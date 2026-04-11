@@ -1,40 +1,25 @@
-name: Build Flutter APK
+name: airsoft_app_clean
+description: Airsoft app foundation
+publish_to: "none"
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
+version: 1.0.0+1
 
-jobs:
-  build-apk:
-    runs-on: ubuntu-latest
+environment:
+  sdk: ^3.11.0
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  supabase_flutter: ^2.9.1
+  intl: ^0.20.2
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build debug APK
-        run: flutter build apk --debug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+flutter:
+  uses-material-design: true
