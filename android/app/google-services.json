@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "630959288798",
+    "project_id": "airsoft-app-15023",
+    "storage_bucket": "airsoft-app-15023.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:630959288798:android:5c9e96970c2192c343ed4f",
+        "android_client_info": {
+          "package_name": "com.example.airsoft_app_clean"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtvhOqpn9w0crH-3ylBLtKi_W1GfFYEI4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
