@@ -1,119 +1,73 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'contact_repository.dart';
-import 'direct_message_model.dart';
+import 'contact_model.dart';
 
-class DirectMessageRepository {
-  DirectMessageRepository();
+class ContactRepository {
+  ContactRepository();
 
   final SupabaseClient _client = Supabase.instance.client;
-  final ContactRepository _contactRepository = ContactRepository();
 
-  String get _currentUserId {
+  Future<List<ContactModel>> getContacts() async {
     final user = _client.auth.currentUser;
-    if (user == null) {
-      throw Exception('Not logged in.');
-    }
-    return user.id;
-  }
-
-  Future<List<DirectMessageModel>> getMessages(String otherUserId) async {
-    final currentUserId = _currentUserId;
-
-    final allowed = await _contactRepository.areAcceptedContacts(otherUserId);
-    if (!allowed) {
-      throw Exception('Messaging is only available for accepted contacts.');
-    }
+    if (user == null) throw Exception('Not logged in.');
 
     final response = await _client
-        .from('direct_messages')
-        .select()
-        .or(
-          'and(sender_id.eq.$currentUserId,recipient_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,recipient_id.eq.$currentUserId)',
-        )
-        .order('created_at', ascending: true);
+        .from('user_contacts')
+        .select('''
+          id,
+          requester_id,
+          addressee_id,
+          status,
+          requester_profile:profiles!user_contacts_requester_id_fkey(call_sign),
+          addressee_profile:profiles!user_contacts_addressee_id_fkey(call_sign)
+        ''')
+        .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
+        .order('created_at', ascending: false);
 
-    return response
-        .map<DirectMessageModel>((e) => DirectMessageModel.fromJson(e))
-        .toList();
+    return response.map<ContactModel>((e) => ContactModel.fromJson(e)).toList();
   }
 
-  Future<void> sendMessage({
-    required String recipientId,
-    required String body,
-  }) async {
-    final currentUserId = _currentUserId;
-
-    final allowed = await _contactRepository.areAcceptedContacts(recipientId);
-    if (!allowed) {
-      throw Exception('Messaging is only available for accepted contacts.');
+  Future<void> sendRequest(String userId) async {
+    final current = _client.auth.currentUser;
+    if (current == null) throw Exception('Not logged in.');
+    if (current.id == userId) {
+      throw Exception('You cannot add yourself.');
     }
 
-    final trimmed = body.trim();
-    if (trimmed.isEmpty) {
-      throw Exception('Message is empty.');
-    }
-
-    await _client.from('direct_messages').insert({
-      'sender_id': currentUserId,
-      'recipient_id': recipientId,
-      'body': trimmed,
+    await _client.from('user_contacts').insert({
+      'requester_id': current.id,
+      'addressee_id': userId,
+      'status': 'pending',
     });
   }
 
-  Future<void> markThreadRead(String otherUserId) async {
-    final currentUserId = _currentUserId;
-
-    await _client
-        .from('direct_messages')
-        .update({'read_at': DateTime.now().toIso8601String()})
-        .eq('sender_id', otherUserId)
-        .eq('recipient_id', currentUserId)
-        .isFilter('read_at', null);
+  Future<void> acceptRequest(String id) async {
+    await _client.from('user_contacts').update({
+      'status': 'accepted',
+    }).eq('id', id);
   }
 
-  RealtimeChannel subscribeToThread({
-    required String otherUserId,
-    required VoidCallback onMessage,
-  }) {
-    final currentUserId = _currentUserId;
-
-    final channel = _client.channel('dm-$currentUserId-$otherUserId');
-
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'direct_messages',
-          callback: (payload) {
-            final row = payload.newRecord;
-            final senderId = row['sender_id']?.toString();
-            final recipientId = row['recipient_id']?.toString();
-
-            final matches = (senderId == currentUserId &&
-                    recipientId == otherUserId) ||
-                (senderId == otherUserId && recipientId == currentUserId);
-
-            if (matches) {
-              onMessage();
-            }
-          },
-        )
-        .subscribe();
-
-    return channel;
+  Future<void> rejectRequest(String id) async {
+    await _client.from('user_contacts').delete().eq('id', id);
   }
 
-  Future<int> getUnreadCount() async {
-    final currentUserId = _currentUserId;
+  Future<void> removeContact(String id) async {
+    await _client.from('user_contacts').delete().eq('id', id);
+  }
+
+  Future<bool> areAcceptedContacts(String otherUserId) async {
+    final current = _client.auth.currentUser;
+    if (current == null) return false;
 
     final response = await _client
-        .from('direct_messages')
-        .select('id')
-        .eq('recipient_id', currentUserId)
-        .isFilter('read_at', null);
+        .from('user_contacts')
+        .select('id,status')
+        .or(
+          'and(requester_id.eq.${current.id},addressee_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,addressee_id.eq.${current.id})',
+        )
+        .eq('status', 'accepted')
+        .maybeSingle();
 
-    return response.length;
+    return response != null;
   }
 }
