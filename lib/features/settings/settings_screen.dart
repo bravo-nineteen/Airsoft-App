@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../core/notifications/notification_settings_screen.dart';
 import '../auth/login_screen.dart';
+import '../social/contacts_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
@@ -129,7 +130,7 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTileData(
             icon: Icons.notifications_outlined,
             title: 'Push Notifications',
-            subtitle: 'Manage event, meetup, DM, and field alerts',
+            subtitle: 'Manage event, board, DM, and field alerts',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -156,32 +157,32 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
       _SettingsGroup(
-  title: 'Account',
-  tiles: [
-    _SettingsTileData(
-      icon: Icons.person_outline,
-      title: 'Edit Profile',
-      subtitle: 'Call sign, avatar, and account details',
-    ),
-    _SettingsTileData(
-      icon: Icons.people_outline,
-      title: l10n.contacts,
-      subtitle: 'Manage your contacts and requests',
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const ContactsScreen(),
+        title: 'Account',
+        tiles: [
+          const _SettingsTileData(
+            icon: Icons.person_outline,
+            title: 'Edit Profile',
+            subtitle: 'Call sign, avatar, and account details',
           ),
-        );
-      },
-    ),
-    _SettingsTileData(
-      icon: Icons.mail_outline,
-      title: l10n.email,
-      subtitle: l10n.viewYourSignedInEmailAccount,
-    ),
-  ],
-),
+          _SettingsTileData(
+            icon: Icons.people_outline,
+            title: l10n.contacts,
+            subtitle: 'Manage your contacts and requests',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ContactsScreen(),
+                ),
+              );
+            },
+          ),
+          const _SettingsTileData(
+            icon: Icons.mail_outline,
+            title: 'Email',
+            subtitle: 'View your signed-in email account',
+          ),
+        ],
+      ),
     ];
 
     return Scaffold(
