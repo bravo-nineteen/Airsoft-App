@@ -30,10 +30,31 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Future<void> _openCreate() async {
-    await Navigator.of(context).push(
+    final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const EventCreateScreen()),
     );
-    await _refresh();
+
+    if (created == true) {
+      await _refresh();
+    }
+  }
+
+  String _formatDate(DateTime value) {
+    final yyyy = value.year.toString().padLeft(4, '0');
+    final mm = value.month.toString().padLeft(2, '0');
+    final dd = value.day.toString().padLeft(2, '0');
+    return '$yyyy-$mm-$dd';
+  }
+
+  String _buildSubtitle(EventModel event) {
+    final parts = <String>[
+      _formatDate(event.startsAt),
+      if ((event.prefecture ?? '').isNotEmpty) event.prefecture!,
+      if ((event.location ?? '').isNotEmpty) event.location!,
+      if ((event.eventType ?? '').isNotEmpty) event.eventType!,
+    ];
+
+    return parts.join(' • ');
   }
 
   @override
@@ -51,6 +72,23 @@ class _EventListScreenState extends State<EventListScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return ListView(
+                children: [
+                  const SizedBox(height: 140),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Failed to load events:\n${snapshot.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              );
             }
 
             final events = snapshot.data ?? [];
@@ -72,7 +110,7 @@ class _EventListScreenState extends State<EventListScreen> {
                 return Card(
                   child: ListTile(
                     title: Text(event.title),
-                    subtitle: Text(event.location ?? event.startsAt.toString()),
+                    subtitle: Text(_buildSubtitle(event)),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       Navigator.of(context).push(
