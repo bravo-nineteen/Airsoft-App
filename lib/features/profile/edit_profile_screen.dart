@@ -92,13 +92,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         children: [
           Center(
             child: AvatarPickerWidget(
-              avatarUrl: _profile.avatarUrl,
+              initialAvatarUrl: _profile.avatarUrl,
               onAvatarUpdated: (newUrl) {
                 setState(() {
                   _profile = _profile.copyWith(avatarUrl: newUrl);
                 });
               },
-              radius: 50,
             ),
           ),
           const SizedBox(height: 20),

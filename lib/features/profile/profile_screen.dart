@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../settings/settings_screen.dart';
+import 'avatar_picker_widget.dart';
 import 'edit_profile_screen.dart';
 import 'profile_model.dart';
 import 'profile_repository.dart';
@@ -22,7 +23,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileRepository _repository = ProfileRepository();
-  late Future<ProfileModel> _future;
+  late Future<ProfileModel?> _future;
 
   @override
   void initState() {
@@ -63,16 +64,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<ProfileModel>(
+    return FutureBuilder<ProfileModel?>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
 
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Profile error:\n${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
         final profile = snapshot.data;
+
         if (profile == null) {
-          return const Center(child: Text('Profile not found.'));
+          return const Center(child: Text('No profile available.'));
         }
 
         return ListView(
@@ -83,23 +97,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 44,
-                      backgroundImage: (profile.avatarUrl ?? '').isNotEmpty
-                          ? NetworkImage(profile.avatarUrl!)
-                          : null,
-                      child: (profile.avatarUrl ?? '').isEmpty
-                          ? const Icon(Icons.person, size: 44)
-                          : null,
+                    AvatarPickerWidget(
+                      initialAvatarUrl: profile.avatarUrl,
+                      onAvatarUpdated: (_) => _refresh(),
                     ),
+
                     const SizedBox(height: 12),
+
                     Text(
                       profile.displayName,
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
+
                     const SizedBox(height: 4),
+
                     Text(profile.userCode),
+
                     const SizedBox(height: 12),
+
                     Wrap(
                       spacing: 8,
                       children: [
@@ -119,20 +134,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 12),
+
             _InfoCard(title: 'Area', value: profile.area),
             _InfoCard(title: 'Team', value: profile.teamName),
             _InfoCard(title: 'Loadout', value: profile.loadout),
             _InfoCard(title: 'Instagram', value: profile.instagram),
             _InfoCard(title: 'Facebook', value: profile.facebook),
             _InfoCard(title: 'YouTube', value: profile.youtube),
+
             const SizedBox(height: 12),
+
             Card(
               child: ListTile(
                 leading: const Icon(Icons.mail),
                 title: const Text('Signed-in account'),
-                subtitle:
-                    Text(Supabase.instance.client.auth.currentUser?.email ?? ''),
+                subtitle: Text(
+                  Supabase.instance.client.auth.currentUser?.email ?? '',
+                ),
               ),
             ),
           ],
