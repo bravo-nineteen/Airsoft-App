@@ -39,12 +39,17 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _sendComment() async {
+    final body = _commentController.text.trim();
+    if (body.isEmpty) {
+      return;
+    }
+
     setState(() => _isSending = true);
 
     try {
       await _repository.addComment(
         postId: widget.post.id,
-        body: _commentController.text.trim(),
+        body: body,
       );
       _commentController.clear();
       await _refresh();
@@ -58,6 +63,35 @@ class _CommunityPostDetailsScreenState
         setState(() => _isSending = false);
       }
     }
+  }
+
+  String _categoryLabel(String value) {
+    switch (value) {
+      case 'meetups':
+        return 'Meetups';
+      case 'tech-talk':
+        return 'Tech Talk';
+      case 'troubleshooting':
+        return 'Troubleshooting';
+      case 'events':
+        return 'Events';
+      case 'off-topic':
+        return 'Off-topic';
+      case 'memes':
+        return 'Memes';
+      case 'buy-sell':
+        return 'Buy / Sell';
+      case 'gear-showcase':
+        return 'Gear Showcase';
+      case 'field-talk':
+        return 'Field Talk';
+      default:
+        return value;
+    }
+  }
+
+  String _languageLabel(String code) {
+    return code == 'ja' ? '日本語' : 'English';
   }
 
   @override
@@ -88,7 +122,23 @@ class _CommunityPostDetailsScreenState
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: Text(post.body),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  Chip(label: Text(_categoryLabel(post.category))),
+                                  Chip(label: Text(_languageLabel(post.languageCode))),
+                                  if ((post.callSign ?? '').isNotEmpty)
+                                    Chip(label: Text(post.callSign!)),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(post.body),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -133,7 +183,13 @@ class _CommunityPostDetailsScreenState
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _isSending ? null : _sendComment,
-                    child: const Text('Send'),
+                    child: _isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.4),
+                          )
+                        : const Text('Send'),
                   ),
                 ],
               ),

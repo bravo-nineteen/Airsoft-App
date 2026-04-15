@@ -150,8 +150,8 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
             label: l10n.events,
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.campaign),
-            label: l10n.meetups,
+            icon: const Icon(Icons.forum),
+            label: l10n.board,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),

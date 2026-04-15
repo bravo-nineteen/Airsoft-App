@@ -15,18 +15,51 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   final _bodyController = TextEditingController();
   final CommunityRepository _repository = CommunityRepository();
 
+  String _languageCode = 'en';
+  String _category = 'meetups';
   bool _isSaving = false;
 
+  static const List<String> _categories = [
+    'meetups',
+    'tech-talk',
+    'troubleshooting',
+    'events',
+    'off-topic',
+    'memes',
+    'buy-sell',
+    'gear-showcase',
+    'field-talk',
+  ];
+
   Future<void> _save() async {
+    final title = _titleController.text.trim();
+    final body = _bodyController.text.trim();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title is required.')),
+      );
+      return;
+    }
+
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Body is required.')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
       await _repository.createPost(
-        title: _titleController.text.trim(),
-        body: _bodyController.text.trim(),
+        title: title,
+        body: body,
+        languageCode: _languageCode,
+        category: _category,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -46,13 +79,75 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
     super.dispose();
   }
 
+  String _labelForCategory(String value) {
+    switch (value) {
+      case 'meetups':
+        return 'Meetups';
+      case 'tech-talk':
+        return 'Tech Talk';
+      case 'troubleshooting':
+        return 'Troubleshooting';
+      case 'events':
+        return 'Events';
+      case 'off-topic':
+        return 'Off-topic';
+      case 'memes':
+        return 'Memes';
+      case 'buy-sell':
+        return 'Buy / Sell';
+      case 'gear-showcase':
+        return 'Gear Showcase';
+      case 'field-talk':
+        return 'Field Talk';
+      default:
+        return value;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create post')),
+      appBar: AppBar(title: const Text('Create Post')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment<String>(
+                value: 'en',
+                label: Text('English'),
+              ),
+              ButtonSegment<String>(
+                value: 'ja',
+                label: Text('日本語'),
+              ),
+            ],
+            selected: {_languageCode},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _languageCode = selection.first;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            initialValue: _category,
+            decoration: const InputDecoration(labelText: 'Section'),
+            items: _categories
+                .map(
+                  (value) => DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(_labelForCategory(value)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                _category = value ?? 'meetups';
+              });
+            },
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _titleController,
             decoration: const InputDecoration(labelText: 'Title'),
@@ -68,7 +163,11 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
           FilledButton(
             onPressed: _isSaving ? null : _save,
             child: _isSaving
-                ? const CircularProgressIndicator()
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  )
                 : const Text('Publish'),
           ),
         ],
