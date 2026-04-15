@@ -6,7 +6,7 @@ Phase 1A Flutter foundation for the Airsoft app.
 
 1. Install Flutter.
 2. Run `flutter pub get`.
-3. Open `lib/core/config/app_config.dart`.
+3. Open `lib/core/config/app_config.local.dart`.
 4. Replace the Supabase URL and anon key placeholders.
 5. Run the app.
 
@@ -15,7 +15,24 @@ Phase 1A Flutter foundation for the Airsoft app.
 ```bash
 flutter pub get
 flutter run
+flutter build apk --debug
+flutter build apk --release
 ```
+
+Release APK output:
+
+`build/app/outputs/flutter-apk/app-release.apk`
+
+## Build APK In GitHub
+
+This repository includes a GitHub Actions workflow at [.github/workflows/build-apk.yml](.github/workflows/build-apk.yml).
+
+You can trigger it in two ways:
+
+1. Push to `main` or `clean-main`
+2. Run it manually from the Actions tab (`Build Android APK`)
+
+After the workflow finishes, download artifact `airsoft-app-release-apk`.
 
 ## Included
 
