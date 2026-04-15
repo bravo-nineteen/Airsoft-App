@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'push_token_repository.dart';
 
@@ -66,6 +67,12 @@ class PushNotificationService {
   }
 
   static Future<void> _saveToken(String token) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      debugPrint('Skipping FCM token save because user is not authenticated yet.');
+      return;
+    }
+
     final platform = _platformName();
 
     await _tokenRepository.upsertToken(
