@@ -114,10 +114,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
 class SplashScreen extends StatelessWidget {
   const SplashScreen({
     super.key,
-    required this.versionText,
   });
-
-  final String versionText;
 
   @override
   Widget build(BuildContext context) {
@@ -133,37 +130,64 @@ class SplashScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(),
+
+                // LOGO
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Image.asset(
+                    'assets/logo.png',
+                    fit: BoxFit.contain,
+                    height: 120,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
                 const Text(
                   'FieldOps',
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: 30,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
                     color: Colors.white,
+                    letterSpacing: 1.5,
                   ),
                 ),
-                const SizedBox(height: 12),
+
+                const SizedBox(height: 8),
+
                 const Text(
                   'フィールドオプス',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     color: Colors.white70,
-                    letterSpacing: 1,
                   ),
                 ),
-                const SizedBox(height: 24),
+
+                const SizedBox(height: 20),
+
                 const CircularProgressIndicator(),
+
                 const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Text(
-                    versionText.isEmpty ? 'Starting...' : versionText,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+
+                const Text(
+                  'in partnership with Airsoft Online Japan',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white70,
                   ),
                 ),
+
+                const SizedBox(height: 6),
+
+                const Text(
+                  'v1.1.9',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white54,
+                  ),
+                ),
+
+                const SizedBox(height: 24),
               ],
             ),
           ),
