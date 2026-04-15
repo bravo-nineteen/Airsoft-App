@@ -67,6 +67,10 @@ class AppLocalizations {
       'fieldContact': 'Field Contact',
       'website': 'Website',
       'socialProfiles': 'Social Profiles',
+      'contacts': 'Contacts',
+      'messages': 'Messages',
+      'addContact': 'Add Contact',
+      'contactRequests': 'Contact Requests',
     },
     'ja': {
       'appTitle': 'エアソフトアプリ',
@@ -114,6 +118,10 @@ class AppLocalizations {
       'fieldContact': 'フィールド連絡先',
       'website': 'ウェブサイト',
       'socialProfiles': 'SNSプロフィール',
+      'contacts': '連絡先',
+      'messages': 'メッセージ',
+      'addContact': '連絡先追加',
+      'contactRequests': 'リクエスト',
     },
   };
 
@@ -166,6 +174,10 @@ class AppLocalizations {
   String get fieldContact => _text('fieldContact');
   String get website => _text('website');
   String get socialProfiles => _text('socialProfiles');
+  String get contacts => _text('contacts');
+  String get messages => _text('messages');
+  String get addContact => _text('addContact');
+  String get contactRequests => _text('contactRequests');
 }
 
 class _AppLocalizationsDelegate

@@ -156,20 +156,32 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
       _SettingsGroup(
-        title: 'Account',
-        tiles: const [
-          _SettingsTileData(
-            icon: Icons.person_outline,
-            title: 'Edit Profile',
-            subtitle: 'Call sign, avatar, and account details',
+  title: 'Account',
+  tiles: [
+    _SettingsTileData(
+      icon: Icons.person_outline,
+      title: 'Edit Profile',
+      subtitle: 'Call sign, avatar, and account details',
+    ),
+    _SettingsTileData(
+      icon: Icons.people_outline,
+      title: l10n.contacts,
+      subtitle: 'Manage your contacts and requests',
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const ContactsScreen(),
           ),
-          _SettingsTileData(
-            icon: Icons.mail_outline,
-            title: 'Email',
-            subtitle: 'View your signed-in email account',
-          ),
-        ],
-      ),
+        );
+      },
+    ),
+    _SettingsTileData(
+      icon: Icons.mail_outline,
+      title: l10n.email,
+      subtitle: l10n.viewYourSignedInEmailAccount,
+    ),
+  ],
+),
     ];
 
     return Scaffold(
