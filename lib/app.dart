@@ -151,7 +151,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.forum),
-            label: l10n.board,
+            label: 'Board',
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),
@@ -171,7 +171,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
       case 2:
         return l10n.events;
       case 3:
-        return l10n.meetups;
+        return 'Board';
       case 4:
         return l10n.profile;
       default:
