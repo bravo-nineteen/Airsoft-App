@@ -1,17 +1,28 @@
-# airsoft_app_clean
+# Airsoft App Foundation
 
-A new Flutter project.
+Phase 1A Flutter foundation for the Airsoft app.
 
-## Getting Started
+## Setup
 
-This project is a starting point for a Flutter application.
+1. Install Flutter.
+2. Run `flutter pub get`.
+3. Open `lib/core/config/app_config.dart`.
+4. Replace the Supabase URL and anon key placeholders.
+5. Run the app.
 
-A few resources to get you started if this is your first Flutter project:
+## Commands
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Included
+
+- App shell with bottom navigation
+- Splash screen
+- English/Japanese localization scaffold
+- Dark/light theme setup
+- Placeholder screens for root tabs
+- Profile model and profile/edit screens
+- Supabase initialization

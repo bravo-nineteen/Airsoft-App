@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/notifications/push_notification_service.dart';
+import 'app/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/community/community_list_screen.dart';
@@ -21,6 +22,7 @@ class AirsoftApp extends StatefulWidget {
 
 class _AirsoftAppState extends State<AirsoftApp> {
   ThemeMode _themeMode = ThemeMode.dark;
+  Locale _locale = const Locale('en');
 
   void _toggleThemeMode() {
     setState(() {
@@ -29,11 +31,25 @@ class _AirsoftAppState extends State<AirsoftApp> {
     });
   }
 
+  void _setLocale(Locale locale) {
+    setState(() {
+      _locale = locale;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Airsoft App',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
+      locale: _locale,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: AppTheme.lightTheme(),
       darkTheme: AppTheme.darkTheme(),
       themeMode: _themeMode,
@@ -41,6 +57,8 @@ class _AirsoftAppState extends State<AirsoftApp> {
         homeBuilder: () => AirsoftHomeShell(
           themeMode: _themeMode,
           onToggleThemeMode: _toggleThemeMode,
+          locale: _locale,
+          onLocaleChanged: _setLocale,
         ),
       ),
     );
@@ -52,10 +70,14 @@ class AirsoftHomeShell extends StatefulWidget {
     super.key,
     required this.themeMode,
     required this.onToggleThemeMode,
+    required this.locale,
+    required this.onLocaleChanged,
   });
 
   final ThemeMode themeMode;
   final VoidCallback onToggleThemeMode;
+  final Locale locale;
+  final ValueChanged<Locale> onLocaleChanged;
 
   @override
   State<AirsoftHomeShell> createState() => _AirsoftHomeShellState();
@@ -65,24 +87,18 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   int _index = 0;
   final ProfileRepository _profileRepository = ProfileRepository();
 
-  late final List<Widget> _screens = const [
-    HomeDashboardScreen(),
-    FieldsScreen(),
-    EventListScreen(),
-    CommunityListScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   void initState() {
     super.initState();
-    PushNotificationService.init();
   }
 
   Future<void> _openProfile() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const ProfileScreen(),
+        builder: (_) => ProfileScreen(
+          currentLocale: widget.locale,
+          onLocaleChanged: widget.onLocaleChanged,
+        ),
       ),
     );
 
@@ -90,15 +106,12 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
     setState(() {});
   }
 
-  Future<void> _signOut() async {
-    await Supabase.instance.client.auth.signOut();
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<ProfileModel>(
       future: _profileRepository.getCurrentProfile(),
       builder: (context, snapshot) {
+        final l10n = AppLocalizations.of(context);
         final callSign =
             snapshot.data?.callSign ??
             Supabase.instance.client.auth.currentUser?.email ??
@@ -131,7 +144,16 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           ),
           body: IndexedStack(
             index: _index,
-            children: _screens,
+            children: [
+              const HomeDashboardScreen(),
+              const FieldsScreen(),
+              const EventListScreen(),
+              const CommunityListScreen(),
+              ProfileScreen(
+                currentLocale: widget.locale,
+                onLocaleChanged: widget.onLocaleChanged,
+              ),
+            ],
           ),
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: _index,
@@ -140,26 +162,26 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
                 _index = value;
               });
             },
-            items: const [
+            items: [
               BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: 'Home',
+                icon: const Icon(Icons.home),
+                label: l10n.home,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.map),
-                label: 'Fields',
+                icon: const Icon(Icons.map),
+                label: l10n.fieldFinder,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.event),
-                label: 'Events',
+                icon: const Icon(Icons.event),
+                label: l10n.events,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.campaign),
-                label: 'Community',
+                icon: const Icon(Icons.campaign),
+                label: l10n.meetups,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.person),
-                label: 'Profile',
+                icon: const Icon(Icons.person),
+                label: l10n.profile,
               ),
             ],
           ),

@@ -45,9 +45,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Avatar',
-            toolbarCenterTitle: false,
             lockAspectRatio: true,
-            hideBottomControls: false,
             initAspectRatio: CropAspectRatioPreset.square,
           ),
           IOSUiSettings(
@@ -66,9 +64,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
 
       await _avatarService.deleteOldAvatarIfOwned(widget.avatarUrl);
 
-      final publicUrl = await _avatarService.uploadAvatar(
-        File(cropped.path),
-      );
+      final publicUrl = await _avatarService.uploadAvatar(File(cropped.path));
 
       if (!mounted) return;
 

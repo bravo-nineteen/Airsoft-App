@@ -17,7 +17,7 @@ class PushDebugService {
     debugPrint('Notification permission: ${settings.authorizationStatus}');
 
     final token = await messaging.getToken();
-    debugPrint('FCM TOKEN: $token');
+    debugPrint('FCM token available: ${token != null && token.isNotEmpty}');
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint('Foreground message ID: ${message.messageId}');
@@ -32,7 +32,7 @@ class PushDebugService {
     });
 
     messaging.onTokenRefresh.listen((newToken) {
-      debugPrint('FCM TOKEN REFRESHED: $newToken');
+      debugPrint('FCM token refreshed.');
     });
   }
 }

@@ -82,24 +82,19 @@ class ProfileModel {
   String get displayName => callSign.trim().isEmpty ? 'Operator' : callSign.trim();
 
   bool get hasAvatar => avatarUrl != null && avatarUrl!.trim().isNotEmpty;
-  bool get hasArea => area != null && area!.trim().isNotEmpty;
-  bool get hasTeamName => teamName != null && teamName!.trim().isNotEmpty;
-  bool get hasLoadout => loadout != null && loadout!.trim().isNotEmpty;
-  bool get hasInstagram => instagram != null && instagram!.trim().isNotEmpty;
-  bool get hasFacebook => facebook != null && facebook!.trim().isNotEmpty;
-  bool get hasYoutube => youtube != null && youtube!.trim().isNotEmpty;
-  bool get hasAnySocial => hasInstagram || hasFacebook || hasYoutube;
+  bool get hasAnySocial =>
+      (instagram?.trim().isNotEmpty ?? false) ||
+      (facebook?.trim().isNotEmpty ?? false) ||
+      (youtube?.trim().isNotEmpty ?? false);
 
   static String _readString(dynamic value, {String fallback = ''}) {
     if (value == null) return fallback;
-
     final text = value.toString().trim();
     return text.isEmpty ? fallback : text;
   }
 
   static String? _readNullableString(dynamic value) {
     if (value == null) return null;
-
     final text = value.toString().trim();
     return text.isEmpty ? null : text;
   }
