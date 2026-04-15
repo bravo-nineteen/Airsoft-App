@@ -1,92 +1,67 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
-import '../../../app.dart';
-import '../../../core/config/app_config.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({
+    super.key,
+    required this.onComplete,
+  });
+
+  final VoidCallback onComplete;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  double _progress = 0.1;
-  Timer? _timer;
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 250), (Timer timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() {
-        _progress += 0.18;
-        if (_progress >= 1.0) {
-          _progress = 1.0;
-          timer.cancel();
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const AirsoftApp()),
-          );
-        }
-      });
-    });
+    _init();
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
+  Future<void> _init() async {
+    final info = await PackageInfo.fromPlatform();
+
+    setState(() {
+      _version = 'v${info.version} (${info.buildNumber})';
+    });
+
+    await Future.delayed(const Duration(seconds: 5));
+
+    widget.onComplete();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          color: Colors.black,
           child: Column(
-            children: <Widget>[
-              const Spacer(),
-              Container(
-                width: 110,
-                height: 110,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.surface,
-                  border: Border.all(color: theme.colorScheme.secondary, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'AOJ',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                'AIRSOFT APP',
+                style: TextStyle(
+                  fontSize: 28,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
                 ),
               ),
-              const SizedBox(height: 24),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(value: _progress, minHeight: 10),
-              ),
-              const Spacer(),
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(color: Colors.white),
+              const SizedBox(height: 40),
               Text(
-                AppConfig.appVersion,
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                AppConfig.appCredit,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
+                _version,
+                style: const TextStyle(color: Colors.white70),
               ),
             ],
           ),
