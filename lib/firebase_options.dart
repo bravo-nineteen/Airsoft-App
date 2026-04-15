@@ -78,4 +78,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'airsoft-app-15023.firebasestorage.app',
     measurementId: 'G-8TSFLMZGXT',
   );
+
 }

@@ -7,7 +7,14 @@ import 'profile_model.dart';
 import 'profile_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({
+    super.key,
+    this.currentLocale,
+    this.onLocaleChanged,
+  });
+
+  final Locale? currentLocale;
+  final ValueChanged<Locale>? onLocaleChanged;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -44,7 +51,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          currentLocale: widget.currentLocale,
+          onLocaleChanged: widget.onLocaleChanged,
+        ),
+      ),
     );
     await _refresh();
   }

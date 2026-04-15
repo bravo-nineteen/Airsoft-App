@@ -130,6 +130,14 @@ class AppTheme {
     );
   }
 
+  static ThemeData lightTheme({double fontScale = 1.0}) {
+    return light(fontScale: fontScale);
+  }
+
+  static ThemeData darkTheme({double fontScale = 1.0}) {
+    return dark(fontScale: fontScale);
+  }
+
   static TextTheme _scaledTextTheme(TextTheme base, double scale) {
     return base.copyWith(
       displayLarge: base.displayLarge?.copyWith(fontSize: 57 * scale),

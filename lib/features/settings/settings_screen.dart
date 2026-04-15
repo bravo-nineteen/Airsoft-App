@@ -1,11 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../../core/notifications/notification_settings_screen.dart';
 import '../auth/login_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.currentLocale,
+    this.onLocaleChanged,
+  });
+
+  final Locale? currentLocale;
+  final ValueChanged<Locale>? onLocaleChanged;
+
+  Future<void> _showLanguagePicker(BuildContext context) async {
+    final selected = currentLocale ?? Localizations.localeOf(context);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.language),
+                title: const Text('English'),
+                trailing: selected.languageCode == 'en'
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () {
+                  onLocaleChanged?.call(const Locale('en'));
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.language),
+                title: const Text('日本語'),
+                trailing: selected.languageCode == 'ja'
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () {
+                  onLocaleChanged?.call(const Locale('ja'));
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _logout(BuildContext context) async {
     try {
@@ -53,19 +100,26 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final selectedLanguageCode =
+        (currentLocale ?? Localizations.localeOf(context)).languageCode;
+    final selectedLanguageLabel =
+        selectedLanguageCode == 'ja' ? '日本語' : 'English';
+
     final items = [
       _SettingsGroup(
         title: 'Display',
-        tiles: const [
+        tiles: [
           _SettingsTileData(
             icon: Icons.palette_outlined,
-            title: 'Theme',
+            title: l10n.theme,
             subtitle: 'Light and dark display controls',
           ),
           _SettingsTileData(
             icon: Icons.language_outlined,
-            title: 'Language',
-            subtitle: 'English / Japanese',
+            title: l10n.language,
+            subtitle: selectedLanguageLabel,
+            onTap: () => _showLanguagePicker(context),
           ),
         ],
       ),

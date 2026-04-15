@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../community/community_list_screen.dart';
 import '../events/events_screen.dart';
 import '../fields/fields_screen.dart';
 import '../home/home_screen.dart';
-import '../meetups/meetups_screen.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
@@ -20,12 +20,12 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   int _index = 0;
   final ProfileRepository _profileRepository = ProfileRepository();
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    FieldsScreen(),
-    EventsScreen(),
-    MeetupsScreen(),
-    SettingsScreen(),
+  late final List<Widget> _screens = <Widget>[
+    const HomeScreen(),
+    const FieldsScreen(),
+    const EventsScreen(),
+    const CommunityListScreen(),
+    const SettingsScreen(),
   ];
 
   Future<void> _openProfile() async {
@@ -64,7 +64,10 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
               BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Fields'),
               BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
-              BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'Meet-ups'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.campaign),
+                label: 'Community',
+              ),
               BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
             ],
           ),

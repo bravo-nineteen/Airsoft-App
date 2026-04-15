@@ -33,7 +33,7 @@ class PushNotificationService {
     _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = _messaging.onTokenRefresh.listen(
       (newToken) async {
-        debugPrint('FCM token refreshed: $newToken');
+        debugPrint('FCM token refreshed.');
         await _saveToken(newToken);
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -61,7 +61,7 @@ class PushNotificationService {
       return;
     }
 
-    debugPrint('FCM TOKEN: $token');
+    debugPrint('FCM token acquired.');
     await _saveToken(token);
   }
 

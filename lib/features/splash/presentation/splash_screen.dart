@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../app/router.dart';
+import '../../../app.dart';
 import '../../../core/config/app_config.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -30,7 +30,9 @@ class _SplashScreenState extends State<SplashScreen> {
         if (_progress >= 1.0) {
           _progress = 1.0;
           timer.cancel();
-          Navigator.of(context).pushReplacementNamed(AppRouter.shell);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AirsoftApp()),
+          );
         }
       });
     });

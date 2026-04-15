@@ -3,3 +3,9 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
+
+# Generated platform artifacts and local caches
+android/.gradle/
+ios/Flutter/ephemeral/
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
