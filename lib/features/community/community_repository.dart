@@ -96,12 +96,12 @@ class CommunityRepository {
       'author_avatar_url': authorAvatarUrl ?? '',
       'title': title,
       'language': 'english',
-      'language_code': 'en',
       'is_bulletin': false,
       'is_pinned': false,
       'is_locked': false,
       'is_deleted': false,
       'visibility': 'public',
+      'language_code': 'en',
       'category': category ?? 'General',
       'image_url': imageUrls.isNotEmpty ? imageUrls.first : null,
       'image_urls': imageUrls,
@@ -135,8 +135,11 @@ class CommunityRepository {
   Future<List<CommunityCommentModel>> fetchComments(String postId) async {
     final response = await _client
         .from('community_comments')
-        .select()
+        .select(
+          'id, created_at, post_id, author_id, author_name, author_avatar_url, message, body',
+        )
         .eq('post_id', postId)
+        .eq('is_deleted', false)
         .order('created_at', ascending: true);
 
     return (response as List<dynamic>)
@@ -161,8 +164,9 @@ class CommunityRepository {
     final authorName =
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
+    final now = DateTime.now().toUtc().toIso8601String();
 
-    await _client.from('community_comments').insert({
+    final payload = <String, dynamic>{
       'post_id': postId,
       'author_id': user.id,
       'user_id': user.id,
@@ -173,14 +177,20 @@ class CommunityRepository {
       'language': 'english',
       'is_deleted': false,
       'is_locked': false,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    });
+      'updated_at': now,
+    };
+
+    await _client.from('community_comments').insert(payload);
 
     final post = await fetchPostById(postId);
 
     await _client.from('community_posts').update({
       'comment_count': post.commentCount + 1,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': now,
     }).eq('id', postId);
+  }
+
+  Future<void> toggleLikePost(String postId) async {
+    throw UnimplementedError('Post likes are not wired yet.');
   }
 }
