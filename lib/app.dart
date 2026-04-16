@@ -9,6 +9,9 @@ import 'features/events/event_list_screen.dart';
 import 'features/fields/field_list_screen.dart';
 import 'features/home/home_dashboard_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/social/contact_repository.dart';
+import 'features/social/contacts_screen.dart';
+import 'features/social/direct_message_repository.dart';
 
 class AirsoftApp extends StatefulWidget {
   const AirsoftApp({super.key});
@@ -83,16 +86,38 @@ class AirsoftHomeShell extends StatefulWidget {
 class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   int _index = 0;
 
-  // Placeholder notification count for now.
-  // Replace with real repository count later.
-  int _notificationCount = 3;
+  final ContactRepository _contactRepo = ContactRepository();
+  final DirectMessageRepository _dmRepo = DirectMessageRepository();
 
-  void _openNotifications() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notifications screen not wired yet.'),
+  int _notificationCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final unreadMessages = await _dmRepo.getUnreadCount();
+      final pendingRequests = await _contactRepo.getPendingRequestsCount();
+
+      if (!mounted) return;
+
+      setState(() {
+        _notificationCount = unreadMessages + pendingRequests;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ContactsScreen(),
       ),
     );
+
+    await _loadNotifications();
   }
 
   @override
@@ -131,10 +156,11 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (value) {
+        onTap: (value) async {
           setState(() {
             _index = value;
           });
+          await _loadNotifications();
         },
         items: [
           BottomNavigationBarItem(
@@ -149,8 +175,8 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
             icon: const Icon(Icons.event),
             label: l10n.events,
           ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.forum),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.forum),
             label: 'Board',
           ),
           BottomNavigationBarItem(
