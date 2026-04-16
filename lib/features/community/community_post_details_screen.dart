@@ -166,6 +166,7 @@ class _CommunityPostDetailsScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   _avatar(
                                     displayName: post.displayName,
@@ -174,7 +175,8 @@ class _CommunityPostDetailsScreenState
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           post.displayName,
@@ -199,9 +201,25 @@ class _CommunityPostDetailsScreenState
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: [
-                                  Chip(label: Text(_categoryLabel(l10n, post.category))),
-                                  Chip(label: Text(_languageLabel(l10n, post.languageCode))),
+                                  Chip(
+                                    label: Text(
+                                      _categoryLabel(l10n, post.category),
+                                    ),
+                                  ),
+                                  Chip(
+                                    label: Text(
+                                      _languageLabel(
+                                        l10n,
+                                        post.languageCode,
+                                      ),
+                                    ),
+                                  ),
                                 ],
+                              ),
+                              const SizedBox(height: 12),
+                              SelectableText(
+                                post.title,
+                                style: Theme.of(context).textTheme.headlineSmall,
                               ),
                               const SizedBox(height: 12),
                               CommunityRichText(text: post.body),
@@ -220,7 +238,9 @@ class _CommunityPostDetailsScreenState
                                               .colorScheme
                                               .surfaceContainerHighest,
                                           alignment: Alignment.center,
-                                          child: const Icon(Icons.image_not_supported),
+                                          child: const Icon(
+                                            Icons.image_not_supported,
+                                          ),
                                         );
                                       },
                                     ),
@@ -239,26 +259,45 @@ class _CommunityPostDetailsScreenState
                       const SizedBox(height: 12),
                       if (comments.isEmpty)
                         Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(child: Text(l10n.t('noCommentsYet'))),
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(l10n.t('noCommentsYet')),
+                          ),
                         ),
                       ...comments.map(
                         (comment) => Card(
-                          child: ListTile(
-                            leading: _avatar(
-                              displayName: comment.displayName,
-                              avatarUrl: comment.avatarUrl,
-                            ),
-                            title: Text(comment.displayName),
-                            subtitle: Column(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const SizedBox(height: 4),
-                                CommunityRichText(text: comment.body),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _timeLabel(l10n, comment.createdAt),
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                _avatar(
+                                  displayName: comment.displayName,
+                                  avatarUrl: comment.avatarUrl,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        comment.displayName,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      CommunityRichText(text: comment.body),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        _timeLabel(l10n, comment.createdAt),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -280,6 +319,8 @@ class _CommunityPostDetailsScreenState
                   Expanded(
                     child: TextField(
                       controller: _commentController,
+                      minLines: 1,
+                      maxLines: 4,
                       decoration: InputDecoration(
                         hintText: l10n.t('writeComment'),
                       ),

@@ -212,137 +212,153 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('createEvent'))),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _titleController,
-            decoration: InputDecoration(labelText: l10n.title),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _eventType,
-            items: _eventTypes
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(value),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _eventType = value);
-            },
-            decoration: InputDecoration(labelText: l10n.t('eventType')),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _language,
-            items: _languages
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(value),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _language = value);
-            },
-            decoration: InputDecoration(labelText: l10n.language),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _skillLevel,
-            items: _skillLevels
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(value),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _skillLevel = value);
-            },
-            decoration: InputDecoration(labelText: l10n.t('skillLevel')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _locationController,
-            decoration: InputDecoration(labelText: l10n.t('locationField')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _prefectureController,
-            decoration: InputDecoration(labelText: l10n.t('prefecture')),
-          ),
-          const SizedBox(height: 12),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.t('start')),
-            subtitle: Text(_formatDateTime(_startAt)),
-            trailing: OutlinedButton(
-              onPressed: _pickStartDateTime,
-              child: Text(l10n.t('change')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(labelText: l10n.title),
+              textInputAction: TextInputAction.next,
             ),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.t('end')),
-            subtitle: Text(_formatDateTime(_endAt)),
-            trailing: OutlinedButton(
-              onPressed: _pickEndDateTime,
-              child: Text(l10n.t('change')),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _eventType,
+              items: _eventTypes
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _eventType = value);
+              },
+              decoration: InputDecoration(labelText: l10n.t('eventType')),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _priceController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: l10n.t('priceJpy')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _maxPlayersController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: l10n.t('maxPlayers')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _organizerController,
-            decoration: InputDecoration(labelText: l10n.t('organizerName')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _contactController,
-            decoration: InputDecoration(
-              labelText: l10n.t('contactInfo'),
-              hintText: l10n.t('contactInfoHint'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _language,
+              items: _languages
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _language = value);
+              },
+              decoration: InputDecoration(labelText: l10n.language),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _descriptionController,
-            minLines: 5,
-            maxLines: 10,
-            decoration: InputDecoration(labelText: l10n.t('description')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _notesController,
-            minLines: 3,
-            maxLines: 8,
-            decoration: InputDecoration(
-              labelText: l10n.t('rulesNotes'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _skillLevel,
+              items: _skillLevels
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _skillLevel = value);
+              },
+              decoration: InputDecoration(labelText: l10n.t('skillLevel')),
             ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
+            const SizedBox(height: 12),
+            TextField(
+              controller: _locationController,
+              decoration: InputDecoration(labelText: l10n.t('locationField')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _prefectureController,
+              decoration: InputDecoration(labelText: l10n.t('prefecture')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.t('start')),
+              subtitle: Text(_formatDateTime(_startAt)),
+              trailing: OutlinedButton(
+                onPressed: _pickStartDateTime,
+                child: Text(l10n.t('change')),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.t('end')),
+              subtitle: Text(_formatDateTime(_endAt)),
+              trailing: OutlinedButton(
+                onPressed: _pickEndDateTime,
+                child: Text(l10n.t('change')),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _priceController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: l10n.t('priceJpy')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _maxPlayersController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: l10n.t('maxPlayers')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _organizerController,
+              decoration: InputDecoration(labelText: l10n.t('organizerName')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contactController,
+              decoration: InputDecoration(
+                labelText: l10n.t('contactInfo'),
+                hintText: l10n.t('contactInfoHint'),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descriptionController,
+              minLines: 5,
+              maxLines: 10,
+              decoration: InputDecoration(labelText: l10n.t('description')),
+              textInputAction: TextInputAction.newline,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notesController,
+              minLines: 3,
+              maxLines: 8,
+              decoration: InputDecoration(
+                labelText: l10n.t('rulesNotes'),
+              ),
+              textInputAction: TextInputAction.newline,
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: FilledButton(
             onPressed: _isSaving ? null : _save,
             child: _isSaving
                 ? const SizedBox(
@@ -352,7 +368,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                   )
                 : Text(l10n.t('saveEvent')),
           ),
-        ],
+        ),
       ),
     );
   }

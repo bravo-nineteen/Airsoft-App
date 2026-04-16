@@ -90,6 +90,87 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
     }
   }
 
+  void _applyWrap(String prefix, String suffix) {
+    final text = _bodyController.text;
+    final selection = _bodyController.selection;
+
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+
+    final selectedText = (start < end) ? text.substring(start, end) : '';
+    final replacement = '$prefix${selectedText.isEmpty ? 'text' : selectedText}$suffix';
+
+    final newText = text.replaceRange(start, end, replacement);
+    final cursorOffset = selectedText.isEmpty
+        ? start + prefix.length
+        : start + replacement.length;
+
+    _bodyController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: cursorOffset),
+    );
+  }
+
+  void _applyLinePrefix(String prefix, {bool numbered = false}) {
+    final text = _bodyController.text;
+    final selection = _bodyController.selection;
+
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+
+    final safeStart = start.clamp(0, text.length);
+    final safeEnd = end.clamp(0, text.length);
+
+    final lineStart = text.lastIndexOf('\n', safeStart == 0 ? 0 : safeStart - 1);
+    final adjustedStart = lineStart == -1 ? 0 : lineStart + 1;
+
+    final lineEndIndex = text.indexOf('\n', safeEnd);
+    final adjustedEnd = lineEndIndex == -1 ? text.length : lineEndIndex;
+
+    final selectedBlock = text.substring(adjustedStart, adjustedEnd);
+    final lines = selectedBlock.split('\n');
+
+    final updatedLines = <String>[];
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.trim().isEmpty) {
+        updatedLines.add(numbered ? '${i + 1}. ' : prefix);
+      } else {
+        updatedLines.add(numbered ? '${i + 1}. $line' : '$prefix$line');
+      }
+    }
+
+    final replacement = updatedLines.join('\n');
+    final newText = text.replaceRange(adjustedStart, adjustedEnd, replacement);
+
+    _bodyController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: adjustedStart + replacement.length,
+      ),
+    );
+  }
+
+  Widget _buildFormatButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onPressed,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          child: Icon(icon, size: 20),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
@@ -181,80 +262,131 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('createPost'))),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SegmentedButton<String>(
-            segments: [
-              ButtonSegment<String>(
-                value: 'en',
-                label: Text(l10n.t('english')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment<String>(
+                  value: 'en',
+                  label: Text(l10n.t('english')),
+                ),
+                const ButtonSegment<String>(
+                  value: 'ja',
+                  label: Text('日本語'),
+                ),
+              ],
+              selected: {_languageCode},
+              onSelectionChanged: (selection) {
+                setState(() {
+                  _languageCode = selection.first;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: InputDecoration(labelText: l10n.t('section')),
+              items: _categories
+                  .map(
+                    (value) => DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(_labelForCategory(l10n, value)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _category = value ?? 'meetups';
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(labelText: l10n.title),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    _buildFormatButton(
+                      icon: Icons.format_bold,
+                      tooltip: 'Bold',
+                      onPressed: () => _applyWrap('**', '**'),
+                    ),
+                    _buildFormatButton(
+                      icon: Icons.format_italic,
+                      tooltip: 'Italic',
+                      onPressed: () => _applyWrap('*', '*'),
+                    ),
+                    _buildFormatButton(
+                      icon: Icons.format_underline,
+                      tooltip: 'Underline',
+                      onPressed: () => _applyWrap('<u>', '</u>'),
+                    ),
+                    _buildFormatButton(
+                      icon: Icons.format_list_bulleted,
+                      tooltip: 'Bullet List',
+                      onPressed: () => _applyLinePrefix('- '),
+                    ),
+                    _buildFormatButton(
+                      icon: Icons.format_list_numbered,
+                      tooltip: 'Numbered List',
+                      onPressed: () => _applyLinePrefix('', numbered: true),
+                    ),
+                  ],
+                ),
               ),
-              ButtonSegment<String>(
-                value: 'ja',
-                label: Text('日本語'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _bodyController,
+              minLines: 10,
+              maxLines: 16,
+              decoration: InputDecoration(
+                labelText: l10n.t('body'),
+                hintText:
+                    '${l10n.t('bodyLinkHint')}\n\nFormatting supported: bold, italic, underline, bullet list, numbered list.',
+                alignLabelWithHint: true,
+              ),
+              textInputAction: TextInputAction.newline,
+              keyboardType: TextInputType.multiline,
+              maxLength: 5000,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _isUploadingImage ? null : _pickImage,
+              icon: const Icon(Icons.image_outlined),
+              label: Text(
+                _isUploadingImage ? l10n.t('uploading') : l10n.t('addImage'),
+              ),
+            ),
+            if (previewImage != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  height: 180,
+                  child: previewImage,
+                ),
               ),
             ],
-            selected: {_languageCode},
-            onSelectionChanged: (selection) {
-              setState(() {
-                _languageCode = selection.first;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _category,
-            decoration: InputDecoration(labelText: l10n.t('section')),
-            items: _categories
-                .map(
-                  (value) => DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(_labelForCategory(l10n, value)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              setState(() {
-                _category = value ?? 'meetups';
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _titleController,
-            decoration: InputDecoration(labelText: l10n.title),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _bodyController,
-            minLines: 6,
-            maxLines: 12,
-            decoration: InputDecoration(
-              labelText: l10n.t('body'),
-              hintText: l10n.t('bodyLinkHint'),
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _isUploadingImage ? null : _pickImage,
-            icon: const Icon(Icons.image_outlined),
-            label: Text(
-              _isUploadingImage ? l10n.t('uploading') : l10n.t('addImage'),
-            ),
-          ),
-          if (previewImage != null) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 180,
-                child: previewImage,
-              ),
-            ),
           ],
-          const SizedBox(height: 20),
-          FilledButton(
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: FilledButton(
             onPressed: _isSaving ? null : _save,
             child: _isSaving
                 ? const SizedBox(
@@ -264,7 +396,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                   )
                 : Text(l10n.t('publish')),
           ),
-        ],
+        ),
       ),
     );
   }
