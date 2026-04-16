@@ -40,7 +40,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<ProfileModel>(
+    return FutureBuilder<ProfileModel?>(
       future: _profileRepository.getCurrentProfile(),
       builder: (context, snapshot) {
         final callSign = snapshot.data?.callSign ?? 'Operator';
