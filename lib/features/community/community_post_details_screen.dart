@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -91,20 +88,8 @@ class _CommunityPostDetailsScreenState
     });
 
     try {
-      final profile = await _repository.fetchCurrentUserProfile();
-
-      final displayName = (profile?['call_sign'] ??
-        user.email ??
-        'Unknown')
-    .toString();
-
-final avatarUrl = profile?['avatar_url']?.toString();
-
       await _repository.addComment(
         postId: _post!.id,
-        authorId: user.id,
-        authorName: displayName,
-        authorAvatarUrl: avatarUrl,
         message: message,
       );
 
@@ -120,30 +105,6 @@ final avatarUrl = profile?['avatar_url']?.toString();
           _isSendingComment = false;
         });
       }
-    }
-  }
-
-  quill.QuillController _buildReadOnlyController(String bodyDeltaJson) {
-    try {
-      final decoded = jsonDecode(bodyDeltaJson) as Map<String, dynamic>;
-      final document = quill.Document.fromJson(
-        List<Map<String, dynamic>>.from(decoded['ops'] as List<dynamic>),
-      );
-
-      return quill.QuillController(
-        document: document,
-        selection: const TextSelection.collapsed(offset: 0),
-        readOnly: true,
-      );
-    } catch (_) {
-      final fallbackDoc = quill.Document()
-        ..insert(0, 'Unable to display post body.');
-
-      return quill.QuillController(
-        document: fallbackDoc,
-        selection: const TextSelection.collapsed(offset: 0),
-        readOnly: true,
-      );
     }
   }
 
@@ -304,15 +265,9 @@ final avatarUrl = profile?['avatar_url']?.toString();
                                 .withOpacity(0.2),
                           ),
                         ),
-                        child: quill.QuillEditor.basic(
-                          controller:
-                              _buildReadOnlyController(post.bodyDeltaJson),
-                          config: const quill.QuillEditorConfig(
-                            padding: EdgeInsets.zero,
-                            enableInteractiveSelection: false,
-                            scrollable: false,
-                            showCursor: false,
-                          ),
+                        child: Text(
+                          post.bodyText.isEmpty ? post.plainText : post.bodyText,
+                          style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),
                       const SizedBox(height: 18),

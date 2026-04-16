@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_repository.dart';
@@ -18,9 +15,8 @@ class _CommunityCreatePostScreenState
     extends State<CommunityCreatePostScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
-
-  late final quill.QuillController _quillController;
 
   final List<String> _imageUrls = <String>[];
   String _category = 'General';
@@ -35,24 +31,6 @@ class _CommunityCreatePostScreenState
     'Guide',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _quillController = quill.QuillController.basic();
-  }
-
-  String _extractPlainText() {
-    final plainText = _quillController.document.toPlainText();
-    return plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  String _encodeDocumentJson() {
-    final raw = _quillController.document.toDelta().toJson();
-    return jsonEncode(<String, dynamic>{
-      'ops': raw,
-    });
-  }
-
   Future<void> _savePost() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
@@ -63,7 +41,8 @@ class _CommunityCreatePostScreenState
     }
 
     final title = _titleController.text.trim();
-    final plainText = _extractPlainText();
+    final bodyText = _bodyController.text.trim();
+    final plainText = bodyText.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,7 +51,7 @@ class _CommunityCreatePostScreenState
       return;
     }
 
-    if (plainText.isEmpty) {
+    if (bodyText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Body is required')),
       );
@@ -84,22 +63,10 @@ class _CommunityCreatePostScreenState
     });
 
     try {
-      final profile = await _repository.fetchCurrentUserProfile();
-
-      final authorName = (profile?['call_sign'] ??
-        user.email ??
-        'Unknown')
-    .toString();
-
-final authorAvatarUrl = profile?['avatar_url']?.toString();
-
       await _repository.createPost(
-        authorId: user.id,
-        authorName: authorName,
-        authorAvatarUrl: authorAvatarUrl,
         title: title,
+        bodyText: bodyText,
         plainText: plainText,
-        bodyDeltaJson: _encodeDocumentJson(),
         imageUrls: _imageUrls,
         category: _category,
       );
@@ -148,8 +115,8 @@ final authorAvatarUrl = profile?['avatar_url']?.toString();
   @override
   void dispose() {
     _titleController.dispose();
+    _bodyController.dispose();
     _imageUrlController.dispose();
-    _quillController.dispose();
     super.dispose();
   }
 
@@ -174,151 +141,106 @@ final authorAvatarUrl = profile?['avatar_url']?.toString();
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                children: <Widget>[
-                  TextField(
-                    controller: _titleController,
-                    maxLength: 100,
-                    decoration: InputDecoration(
-                      labelText: 'Title',
-                      hintText: 'Write a clear title',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: _category,
-                    items: _categories
-                        .map(
-                          (String category) => DropdownMenuItem<String>(
-                            value: category,
-                            child: Text(category),
-                          ),
-                        )
-                        .toList(),
-                    decoration: InputDecoration(
-                      labelText: 'Category',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onChanged: (String? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _category = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      color: theme.colorScheme.surface,
-                      border: Border.all(
-                        color: theme.dividerColor.withOpacity(0.2),
-                      ),
-                    ),
-                    child: Column(
-                      children: <Widget>[
-                        quill.QuillSimpleToolbar(
-                          controller: _quillController,
-                          config: const quill.QuillSimpleToolbarConfig(
-                            showInlineCode: false,
-                            showCodeBlock: false,
-                            showBackgroundColorButton: false,
-                            showColorButton: false,
-                            showFontFamily: false,
-                            showFontSize: false,
-                            showSubscript: false,
-                            showSuperscript: false,
-                            showClipboardCut: false,
-                            showClipboardPaste: false,
-                            showClipboardCopy: false,
-                            showUndo: true,
-                            showRedo: true,
-                            showSearchButton: false,
-                          ),
-                        ),
-                        const Divider(height: 20),
-                        Container(
-                          constraints: const BoxConstraints(minHeight: 320),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: theme.colorScheme.surface,
-                          ),
-                          child: quill.QuillEditor.basic(
-                            controller: _quillController,
-                            config: const quill.QuillEditorConfig(
-                              placeholder: 'Write your post here',
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Image URLs',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: TextField(
-                          controller: _imageUrlController,
-                          decoration: InputDecoration(
-                            hintText: 'Paste image URL',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _addImageUrl,
-                        child: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (_imageUrls.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _imageUrls.map((String url) {
-                        return Chip(
-                          label: SizedBox(
-                            width: 180,
-                            child: Text(
-                              url,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          onDeleted: () => _removeImageUrl(url),
-                        );
-                      }).toList(),
-                    ),
-                ],
+            TextField(
+              controller: _titleController,
+              maxLength: 100,
+              decoration: InputDecoration(
+                labelText: 'Title',
+                hintText: 'Write a clear title',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _category,
+              items: _categories
+                  .map(
+                    (String category) => DropdownMenuItem<String>(
+                      value: category,
+                      child: Text(category),
+                    ),
+                  )
+                  .toList(),
+              decoration: InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onChanged: (String? value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _category = value;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _bodyController,
+              minLines: 10,
+              maxLines: 20,
+              decoration: InputDecoration(
+                labelText: 'Post body',
+                hintText: 'Write your post here',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Image URLs',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _imageUrlController,
+                    decoration: InputDecoration(
+                      hintText: 'Paste image URL',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _addImageUrl,
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_imageUrls.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _imageUrls.map((String url) {
+                  return Chip(
+                    label: SizedBox(
+                      width: 180,
+                      child: Text(
+                        url,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    onDeleted: () => _removeImageUrl(url),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       ),

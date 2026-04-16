@@ -32,6 +32,7 @@ class CommunityRepository {
       posts = posts.where((post) {
         return post.title.toLowerCase().contains(normalizedQuery) ||
             post.plainText.toLowerCase().contains(normalizedQuery) ||
+            post.bodyText.toLowerCase().contains(normalizedQuery) ||
             (post.category ?? '').toLowerCase().contains(normalizedQuery) ||
             post.authorName.toLowerCase().contains(normalizedQuery);
       }).toList();
@@ -77,8 +78,8 @@ class CommunityRepository {
 
   Future<String> createPost({
     required String title,
+    required String bodyText,
     required String plainText,
-    required String bodyDeltaJson,
     required List<String> imageUrls,
     required String? category,
   }) async {
@@ -88,7 +89,6 @@ class CommunityRepository {
     }
 
     final profile = await fetchCurrentUserProfile();
-
     final authorName =
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
@@ -100,8 +100,8 @@ class CommunityRepository {
           'author_name': authorName,
           'author_avatar_url': authorAvatarUrl,
           'title': title,
+          'body_text': bodyText,
           'plain_text': plainText,
-          'body_delta_json': bodyDeltaJson,
           'image_urls': imageUrls,
           'category': category,
           'comment_count': 0,

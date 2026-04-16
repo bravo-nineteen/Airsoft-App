@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 class CommunityPostModel {
   final String id;
-  final String authorId;
+  final String? authorId;
   final String authorName;
   final String? authorAvatarUrl;
   final String title;
+  final String bodyText;
   final String plainText;
-  final String bodyDeltaJson;
   final List<String> imageUrls;
   final String? category;
   final int commentCount;
@@ -23,8 +21,8 @@ class CommunityPostModel {
     required this.authorName,
     required this.authorAvatarUrl,
     required this.title,
+    required this.bodyText,
     required this.plainText,
-    required this.bodyDeltaJson,
     required this.imageUrls,
     required this.category,
     required this.commentCount,
@@ -59,12 +57,12 @@ class CommunityPostModel {
 
     return CommunityPostModel(
       id: json['id'].toString(),
-      authorId: json['author_id'].toString(),
+      authorId: json['author_id']?.toString(),
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
       title: (json['title'] ?? '').toString(),
+      bodyText: (json['body_text'] ?? '').toString(),
       plainText: (json['plain_text'] ?? '').toString(),
-      bodyDeltaJson: (json['body_delta_json'] ?? '{"ops":[{"insert":"\\n"}]}').toString(),
       imageUrls: imageList,
       category: json['category']?.toString(),
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
@@ -77,33 +75,12 @@ class CommunityPostModel {
       isPinned: json['is_pinned'] == true,
     );
   }
-
-  Map<String, dynamic> toInsertJson() {
-    return <String, dynamic>{
-      'author_id': authorId,
-      'author_name': authorName,
-      'author_avatar_url': authorAvatarUrl,
-      'title': title,
-      'plain_text': plainText,
-      'body_delta_json': bodyDeltaJson,
-      'image_urls': imageUrls,
-      'category': category,
-      'comment_count': commentCount,
-      'like_count': likeCount,
-      'view_count': viewCount,
-      'is_pinned': isPinned,
-    };
-  }
-
-  static String encodeDelta(List<Map<String, dynamic>> ops) {
-    return jsonEncode(<String, dynamic>{'ops': ops});
-  }
 }
 
 class CommunityCommentModel {
   final String id;
   final String postId;
-  final String authorId;
+  final String? authorId;
   final String authorName;
   final String? authorAvatarUrl;
   final String message;
@@ -123,21 +100,11 @@ class CommunityCommentModel {
     return CommunityCommentModel(
       id: json['id'].toString(),
       postId: json['post_id'].toString(),
-      authorId: json['author_id'].toString(),
+      authorId: json['author_id']?.toString(),
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
       message: (json['message'] ?? '').toString(),
       createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
     );
-  }
-
-  Map<String, dynamic> toInsertJson() {
-    return <String, dynamic>{
-      'post_id': postId,
-      'author_id': authorId,
-      'author_name': authorName,
-      'author_avatar_url': authorAvatarUrl,
-      'message': message,
-    };
   }
 }
