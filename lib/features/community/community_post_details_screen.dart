@@ -18,10 +18,12 @@ class CommunityPostDetailsScreen extends StatefulWidget {
   final String postId;
 
   @override
-  State<CommunityPostDetailsScreen> createState() => _CommunityPostDetailsScreenState();
+  State<CommunityPostDetailsScreen> createState() =>
+      _CommunityPostDetailsScreenState();
 }
 
-class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen> {
+class _CommunityPostDetailsScreenState
+    extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _commentController = TextEditingController();
 
@@ -55,7 +57,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
         _comments = comments;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
@@ -65,7 +67,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load post')),
+        SnackBar(content: Text('Failed to load post: $error')),
       );
     }
   }
@@ -108,9 +110,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
 
       _commentController.clear();
       await _load();
-    } catch (_) {
+    } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to post comment')),
+        SnackBar(content: Text('Failed to post comment: $error')),
       );
     } finally {
       if (mounted) {
@@ -127,15 +129,19 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
       final document = quill.Document.fromJson(
         List<Map<String, dynamic>>.from(decoded['ops'] as List<dynamic>),
       );
+
       return quill.QuillController(
         document: document,
         selection: const TextSelection.collapsed(offset: 0),
+        readOnly: true,
       );
     } catch (_) {
       final fallbackDoc = quill.Document()..insert(0, 'Unable to display post body.');
+
       return quill.QuillController(
         document: fallbackDoc,
         selection: const TextSelection.collapsed(offset: 0),
+        readOnly: true,
       );
     }
   }
@@ -176,7 +182,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                 ? Text(
                                     post.authorName.isEmpty
                                         ? '?'
-                                        : post.authorName.substring(0, 1).toUpperCase(),
+                                        : post.authorName
+                                            .substring(0, 1)
+                                            .toUpperCase(),
                                   )
                                 : null,
                           ),
@@ -187,12 +195,14 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                               children: <Widget>[
                                 Text(
                                   post.authorName,
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                                 Text(
-                                  DateFormat('dd MMM yyyy, HH:mm').format(post.createdAt),
+                                  DateFormat('dd MMM yyyy, HH:mm')
+                                      .format(post.createdAt),
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ],
@@ -208,9 +218,10 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                       const SizedBox(height: 16),
                       Text(
                         post.title,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 14),
                       if (post.imageUrls.isNotEmpty) ...<Widget>[
@@ -219,7 +230,8 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: post.imageUrls.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 10),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 10),
                             itemBuilder: (BuildContext context, int index) {
                               final imageUrl = post.imageUrls[index];
 
@@ -246,7 +258,8 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                         if (state.extendedImageLoadState ==
                                             LoadState.completed) {
                                           return ExtendedRawImage(
-                                            image: state.extendedImageInfo?.image,
+                                            image:
+                                                state.extendedImageInfo?.image,
                                             fit: BoxFit.cover,
                                           );
                                         }
@@ -256,7 +269,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                           return Container(
                                             color: Colors.black12,
                                             alignment: Alignment.center,
-                                            child: const Icon(Icons.broken_image_outlined),
+                                            child: const Icon(
+                                              Icons.broken_image_outlined,
+                                            ),
                                           );
                                         }
 
@@ -279,14 +294,22 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
-                          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                          color: Theme.of(context).colorScheme.surface,
                           border: Border.all(
-                            color: Theme.of(context).dividerColor.withOpacity(0.2),
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.2),
                           ),
                         ),
                         child: quill.QuillEditor.basic(
-                          controller: _buildReadOnlyController(post.bodyDeltaJson),
-                          readOnly: true,
+                          controller:
+                              _buildReadOnlyController(post.bodyDeltaJson),
+                          config: const quill.QuillEditorConfig(
+                            padding: EdgeInsets.zero,
+                            enableInteractiveSelection: false,
+                            scrollable: false,
+                            showCursor: false,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -311,16 +334,17 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                       const SizedBox(height: 22),
                       Text(
                         'Comments',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
-                          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                          color: Theme.of(context).colorScheme.surface,
                         ),
                         child: Column(
                           children: <Widget>[
@@ -339,12 +363,15 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                             Align(
                               alignment: Alignment.centerRight,
                               child: FilledButton.icon(
-                                onPressed: _isSendingComment ? null : _submitComment,
+                                onPressed:
+                                    _isSendingComment ? null : _submitComment,
                                 icon: _isSendingComment
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
                                       )
                                     : const Icon(Icons.send_outlined),
                                 label: const Text('Post comment'),
@@ -367,7 +394,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: Theme.of(context).dividerColor.withOpacity(0.18),
+                                color: Theme.of(context)
+                                    .dividerColor
+                                    .withOpacity(0.18),
                               ),
                             ),
                             child: Row(
@@ -375,23 +404,33 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                               children: <Widget>[
                                 CircleAvatar(
                                   radius: 16,
-                                  backgroundImage: comment.authorAvatarUrl != null &&
-                                          comment.authorAvatarUrl!.trim().isNotEmpty
-                                      ? NetworkImage(comment.authorAvatarUrl!)
-                                      : null,
+                                  backgroundImage:
+                                      comment.authorAvatarUrl != null &&
+                                              comment.authorAvatarUrl!
+                                                  .trim()
+                                                  .isNotEmpty
+                                          ? NetworkImage(
+                                              comment.authorAvatarUrl!,
+                                            )
+                                          : null,
                                   child: comment.authorAvatarUrl == null ||
-                                          comment.authorAvatarUrl!.trim().isEmpty
+                                          comment.authorAvatarUrl!
+                                              .trim()
+                                              .isEmpty
                                       ? Text(
                                           comment.authorName.isEmpty
                                               ? '?'
-                                              : comment.authorName.substring(0, 1).toUpperCase(),
+                                              : comment.authorName
+                                                  .substring(0, 1)
+                                                  .toUpperCase(),
                                         )
                                       : null,
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: <Widget>[
                                       Row(
                                         children: <Widget>[
@@ -401,12 +440,18 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .titleSmall
-                                                  ?.copyWith(fontWeight: FontWeight.w700),
+                                                  ?.copyWith(
+                                                    fontWeight:
+                                                        FontWeight.w700,
+                                                  ),
                                             ),
                                           ),
                                           Text(
-                                            DateFormat('dd MMM HH:mm').format(comment.createdAt),
-                                            style: Theme.of(context).textTheme.bodySmall,
+                                            DateFormat('dd MMM HH:mm')
+                                                .format(comment.createdAt),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
                                           ),
                                         ],
                                       ),
@@ -456,10 +501,12 @@ class CommunityImageViewerScreen extends StatefulWidget {
   final int initialIndex;
 
   @override
-  State<CommunityImageViewerScreen> createState() => _CommunityImageViewerScreenState();
+  State<CommunityImageViewerScreen> createState() =>
+      _CommunityImageViewerScreenState();
 }
 
-class _CommunityImageViewerScreenState extends State<CommunityImageViewerScreen> {
+class _CommunityImageViewerScreenState
+    extends State<CommunityImageViewerScreen> {
   late final PageController _pageController =
       PageController(initialPage: widget.initialIndex);
 
@@ -483,16 +530,12 @@ class _CommunityImageViewerScreenState extends State<CommunityImageViewerScreen>
           });
         },
         itemBuilder: (BuildContext context, int index) {
-          return InteractiveViewer(
-            minScale: 0.8,
-            maxScale: 5,
-            child: Center(
-              child: ExtendedImage.network(
-                widget.imageUrls[index],
-                fit: BoxFit.contain,
-                mode: ExtendedImageMode.gesture,
-                cache: true,
-              ),
+          return Center(
+            child: ExtendedImage.network(
+              widget.imageUrls[index],
+              fit: BoxFit.contain,
+              mode: ExtendedImageMode.gesture,
+              cache: true,
             ),
           );
         },

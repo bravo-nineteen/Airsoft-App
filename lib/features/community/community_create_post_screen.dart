@@ -10,10 +10,12 @@ class CommunityCreatePostScreen extends StatefulWidget {
   const CommunityCreatePostScreen({super.key});
 
   @override
-  State<CommunityCreatePostScreen> createState() => _CommunityCreatePostScreenState();
+  State<CommunityCreatePostScreen> createState() =>
+      _CommunityCreatePostScreenState();
 }
 
-class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
+class _CommunityCreatePostScreenState
+    extends State<CommunityCreatePostScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
@@ -107,9 +109,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       }
 
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to create post')),
+        SnackBar(content: Text('Failed to create post: $error')),
       );
     } finally {
       if (mounted) {
@@ -220,38 +222,49 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(18),
-                      color: theme.colorScheme.surfaceContainerLowest,
+                      color: theme.colorScheme.surface,
                       border: Border.all(
                         color: theme.dividerColor.withOpacity(0.2),
                       ),
                     ),
                     child: Column(
                       children: <Widget>[
-                        quill.QuillToolbar.simple(
+                        quill.QuillSimpleToolbar(
                           controller: _quillController,
-                          configurations: const quill.QuillSimpleToolbarConfigurations(
+                          config: const quill.QuillSimpleToolbarConfig(
                             showInlineCode: false,
                             showCodeBlock: false,
                             showBackgroundColorButton: false,
                             showColorButton: false,
                             showFontFamily: false,
                             showFontSize: false,
-                            showListNumbers: true,
-                            showListBullets: true,
-                            showQuote: true,
-                            showLink: true,
+                            showSubscript: false,
+                            showSuperscript: false,
+                            showClipboardCut: false,
+                            showClipboardPaste: false,
+                            showClipboardCopy: false,
+                            showUndo: true,
+                            showRedo: true,
                             showSearchButton: false,
-                            showDirection: false,
-                            showIndent: true,
-                            showDividers: true,
                           ),
                         ),
                         const Divider(height: 20),
-                        SizedBox(
-                          height: 320,
+                        Container(
+                          constraints: const BoxConstraints(minHeight: 320),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            color: theme.colorScheme.surface,
+                          ),
                           child: quill.QuillEditor.basic(
                             controller: _quillController,
-                            readOnly: false,
+                            config: const quill.QuillEditorConfig(
+                              placeholder: 'Write your post here',
+                              padding: EdgeInsets.zero,
+                            ),
                           ),
                         ),
                       ],
@@ -303,17 +316,6 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                         );
                       }).toList(),
                     ),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
-                    ),
-                    child: const Text(
-                      'This editor is WYSIWYG. Users tap bold, bullets, and quote buttons directly. No markdown symbols are needed.',
-                    ),
-                  ),
                 ],
               ),
             ),
