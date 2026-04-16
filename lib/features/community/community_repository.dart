@@ -20,7 +20,11 @@ class CommunityRepository {
         .order('created_at', ascending: false);
 
     var posts = (response as List<dynamic>)
-        .map((e) => CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .map(
+          (e) => CommunityPostModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
         .toList();
 
     final normalizedQuery = query.trim().toLowerCase();
@@ -34,7 +38,9 @@ class CommunityRepository {
     }
 
     if (category != 'All') {
-      posts = posts.where((post) => (post.category ?? 'General') == category).toList();
+      posts = posts
+          .where((post) => (post.category ?? 'General') == category)
+          .toList();
     }
 
     return posts;
@@ -48,6 +54,29 @@ class CommunityRepository {
         .single();
 
     return CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  Future<Map<String, dynamic>?> fetchCurrentUserProfile() async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      return null;
+    }
+
+    try {
+      final response = await _client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+
+      return Map<String, dynamic>.from(response);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String> createPost({
@@ -97,7 +126,11 @@ class CommunityRepository {
         .order('created_at', ascending: true);
 
     return (response as List<dynamic>)
-        .map((e) => CommunityCommentModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .map(
+          (e) => CommunityCommentModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
         .toList();
   }
 
@@ -119,12 +152,6 @@ class CommunityRepository {
     final post = await fetchPostById(postId);
     await _client.from('community_posts').update(<String, dynamic>{
       'comment_count': post.commentCount + 1,
-    }).eq('id', postId);
-  }
-
-  Future<void> bumpUpdatedAt(String postId) async {
-    await _client.from('community_posts').update(<String, dynamic>{
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', postId);
   }
 }
