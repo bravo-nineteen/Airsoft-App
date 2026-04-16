@@ -3,8 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'contact_model.dart';
 
 class ContactRepository {
-  ContactRepository();
-
   final SupabaseClient _client = Supabase.instance.client;
 
   Future<List<ContactModel>> getContacts() async {
@@ -13,27 +11,17 @@ class ContactRepository {
 
     final response = await _client
         .from('user_contacts')
-        .select('''
-          id,
-          requester_id,
-          addressee_id,
-          status,
-          requester_profile:profiles!user_contacts_requester_id_fkey(call_sign),
-          addressee_profile:profiles!user_contacts_addressee_id_fkey(call_sign)
-        ''')
+        .select()
         .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
         .order('created_at', ascending: false);
 
-    return response.map<ContactModel>((e) => ContactModel.fromJson(e)).toList();
+    return response
+        .map<ContactModel>((e) => ContactModel.fromJson(e))
+        .toList();
   }
 
   Future<void> sendRequest(String userId) async {
-    final current = _client.auth.currentUser;
-    if (current == null) throw Exception('Not logged in.');
-    if (current.id == userId) {
-      throw Exception('You cannot add yourself.');
-    }
-
+    final current = _client.auth.currentUser!;
     await _client.from('user_contacts').insert({
       'requester_id': current.id,
       'addressee_id': userId,
@@ -42,9 +30,10 @@ class ContactRepository {
   }
 
   Future<void> acceptRequest(String id) async {
-    await _client.from('user_contacts').update({
-      'status': 'accepted',
-    }).eq('id', id);
+    await _client
+        .from('user_contacts')
+        .update({'status': 'accepted'})
+        .eq('id', id);
   }
 
   Future<void> rejectRequest(String id) async {
@@ -61,7 +50,7 @@ class ContactRepository {
 
     final response = await _client
         .from('user_contacts')
-        .select('id,status')
+        .select('id')
         .or(
           'and(requester_id.eq.${current.id},addressee_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,addressee_id.eq.${current.id})',
         )
@@ -69,5 +58,18 @@ class ContactRepository {
         .maybeSingle();
 
     return response != null;
+  }
+
+  Future<int> getPendingRequestsCount() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 0;
+
+    final response = await _client
+        .from('user_contacts')
+        .select('id')
+        .eq('addressee_id', user.id)
+        .eq('status', 'pending');
+
+    return response.length;
   }
 }
