@@ -57,7 +57,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         _posts = posts;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
@@ -67,7 +67,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load posts')),
+        SnackBar(content: Text('Failed to load posts: $error')),
       );
     }
   }
@@ -120,8 +120,6 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Boards'),
@@ -184,11 +182,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: 6,
-                      itemBuilder: (_, __) => const _PostCardSkeleton(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : _posts.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
@@ -206,7 +200,6 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
                             return _CompactPostCard(
                               post: post,
-                              theme: theme,
                               timeAgo: _timeAgo(post.createdAt),
                               onTap: () => _openPostDetails(post),
                             );
@@ -223,23 +216,22 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 class _CompactPostCard extends StatelessWidget {
   const _CompactPostCard({
     required this.post,
-    required this.theme,
     required this.timeAgo,
     required this.onTap,
   });
 
   final CommunityPostModel post;
-  final ThemeData theme;
   final String timeAgo;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = post.primaryImageUrl != null;
+    final theme = Theme.of(context);
+    final imageUrl = post.primaryImageUrl;
+    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
@@ -247,6 +239,7 @@ class _CompactPostCard extends StatelessWidget {
           color: theme.dividerColor.withOpacity(0.18),
         ),
       ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -254,16 +247,14 @@ class _CompactPostCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              if (hasImage)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Stack(
-                    children: <Widget>[
-                      SizedBox(
-                        width: 110,
-                        height: 110,
-                        child: ExtendedImage.network(
-                          post.primaryImageUrl!,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 96,
+                  height: 96,
+                  child: hasImage
+                      ? ExtendedImage.network(
+                          imageUrl,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {
@@ -276,183 +267,168 @@ class _CompactPostCard extends StatelessWidget {
 
                             if (state.extendedImageLoadState == LoadState.failed) {
                               return Container(
-                                color: Colors.black12,
+                                color: theme.colorScheme.surfaceContainerHighest,
                                 alignment: Alignment.center,
                                 child: const Icon(Icons.broken_image_outlined),
                               );
                             }
 
                             return Container(
-                              color: Colors.black12,
+                              color: theme.colorScheme.surfaceContainerHighest,
                               alignment: Alignment.center,
                               child: const SizedBox(
-                                width: 22,
-                                height: 22,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
                             );
                           },
-                        ),
-                      ),
-                      if (post.imageUrls.length > 1)
-                        Positioned(
-                          right: 8,
-                          bottom: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '+${post.imageUrls.length - 1}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                        )
+                      : Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.forum_outlined,
+                            color: theme.colorScheme.primary,
+                            size: 28,
                           ),
                         ),
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    color: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.forum_outlined,
-                    size: 30,
-                    color: theme.colorScheme.primary,
-                  ),
                 ),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: SizedBox(
-                  height: 110,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          CircleAvatar(
-                            radius: 13,
-                            backgroundImage: post.authorAvatarUrl != null &&
-                                    post.authorAvatarUrl!.trim().isNotEmpty
-                                ? NetworkImage(post.authorAvatarUrl!)
-                                : null,
-                            child: post.authorAvatarUrl == null ||
-                                    post.authorAvatarUrl!.trim().isEmpty
-                                ? Text(
-                                    post.authorName.isEmpty
-                                        ? '?'
-                                        : post.authorName.substring(0, 1).toUpperCase(),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              post.authorName,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            timeAgo,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: <Widget>[
-                          if (post.isPinned)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withOpacity(0.14),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                'Pinned',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          if ((post.category ?? '').isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.secondary.withOpacity(0.14),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                post.category!,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.secondary,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        post.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundImage: post.authorAvatarUrl != null &&
+                                  post.authorAvatarUrl!.trim().isNotEmpty
+                              ? NetworkImage(post.authorAvatarUrl!)
+                              : null,
+                          child: post.authorAvatarUrl == null ||
+                                  post.authorAvatarUrl!.trim().isEmpty
+                              ? Text(
+                                  post.authorName.isEmpty
+                                      ? '?'
+                                      : post.authorName.substring(0, 1).toUpperCase(),
+                                )
+                              : null,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: Text(
-                          post.excerpt,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            post.authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
+                        Text(
+                          timeAgo,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: <Widget>[
+                        if (post.isPinned)
+                          _MiniBadge(
+                            text: 'Pinned',
+                            color: theme.colorScheme.primary.withOpacity(0.14),
+                            textColor: theme.colorScheme.primary,
+                          ),
+                        if ((post.category ?? '').isNotEmpty)
+                          _MiniBadge(
+                            text: post.category!,
+                            color: theme.colorScheme.secondary.withOpacity(0.14),
+                            textColor: theme.colorScheme.secondary,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      post.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: <Widget>[
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      post.excerpt.isEmpty ? 'No preview text available.' : post.excerpt,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _MetaPill(
+                          icon: Icons.mode_comment_outlined,
+                          label: post.commentCount.toString(),
+                        ),
+                        _MetaPill(
+                          icon: Icons.visibility_outlined,
+                          label: post.viewCount.toString(),
+                        ),
+                        _MetaPill(
+                          icon: Icons.favorite_border,
+                          label: post.likeCount.toString(),
+                        ),
+                        if (post.imageUrls.isNotEmpty)
                           _MetaPill(
-                            icon: Icons.mode_comment_outlined,
-                            label: post.commentCount.toString(),
+                            icon: Icons.image_outlined,
+                            label: post.imageUrls.length.toString(),
                           ),
-                          const SizedBox(width: 8),
-                          _MetaPill(
-                            icon: Icons.visibility_outlined,
-                            label: post.viewCount.toString(),
-                          ),
-                          const SizedBox(width: 8),
-                          _MetaPill(
-                            icon: Icons.favorite_border,
-                            label: post.likeCount.toString(),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MiniBadge extends StatelessWidget {
+  const _MiniBadge({
+    required this.text,
+    required this.color,
+    required this.textColor,
+  });
+
+  final String text;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
       ),
     );
   }
@@ -476,6 +452,7 @@ class _MetaPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Icon(icon, size: 14),
           const SizedBox(width: 4),
@@ -486,60 +463,6 @@ class _MetaPill extends StatelessWidget {
                 ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PostCardSkeleton extends StatelessWidget {
-  const _PostCardSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
-
-    return Card(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SizedBox(
-                height: 110,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List<Widget>.generate(
-                    5,
-                    (int index) => Padding(
-                      padding: EdgeInsets.only(bottom: index == 4 ? 0 : 8),
-                      child: Container(
-                        height: index == 0 ? 14 : 12,
-                        width: index.isEven ? 180 : 120,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
