@@ -66,6 +66,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     }
   }
 
+  Future<void> _openPost(CommunityModel post) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityPostDetailsScreen(post: post),
+      ),
+    );
+    await _refresh();
+  }
+
   String _categoryLabel(AppLocalizations l10n, String value) {
     switch (value) {
       case 'all':
@@ -126,7 +135,107 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
     return CircleAvatar(
       child: Text(
-        post.displayName.isEmpty ? '?' : post.displayName.characters.first.toUpperCase(),
+        post.displayName.isEmpty
+            ? '?'
+            : post.displayName.characters.first.toUpperCase(),
+      ),
+    );
+  }
+
+  Widget _buildMetaLine(
+    BuildContext context,
+    AppLocalizations l10n,
+    CommunityModel post,
+  ) {
+    return Text(
+      '${post.displayName} • ${_timeLabel(l10n, post.updatedAt)}',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodySmall,
+    );
+  }
+
+  Widget _buildPostCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    CommunityModel post,
+  ) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openPost(post),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _avatar(post),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        _buildMetaLine(context, l10n, post),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(_categoryLabel(l10n, post.category)),
+                  ),
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(_languageLabel(l10n, post.languageCode)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              CommunityRichText(
+                text: post.body,
+                maxLines: 3,
+              ),
+              if (post.hasImage) ...[
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      post.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) {
+                        return Container(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.image_not_supported),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -134,6 +243,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: SafeArea(
@@ -144,89 +254,89 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
           label: Text(l10n.t('post')),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Column(
-              children: [
-                SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment<String>(
-                      value: 'en',
-                      label: Text(l10n.t('english')),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'ja',
-                      label: Text('日本語'),
-                    ),
-                  ],
-                  selected: {_languageCode},
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _languageCode = selection.first;
-                      _future = _loadPosts();
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: l10n.t('searchPosts'),
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      onPressed: _refresh,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ),
-                  onSubmitted: (_) => _refresh(),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 44,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final value = _categories[index];
-                      final selected = _category == value;
-
-                      return ChoiceChip(
-                        label: Text(_categoryLabel(l10n, value)),
-                        selected: selected,
-                        onSelected: (_) {
-                          setState(() {
-                            _category = value;
-                            _future = _loadPosts();
-                          });
-                        },
-                      );
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                children: [
+                  SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment<String>(
+                        value: 'en',
+                        label: Text(l10n.t('english')),
+                      ),
+                      const ButtonSegment<String>(
+                        value: 'ja',
+                        label: Text('日本語'),
+                      ),
+                    ],
+                    selected: {_languageCode},
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        _languageCode = selection.first;
+                        _future = _loadPosts();
+                      });
                     },
                   ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: FutureBuilder<List<CommunityModel>>(
-                future: _future,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: l10n.t('searchPosts'),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        onPressed: _refresh,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                    ),
+                    onSubmitted: (_) => _refresh(),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 44,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _categories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final value = _categories[index];
+                        final selected = _category == value;
 
-                  if (snapshot.hasError) {
-                    return ListView(
-                      children: [
-                        const SizedBox(height: 160),
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
+                        return ChoiceChip(
+                          label: Text(_categoryLabel(l10n, value)),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() {
+                              _category = value;
+                              _future = _loadPosts();
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: FutureBuilder<List<CommunityModel>>(
+                  future: _future,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(24, 80, 24, 120),
+                        children: [
+                          Center(
                             child: Text(
                               l10n.t(
                                 'failedLoadBoard',
@@ -235,126 +345,36 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                               textAlign: TextAlign.center,
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  }
-
-                  final posts = snapshot.data ?? [];
-                  if (posts.isEmpty) {
-                    return ListView(
-                      children: [
-                        SizedBox(height: 160),
-                        Center(child: Text(l10n.t('noPostsFound'))),
-                      ],
-                    );
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                    itemCount: posts.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final post = posts[index];
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CommunityPostDetailsScreen(post: post),
-                              ),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    _avatar(post),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            post.title,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${post.displayName} • ${_timeLabel(l10n, post.updatedAt)}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      label: Text(_categoryLabel(l10n, post.category)),
-                                    ),
-                                    Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      label: Text(_languageLabel(l10n, post.languageCode)),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                CommunityRichText(
-                                  text: post.body,
-                                  maxLines: 3,
-                                ),
-                                if (post.hasImage) ...[
-                                  const SizedBox(height: 12),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: AspectRatio(
-                                      aspectRatio: 16 / 9,
-                                      child: Image.network(
-                                        post.imageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) {
-                                          return Container(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .surfaceContainerHighest,
-                                            alignment: Alignment.center,
-                                            child: const Icon(Icons.image_not_supported),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
+                        ],
                       );
-                    },
-                  );
-                },
+                    }
+
+                    final posts = snapshot.data ?? [];
+                    if (posts.isEmpty) {
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(24, 120, 24, 120),
+                        children: [
+                          Center(child: Text(l10n.t('noPostsFound'))),
+                        ],
+                      );
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                      itemCount: posts.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final post = posts[index];
+                        return _buildPostCard(context, l10n, post);
+                      },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
