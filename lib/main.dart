@@ -3,9 +3,6 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:flutter_quill/translations.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
@@ -92,35 +89,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
       return const SplashScreen();
     }
 
-    return const AppLocalizationWrapper(
-      child: AirsoftApp(),
-    );
-  }
-}
-
-class AppLocalizationWrapper extends StatelessWidget {
-  const AppLocalizationWrapper({
-    super.key,
-    required this.child,
-  });
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en'),
-      ],
-      home: child,
-    );
+    return const AirsoftApp();
   }
 }
 
@@ -198,15 +167,6 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en'),
-      ],
       home: Scaffold(
         backgroundColor: _bg,
         body: Stack(
@@ -414,15 +374,6 @@ class StartupErrorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en'),
-      ],
       home: Scaffold(
         body: SafeArea(
           child: Padding(
