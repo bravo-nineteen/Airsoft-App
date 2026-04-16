@@ -284,7 +284,7 @@ class _FieldListCard extends StatelessWidget {
                       ? Image.network(
                           field.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _FieldThumbFallback(field: field),
+                          errorBuilder: (_, _, _) => _FieldThumbFallback(field: field),
                         )
                       : _FieldThumbFallback(field: field),
                 ),

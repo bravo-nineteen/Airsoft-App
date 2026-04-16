@@ -223,7 +223,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _eventType,
+              initialValue: _eventType,
               items: _eventTypes
                   .map(
                     (value) => DropdownMenuItem(
@@ -240,7 +240,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _language,
+              initialValue: _language,
               items: _languages
                   .map(
                     (value) => DropdownMenuItem(
@@ -257,7 +257,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _skillLevel,
+              initialValue: _skillLevel,
               items: _skillLevels
                   .map(
                     (value) => DropdownMenuItem(

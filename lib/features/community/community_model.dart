@@ -1,103 +1,143 @@
-class CommunityModel {
-  const CommunityModel({
+import 'dart:convert';
+
+class CommunityPostModel {
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String? authorAvatarUrl;
+  final String title;
+  final String plainText;
+  final String bodyDeltaJson;
+  final List<String> imageUrls;
+  final String? category;
+  final int commentCount;
+  final int likeCount;
+  final int viewCount;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final bool isPinned;
+
+  const CommunityPostModel({
     required this.id,
-    required this.userId,
+    required this.authorId,
+    required this.authorName,
+    required this.authorAvatarUrl,
     required this.title,
-    required this.body,
+    required this.plainText,
+    required this.bodyDeltaJson,
+    required this.imageUrls,
+    required this.category,
+    required this.commentCount,
+    required this.likeCount,
+    required this.viewCount,
     required this.createdAt,
     required this.updatedAt,
-    required this.languageCode,
-    required this.category,
-    this.callSign,
-    this.avatarUrl,
-    this.imageUrl,
+    required this.isPinned,
   });
 
-  final String id;
-  final String userId;
-  final String title;
-  final String body;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final String languageCode;
-  final String category;
-  final String? callSign;
-  final String? avatarUrl;
-  final String? imageUrl;
+  String get excerpt {
+    final normalized = plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= 160) {
+      return normalized;
+    }
+    return '${normalized.substring(0, 157)}...';
+  }
 
-  factory CommunityModel.fromJson(Map<String, dynamic> json) {
-    final rawUserId = _readNullableString(json['user_id']) ??
-        _readNullableString(json['author_id']) ??
-        '';
+  String? get primaryImageUrl {
+    if (imageUrls.isEmpty) {
+      return null;
+    }
+    return imageUrls.first;
+  }
 
-    final rawLanguageCode = _readNullableString(json['language_code']) ??
-        _readNullableString(json['language']) ??
-        'en';
+  factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
+    final imageList = (json['image_urls'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .where((e) => e.trim().isNotEmpty)
+            .toList() ??
+        <String>[];
 
-    return CommunityModel(
-      id: _readRequiredString(json['id']),
-      userId: rawUserId,
-      title: _readNullableString(json['title']) ?? '',
-      body: _readNullableString(json['body']) ?? '',
-      createdAt: _readDateTime(json['created_at']),
-      updatedAt: _readDateTime(json['updated_at'], fallback: json['created_at']),
-      languageCode: rawLanguageCode.trim().isEmpty ? 'en' : rawLanguageCode,
-      category: (_readNullableString(json['category']) ?? 'off-topic').trim().isEmpty
-          ? 'off-topic'
-          : (_readNullableString(json['category']) ?? 'off-topic'),
-      callSign: _firstNonEmpty([
-        json['call_sign'],
-        json['author_name'],
-      ]),
-      avatarUrl: _readNullableString(json['avatar_url']),
-      imageUrl: _readNullableString(json['image_url']),
+    return CommunityPostModel(
+      id: json['id'].toString(),
+      authorId: json['author_id'].toString(),
+      authorName: (json['author_name'] ?? 'Unknown').toString(),
+      authorAvatarUrl: json['author_avatar_url']?.toString(),
+      title: (json['title'] ?? '').toString(),
+      plainText: (json['plain_text'] ?? '').toString(),
+      bodyDeltaJson: (json['body_delta_json'] ?? '{"ops":[{"insert":"\\n"}]}').toString(),
+      imageUrls: imageList,
+      category: json['category']?.toString(),
+      commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
+      viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
+      updatedAt: json['updated_at'] == null
+          ? null
+          : DateTime.parse(json['updated_at'].toString()).toLocal(),
+      isPinned: json['is_pinned'] == true,
     );
   }
 
-  String get displayName {
-    final value = (callSign ?? '').trim();
-    return value.isEmpty ? 'Operator' : value;
+  Map<String, dynamic> toInsertJson() {
+    return <String, dynamic>{
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
+      'title': title,
+      'plain_text': plainText,
+      'body_delta_json': bodyDeltaJson,
+      'image_urls': imageUrls,
+      'category': category,
+      'comment_count': commentCount,
+      'like_count': likeCount,
+      'view_count': viewCount,
+      'is_pinned': isPinned,
+    };
   }
 
-  bool get hasAvatar => (avatarUrl ?? '').trim().isNotEmpty;
-  bool get hasImage => (imageUrl ?? '').trim().isNotEmpty;
-  bool get hasValidUserId => _isValidUuid(userId);
+  static String encodeDelta(List<Map<String, dynamic>> ops) {
+    return jsonEncode(<String, dynamic>{'ops': ops});
+  }
+}
 
-  static String _readRequiredString(dynamic value) {
-    final text = _readNullableString(value);
-    return text ?? '';
+class CommunityCommentModel {
+  final String id;
+  final String postId;
+  final String authorId;
+  final String authorName;
+  final String? authorAvatarUrl;
+  final String message;
+  final DateTime createdAt;
+
+  const CommunityCommentModel({
+    required this.id,
+    required this.postId,
+    required this.authorId,
+    required this.authorName,
+    required this.authorAvatarUrl,
+    required this.message,
+    required this.createdAt,
+  });
+
+  factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
+    return CommunityCommentModel(
+      id: json['id'].toString(),
+      postId: json['post_id'].toString(),
+      authorId: json['author_id'].toString(),
+      authorName: (json['author_name'] ?? 'Unknown').toString(),
+      authorAvatarUrl: json['author_avatar_url']?.toString(),
+      message: (json['message'] ?? '').toString(),
+      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
+    );
   }
 
-  static DateTime _readDateTime(dynamic value, {dynamic fallback}) {
-    final primary = DateTime.tryParse((value ?? '').toString());
-    if (primary != null) return primary;
-
-    final secondary = DateTime.tryParse((fallback ?? '').toString());
-    if (secondary != null) return secondary;
-
-    return DateTime.now();
-  }
-
-  static String? _firstNonEmpty(List<dynamic> values) {
-    for (final value in values) {
-      final text = _readNullableString(value);
-      if (text != null) return text;
-    }
-    return null;
-  }
-
-  static String? _readNullableString(dynamic value) {
-    if (value == null) return null;
-    final text = value.toString().trim();
-    if (text.isEmpty) return null;
-    if (text.toLowerCase() == 'null') return null;
-    return text;
-  }
-
-  static bool _isValidUuid(String? value) {
-    if (value == null) return false;
-    return RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}4',
-    ).hasMatch(value);
+  Map<String, dynamic> toInsertJson() {
+    return <String, dynamic>{
+      'post_id': postId,
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
+      'message': message,
+    };
   }
 }

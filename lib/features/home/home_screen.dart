@@ -430,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
         gradient: LinearGradient(
           colors: [
             theme.colorScheme.primary.withOpacity(0.18),
-            theme.colorScheme.surfaceVariant.withOpacity(0.60),
+            theme.colorScheme.surfaceContainerHighest.withOpacity(0.60),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -506,7 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
         itemCount: actions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final action = actions[index];
           return Container(
@@ -579,11 +579,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 180,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) {
+                  errorBuilder: (_, _, _) {
                     return Container(
                       height: 180,
                       alignment: Alignment.center,
-                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: const Icon(Icons.broken_image_outlined, size: 32),
                     );
                   },
@@ -786,11 +786,11 @@ class HomeFeedDetailScreen extends StatelessWidget {
               height: 240,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) {
+              errorBuilder: (_, _, _) {
                 return Container(
                   height: 240,
                   alignment: Alignment.center,
-                  color: theme.colorScheme.surfaceVariant,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   child: const Icon(Icons.broken_image_outlined, size: 32),
                 );
               },

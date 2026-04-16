@@ -3,169 +3,122 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'community_model.dart';
 
 class CommunityRepository {
-  CommunityRepository();
+  CommunityRepository({
+    SupabaseClient? client,
+  }) : _client = client ?? Supabase.instance.client;
 
-  final SupabaseClient _client = Supabase.instance.client;
+  final SupabaseClient _client;
 
-  Future<List<CommunityModel>> getPosts({
-    String languageCode = 'en',
-    String category = 'all',
-    String search = '',
+  Future<List<CommunityPostModel>> fetchPosts({
+    String query = '',
+    String category = 'All',
   }) async {
     final response = await _client
         .from('community_posts')
         .select()
-        .order('updated_at', ascending: false);
+        .order('is_pinned', ascending: false)
+        .order('created_at', ascending: false);
 
-    var posts = response
-        .map<CommunityModel>((row) => CommunityModel.fromJson(
-              Map<String, dynamic>.from(row as Map),
-            ))
+    var posts = (response as List<dynamic>)
+        .map((e) => CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
 
-    posts = await _attachProfileData(posts);
-
-    if (languageCode != 'all') {
-      posts = posts.where((post) => post.languageCode == languageCode).toList();
-    }
-
-    if (category != 'all') {
-      posts = posts.where((post) => post.category == category).toList();
-    }
-
-    final trimmedSearch = search.trim().toLowerCase();
-    if (trimmedSearch.isNotEmpty) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isNotEmpty) {
       posts = posts.where((post) {
-        return post.title.toLowerCase().contains(trimmedSearch) ||
-            post.body.toLowerCase().contains(trimmedSearch) ||
-            post.displayName.toLowerCase().contains(trimmedSearch);
+        return post.title.toLowerCase().contains(normalizedQuery) ||
+            post.plainText.toLowerCase().contains(normalizedQuery) ||
+            (post.category ?? '').toLowerCase().contains(normalizedQuery) ||
+            post.authorName.toLowerCase().contains(normalizedQuery);
       }).toList();
+    }
+
+    if (category != 'All') {
+      posts = posts.where((post) => (post.category ?? 'General') == category).toList();
     }
 
     return posts;
   }
 
-  Future<void> createPost({
+  Future<CommunityPostModel> fetchPostById(String postId) async {
+    final response = await _client
+        .from('community_posts')
+        .select()
+        .eq('id', postId)
+        .single();
+
+    return CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  Future<String> createPost({
+    required String authorId,
+    required String authorName,
+    required String? authorAvatarUrl,
     required String title,
-    required String body,
-    required String languageCode,
-    required String category,
-    String? imageUrl,
+    required String plainText,
+    required String bodyDeltaJson,
+    required List<String> imageUrls,
+    required String? category,
   }) async {
-    final user = _client.auth.currentUser;
-    if (user == null) {
-      throw Exception('You must be logged in to create a post.');
-    }
+    final response = await _client
+        .from('community_posts')
+        .insert(<String, dynamic>{
+          'author_id': authorId,
+          'author_name': authorName,
+          'author_avatar_url': authorAvatarUrl,
+          'title': title,
+          'plain_text': plainText,
+          'body_delta_json': bodyDeltaJson,
+          'image_urls': imageUrls,
+          'category': category,
+          'comment_count': 0,
+          'like_count': 0,
+          'view_count': 0,
+          'is_pinned': false,
+        })
+        .select('id')
+        .single();
 
-    final trimmedTitle = title.trim();
-    final trimmedBody = body.trim();
-    final safeImageUrl = _sanitizeNullableString(imageUrl);
-
-    if (trimmedTitle.isEmpty) {
-      throw Exception('Title is required.');
-    }
-
-    if (trimmedBody.isEmpty) {
-      throw Exception('Body is required.');
-    }
-
-    await _client.from('community_posts').insert({
-      'user_id': user.id,
-      'title': trimmedTitle,
-      'body': trimmedBody,
-      'language_code': languageCode.trim().isEmpty ? 'en' : languageCode.trim(),
-      'category': category.trim().isEmpty ? 'off-topic' : category.trim(),
-      'image_url': safeImageUrl,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
+    return response['id'].toString();
   }
 
-  Future<void> bumpUpdatedAt(String postId) async {
-    final safePostId = _sanitizeUuid(postId);
-    if (safePostId == null) {
-      throw Exception('Invalid post id.');
-    }
-
-    await _client.from('community_posts').update({
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', safePostId);
+  Future<void> incrementPostView(String postId) async {
+    final post = await fetchPostById(postId);
+    await _client.from('community_posts').update(<String, dynamic>{
+      'view_count': post.viewCount + 1,
+    }).eq('id', postId);
   }
 
-  Future<List<CommunityModel>> _attachProfileData(List<CommunityModel> posts) async {
-    if (posts.isEmpty) return posts;
+  Future<List<CommunityCommentModel>> fetchComments(String postId) async {
+    final response = await _client
+        .from('community_comments')
+        .select()
+        .eq('post_id', postId)
+        .order('created_at', ascending: true);
 
-    final userIds = posts
-        .map((post) => _sanitizeUuid(post.userId))
-        .whereType<String>()
-        .toSet()
+    return (response as List<dynamic>)
+        .map((e) => CommunityCommentModel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
-
-    if (userIds.isEmpty) {
-      return posts;
-    }
-
-    final profilesResponse = await _client
-        .from('profiles')
-        .select('id, call_sign, avatar_url')
-        .inFilter('id', userIds);
-
-    final profiles = <String, Map<String, dynamic>>{};
-    for (final row in profilesResponse) {
-      final map = Map<String, dynamic>.from(row as Map);
-      final id = _sanitizeUuid(map['id']?.toString());
-      if (id != null) {
-        profiles[id] = map;
-      }
-    }
-
-    return posts.map((post) {
-      final profile = profiles[post.userId];
-      if (profile == null) {
-        return post;
-      }
-
-      return CommunityModel.fromJson({
-        ...postToJson(post),
-        'call_sign': profile['call_sign'],
-        'avatar_url': profile['avatar_url'],
-      });
-    }).toList();
   }
 
-  Map<String, dynamic> postToJson(CommunityModel post) {
-    return {
-      'id': post.id,
-      'user_id': post.userId,
-      'title': post.title,
-      'body': post.body,
-      'created_at': post.createdAt.toIso8601String(),
-      'updated_at': post.updatedAt.toIso8601String(),
-      'language_code': post.languageCode,
-      'category': post.category,
-      'call_sign': post.callSign,
-      'avatar_url': post.avatarUrl,
-      'image_url': post.imageUrl,
-    };
-  }
+  Future<void> addComment({
+    required String postId,
+    required String authorId,
+    required String authorName,
+    required String? authorAvatarUrl,
+    required String message,
+  }) async {
+    await _client.from('community_comments').insert(<String, dynamic>{
+      'post_id': postId,
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
+      'message': message,
+    });
 
-  String? _sanitizeNullableString(String? value) {
-    if (value == null) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    if (trimmed.toLowerCase() == 'null') return null;
-    return trimmed;
-  }
-
-  String? _sanitizeUuid(String? value) {
-    final trimmed = _sanitizeNullableString(value);
-    if (trimmed == null) return null;
-    if (!_isValidUuid(trimmed)) return null;
-    return trimmed;
-  }
-
-  bool _isValidUuid(String value) {
-    return RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
-    ).hasMatch(value);
+    final post = await fetchPostById(postId);
+    await _client.from('community_posts').update(<String, dynamic>{
+      'comment_count': post.commentCount + 1,
+    }).eq('id', postId);
   }
 }

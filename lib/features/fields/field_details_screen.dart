@@ -34,7 +34,7 @@ class FieldDetailsScreen extends StatelessWidget {
                   ? Image.network(
                       field.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _FieldImagePlaceholder(
+                      errorBuilder: (_, _, _) => _FieldImagePlaceholder(
                         name: field.name,
                       ),
                     )

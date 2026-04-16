@@ -1,401 +1,323 @@
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../app/localization/app_localizations.dart';
-import 'community_image_service.dart';
 import 'community_repository.dart';
 
 class CommunityCreatePostScreen extends StatefulWidget {
   const CommunityCreatePostScreen({super.key});
 
   @override
-  State<CommunityCreatePostScreen> createState() =>
-      _CommunityCreatePostScreenState();
+  State<CommunityCreatePostScreen> createState() => _CommunityCreatePostScreenState();
 }
 
 class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
-  final _titleController = TextEditingController();
-  final _bodyController = TextEditingController();
   final CommunityRepository _repository = CommunityRepository();
-  final CommunityImageService _imageService = CommunityImageService();
-  final ImagePicker _picker = ImagePicker();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _imageUrlController = TextEditingController();
 
-  String _languageCode = 'en';
-  String _category = 'meetups';
+  late final quill.QuillController _quillController;
+
+  final List<String> _imageUrls = <String>[];
+  String _category = 'General';
   bool _isSaving = false;
-  bool _isUploadingImage = false;
-  String? _imageUrl;
-  File? _selectedImageFile;
 
-  static const List<String> _categories = [
-    'meetups',
-    'tech-talk',
-    'troubleshooting',
-    'events',
-    'off-topic',
-    'memes',
-    'buy-sell',
-    'gear-showcase',
-    'field-talk',
+  static const List<String> _categories = <String>[
+    'General',
+    'Question',
+    'Event',
+    'Review',
+    'Sale',
+    'Guide',
   ];
 
-  Future<void> _pickImage() async {
-    if (_isUploadingImage) return;
+  @override
+  void initState() {
+    super.initState();
+    _quillController = quill.QuillController.basic();
+  }
 
-    setState(() {
-      _isUploadingImage = true;
+  String _extractPlainText() {
+    final plainText = _quillController.document.toPlainText();
+    return plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String _encodeDocumentJson() {
+    final raw = _quillController.document.toDelta().toJson();
+    return jsonEncode(<String, dynamic>{
+      'ops': raw,
     });
+  }
 
-    try {
-      final XFile? picked = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 90,
-        maxWidth: 1800,
-        maxHeight: 1800,
-      );
-
-      if (picked == null) {
-        if (!mounted) return;
-        setState(() {
-          _isUploadingImage = false;
-        });
-        return;
-      }
-
-      final file = File(picked.path);
-      final uploadedUrl = await _imageService.uploadPostImage(file);
-
-      if (!mounted) return;
-      setState(() {
-        _selectedImageFile = file;
-        _imageUrl = uploadedUrl;
-        _isUploadingImage = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isUploadingImage = false;
-      });
+  Future<void> _savePost() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).t('failedUploadImage', args: {'error': '$e'}),
-          ),
-        ),
+        const SnackBar(content: Text('You must be logged in to post')),
       );
-    }
-  }
-
-  void _applyWrap(String prefix, String suffix) {
-    final text = _bodyController.text;
-    final selection = _bodyController.selection;
-
-    final start = selection.start >= 0 ? selection.start : text.length;
-    final end = selection.end >= 0 ? selection.end : text.length;
-
-    final selectedText = (start < end) ? text.substring(start, end) : '';
-    final replacement = '$prefix${selectedText.isEmpty ? 'text' : selectedText}$suffix';
-
-    final newText = text.replaceRange(start, end, replacement);
-    final cursorOffset = selectedText.isEmpty
-        ? start + prefix.length
-        : start + replacement.length;
-
-    _bodyController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: cursorOffset),
-    );
-  }
-
-  void _applyLinePrefix(String prefix, {bool numbered = false}) {
-    final text = _bodyController.text;
-    final selection = _bodyController.selection;
-
-    final start = selection.start >= 0 ? selection.start : text.length;
-    final end = selection.end >= 0 ? selection.end : text.length;
-
-    final safeStart = start.clamp(0, text.length);
-    final safeEnd = end.clamp(0, text.length);
-
-    final lineStart = text.lastIndexOf('\n', safeStart == 0 ? 0 : safeStart - 1);
-    final adjustedStart = lineStart == -1 ? 0 : lineStart + 1;
-
-    final lineEndIndex = text.indexOf('\n', safeEnd);
-    final adjustedEnd = lineEndIndex == -1 ? text.length : lineEndIndex;
-
-    final selectedBlock = text.substring(adjustedStart, adjustedEnd);
-    final lines = selectedBlock.split('\n');
-
-    final updatedLines = <String>[];
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      if (line.trim().isEmpty) {
-        updatedLines.add(numbered ? '${i + 1}. ' : prefix);
-      } else {
-        updatedLines.add(numbered ? '${i + 1}. $line' : '$prefix$line');
-      }
+      return;
     }
 
-    final replacement = updatedLines.join('\n');
-    final newText = text.replaceRange(adjustedStart, adjustedEnd, replacement);
-
-    _bodyController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: adjustedStart + replacement.length,
-      ),
-    );
-  }
-
-  Widget _buildFormatButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onPressed,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          child: Icon(icon, size: 20),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _save() async {
     final title = _titleController.text.trim();
-    final body = _bodyController.text.trim();
+    final plainText = _extractPlainText();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).t('titleRequired'))),
+        const SnackBar(content: Text('Title is required')),
       );
       return;
     }
 
-    if (body.isEmpty) {
+    if (plainText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).t('bodyRequired'))),
+        const SnackBar(content: Text('Body is required')),
       );
       return;
     }
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
+      final metadata = user.userMetadata ?? <String, dynamic>{};
+      final authorName = (metadata['call_sign'] ??
+              metadata['callsign'] ??
+              metadata['full_name'] ??
+              user.email ??
+              'User')
+          .toString();
+      final authorAvatarUrl = metadata['avatar_url']?.toString();
+
       await _repository.createPost(
+        authorId: user.id,
+        authorName: authorName,
+        authorAvatarUrl: authorAvatarUrl,
         title: title,
-        body: body,
-        languageCode: _languageCode,
+        plainText: plainText,
+        bodyDeltaJson: _encodeDocumentJson(),
+        imageUrls: _imageUrls,
         category: _category,
-        imageUrl: _imageUrl,
       );
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).t('failedCreatePost', args: {'error': '$e'}),
-          ),
-        ),
+        const SnackBar(content: Text('Failed to create post')),
       );
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
 
-  String _labelForCategory(AppLocalizations l10n, String value) {
-    switch (value) {
-      case 'meetups':
-        return l10n.t('meetupsLabel');
-      case 'tech-talk':
-        return l10n.t('techTalk');
-      case 'troubleshooting':
-        return l10n.t('troubleshooting');
-      case 'events':
-        return l10n.events;
-      case 'off-topic':
-        return l10n.t('offTopic');
-      case 'memes':
-        return l10n.t('memes');
-      case 'buy-sell':
-        return l10n.t('buySell');
-      case 'gear-showcase':
-        return l10n.t('gearShowcase');
-      case 'field-talk':
-        return l10n.t('fieldTalk');
-      default:
-        return value;
+  void _addImageUrl() {
+    final value = _imageUrlController.text.trim();
+    if (value.isEmpty) {
+      return;
     }
+
+    if (_imageUrls.contains(value)) {
+      _imageUrlController.clear();
+      return;
+    }
+
+    setState(() {
+      _imageUrls.add(value);
+      _imageUrlController.clear();
+    });
+  }
+
+  void _removeImageUrl(String url) {
+    setState(() {
+      _imageUrls.remove(url);
+    });
   }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _bodyController.dispose();
+    _imageUrlController.dispose();
+    _quillController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final previewImage = _selectedImageFile != null
-        ? Image.file(_selectedImageFile!, fit: BoxFit.cover)
-        : (_imageUrl ?? '').trim().isNotEmpty
-            ? Image.network(_imageUrl!, fit: BoxFit.cover)
-            : null;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('createPost'))),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            SegmentedButton<String>(
-              segments: [
-                ButtonSegment<String>(
-                  value: 'en',
-                  label: Text(l10n.t('english')),
-                ),
-                const ButtonSegment<String>(
-                  value: 'ja',
-                  label: Text('日本語'),
-                ),
-              ],
-              selected: {_languageCode},
-              onSelectionChanged: (selection) {
-                setState(() {
-                  _languageCode = selection.first;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: InputDecoration(labelText: l10n.t('section')),
-              items: _categories
-                  .map(
-                    (value) => DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(_labelForCategory(l10n, value)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  _category = value ?? 'meetups';
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(labelText: l10n.title),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 16),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: [
-                    _buildFormatButton(
-                      icon: Icons.format_bold,
-                      tooltip: 'Bold',
-                      onPressed: () => _applyWrap('**', '**'),
-                    ),
-                    _buildFormatButton(
-                      icon: Icons.format_italic,
-                      tooltip: 'Italic',
-                      onPressed: () => _applyWrap('*', '*'),
-                    ),
-                    _buildFormatButton(
-                      icon: Icons.format_underline,
-                      tooltip: 'Underline',
-                      onPressed: () => _applyWrap('<u>', '</u>'),
-                    ),
-                    _buildFormatButton(
-                      icon: Icons.format_list_bulleted,
-                      tooltip: 'Bullet List',
-                      onPressed: () => _applyLinePrefix('- '),
-                    ),
-                    _buildFormatButton(
-                      icon: Icons.format_list_numbered,
-                      tooltip: 'Numbered List',
-                      onPressed: () => _applyLinePrefix('', numbered: true),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _bodyController,
-              minLines: 10,
-              maxLines: 16,
-              decoration: InputDecoration(
-                labelText: l10n.t('body'),
-                hintText:
-                    '${l10n.t('bodyLinkHint')}\n\nFormatting supported: bold, italic, underline, bullet list, numbered list.',
-                alignLabelWithHint: true,
-              ),
-              textInputAction: TextInputAction.newline,
-              keyboardType: TextInputType.multiline,
-              maxLength: 5000,
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _isUploadingImage ? null : _pickImage,
-              icon: const Icon(Icons.image_outlined),
-              label: Text(
-                _isUploadingImage ? l10n.t('uploading') : l10n.t('addImage'),
-              ),
-            ),
-            if (previewImage != null) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  height: 180,
-                  child: previewImage,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: FilledButton(
-            onPressed: _isSaving ? null : _save,
+      appBar: AppBar(
+        title: const Text('Create post'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _isSaving ? null : _savePost,
             child: _isSaving
                 ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text(l10n.t('publish')),
+                : const Text('Publish'),
           ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                children: <Widget>[
+                  TextField(
+                    controller: _titleController,
+                    maxLength: 100,
+                    decoration: InputDecoration(
+                      labelText: 'Title',
+                      hintText: 'Write a clear title',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: _category,
+                    items: _categories
+                        .map(
+                          (String category) => DropdownMenuItem<String>(
+                            value: category,
+                            child: Text(category),
+                          ),
+                        )
+                        .toList(),
+                    decoration: InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onChanged: (String? value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _category = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: theme.colorScheme.surfaceContainerLowest,
+                      border: Border.all(
+                        color: theme.dividerColor.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        quill.QuillToolbar.simple(
+                          controller: _quillController,
+                          configurations: const quill.QuillSimpleToolbarConfigurations(
+                            showInlineCode: false,
+                            showCodeBlock: false,
+                            showBackgroundColorButton: false,
+                            showColorButton: false,
+                            showFontFamily: false,
+                            showFontSize: false,
+                            showListNumbers: true,
+                            showListBullets: true,
+                            showQuote: true,
+                            showLink: true,
+                            showSearchButton: false,
+                            showDirection: false,
+                            showIndent: true,
+                            showDividers: true,
+                          ),
+                        ),
+                        const Divider(height: 20),
+                        SizedBox(
+                          height: 320,
+                          child: quill.QuillEditor.basic(
+                            controller: _quillController,
+                            readOnly: false,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Image URLs',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: TextField(
+                          controller: _imageUrlController,
+                          decoration: InputDecoration(
+                            hintText: 'Paste image URL',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _addImageUrl,
+                        child: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_imageUrls.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _imageUrls.map((String url) {
+                        return Chip(
+                          label: SizedBox(
+                            width: 180,
+                            child: Text(
+                              url,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          onDeleted: () => _removeImageUrl(url),
+                        );
+                      }).toList(),
+                    ),
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
+                    ),
+                    child: const Text(
+                      'This editor is WYSIWYG. Users tap bold, bullets, and quote buttons directly. No markdown symbols are needed.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
