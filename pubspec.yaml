@@ -16,7 +16,7 @@ dependencies:
 
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
-  flutter_quill: ^10.8.5
+  flutter_quill: ^11.5.0
   extended_image: ^10.0.1
 
   cupertino_icons: ^1.0.8
