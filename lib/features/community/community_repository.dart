@@ -91,17 +91,27 @@ class CommunityRepository {
 
     final payload = <String, dynamic>{
       'author_id': user.id,
+      'user_id': user.id,
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl ?? '',
       'title': title,
-      'body': bodyText,
-      'plain_text': plainText,
-      'image_urls': imageUrls,
+      'language': 'english',
+      'language_code': 'en',
+      'is_bulletin': false,
+      'is_pinned': false,
+      'is_locked': false,
+      'is_deleted': false,
+      'visibility': 'public',
       'category': category ?? 'General',
+      'image_url': imageUrls.isNotEmpty ? imageUrls.first : null,
+      'image_urls': imageUrls,
+      'plain_text': plainText,
+      'body_text': bodyText,
+      'body_delta_json': null,
       'comment_count': 0,
       'like_count': 0,
       'view_count': 0,
-      'is_pinned': false,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
 
     final response = await _client
@@ -118,6 +128,7 @@ class CommunityRepository {
 
     await _client.from('community_posts').update({
       'view_count': post.viewCount + 1,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', postId);
   }
 
@@ -151,9 +162,10 @@ class CommunityRepository {
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
 
-    final payload = <String, dynamic>{
+    await _client.from('community_comments').insert({
       'post_id': postId,
       'author_id': user.id,
+      'user_id': user.id,
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl ?? '',
       'message': message,
@@ -162,14 +174,13 @@ class CommunityRepository {
       'is_deleted': false,
       'is_locked': false,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    };
-
-    await _client.from('community_comments').insert(payload);
+    });
 
     final post = await fetchPostById(postId);
 
     await _client.from('community_posts').update({
       'comment_count': post.commentCount + 1,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', postId);
   }
 }
