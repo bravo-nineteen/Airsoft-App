@@ -6,6 +6,7 @@ class CommunityPostModel {
   final String title;
   final String bodyText;
   final String plainText;
+  final String? imageUrl;
   final List<String> imageUrls;
   final String? category;
   final int commentCount;
@@ -23,6 +24,7 @@ class CommunityPostModel {
     required this.title,
     required this.bodyText,
     required this.plainText,
+    required this.imageUrl,
     required this.imageUrls,
     required this.category,
     required this.commentCount,
@@ -46,6 +48,9 @@ class CommunityPostModel {
     if (imageUrls.isNotEmpty) {
       return imageUrls.first;
     }
+    if (imageUrl != null && imageUrl!.trim().isNotEmpty) {
+      return imageUrl;
+    }
     return null;
   }
 
@@ -64,6 +69,7 @@ class CommunityPostModel {
       title: (json['title'] ?? '').toString(),
       bodyText: (json['body_text'] ?? '').toString(),
       plainText: (json['plain_text'] ?? '').toString(),
+      imageUrl: json['image_url']?.toString(),
       imageUrls: imageList,
       category: json['category']?.toString(),
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
@@ -85,6 +91,8 @@ class CommunityCommentModel {
   final String authorName;
   final String? authorAvatarUrl;
   final String message;
+  final int likeCount;
+  final bool likedByMe;
   final DateTime createdAt;
 
   const CommunityCommentModel({
@@ -94,8 +102,27 @@ class CommunityCommentModel {
     required this.authorName,
     required this.authorAvatarUrl,
     required this.message,
+    required this.likeCount,
+    required this.likedByMe,
     required this.createdAt,
   });
+
+  CommunityCommentModel copyWith({
+    int? likeCount,
+    bool? likedByMe,
+  }) {
+    return CommunityCommentModel(
+      id: id,
+      postId: postId,
+      authorId: authorId,
+      authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
+      message: message,
+      likeCount: likeCount ?? this.likeCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+      createdAt: createdAt,
+    );
+  }
 
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
     return CommunityCommentModel(
@@ -105,6 +132,8 @@ class CommunityCommentModel {
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
       message: (json['message'] ?? json['body'] ?? '').toString(),
+      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
+      likedByMe: json['liked_by_me'] == true,
       createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
     );
   }

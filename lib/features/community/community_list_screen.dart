@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_details_screen.dart';
+import 'community_user_profile_screen.dart';
 import 'community_repository.dart';
 
 class CommunityListScreen extends StatefulWidget {
@@ -92,6 +93,24 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     );
 
     await _loadPosts();
+  }
+
+  void _openProfile(String? userId, String fallbackName) {
+    if (userId == null || userId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile not available')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CommunityPublicProfileScreen(
+          userId: userId,
+          fallbackName: fallbackName,
+        ),
+      ),
+    );
   }
 
   @override
@@ -202,6 +221,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                               post: post,
                               timeAgo: _timeAgo(post.createdAt),
                               onTap: () => _openPostDetails(post),
+                              onAuthorTap: () =>
+                                  _openProfile(post.authorId, post.authorName),
                             );
                           },
                         ),
@@ -218,11 +239,13 @@ class _CompactPostCard extends StatelessWidget {
     required this.post,
     required this.timeAgo,
     required this.onTap,
+    required this.onAuthorTap,
   });
 
   final CommunityPostModel post;
   final String timeAgo;
   final VoidCallback onTap;
+  final VoidCallback onAuthorTap;
 
   @override
   Widget build(BuildContext context) {
@@ -248,24 +271,26 @@ class _CompactPostCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 96,
-                  height: 96,
+                  width: 72,
+                  height: 72,
                   child: hasImage
                       ? ExtendedImage.network(
-                          imageUrl,
+                          imageUrl!,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {
-                            if (state.extendedImageLoadState == LoadState.completed) {
+                            if (state.extendedImageLoadState ==
+                                LoadState.completed) {
                               return ExtendedRawImage(
                                 image: state.extendedImageInfo?.image,
                                 fit: BoxFit.cover,
                               );
                             }
 
-                            if (state.extendedImageLoadState == LoadState.failed) {
+                            if (state.extendedImageLoadState ==
+                                LoadState.failed) {
                               return Container(
                                 color: theme.colorScheme.surfaceContainerHighest,
                                 alignment: Alignment.center,
@@ -277,8 +302,8 @@ class _CompactPostCard extends StatelessWidget {
                               color: theme.colorScheme.surfaceContainerHighest,
                               alignment: Alignment.center,
                               child: const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
                             );
@@ -290,7 +315,7 @@ class _CompactPostCard extends StatelessWidget {
                           child: Icon(
                             Icons.forum_outlined,
                             color: theme.colorScheme.primary,
-                            size: 28,
+                            size: 24,
                           ),
                         ),
                 ),
@@ -300,41 +325,51 @@ class _CompactPostCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundImage: post.authorAvatarUrl != null &&
-                                  post.authorAvatarUrl!.trim().isNotEmpty
-                              ? NetworkImage(post.authorAvatarUrl!)
-                              : null,
-                          child: post.authorAvatarUrl == null ||
-                                  post.authorAvatarUrl!.trim().isEmpty
-                              ? Text(
-                                  post.authorName.isEmpty
-                                      ? '?'
-                                      : post.authorName.substring(0, 1).toUpperCase(),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            post.authorName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
+                    InkWell(
+                      onTap: onAuthorTap,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: <Widget>[
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundImage: post.authorAvatarUrl != null &&
+                                      post.authorAvatarUrl!.trim().isNotEmpty
+                                  ? NetworkImage(post.authorAvatarUrl!)
+                                  : null,
+                              child: post.authorAvatarUrl == null ||
+                                      post.authorAvatarUrl!.trim().isEmpty
+                                  ? Text(
+                                      post.authorName.isEmpty
+                                          ? '?'
+                                          : post.authorName
+                                              .substring(0, 1)
+                                              .toUpperCase(),
+                                    )
+                                  : null,
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                post.authorName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              timeAgo,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
                         ),
-                        Text(
-                          timeAgo,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -364,8 +399,10 @@ class _CompactPostCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      post.excerpt.isEmpty ? 'No preview text available.' : post.excerpt,
-                      maxLines: 3,
+                      post.excerpt.isEmpty
+                          ? 'No preview text available.'
+                          : post.excerpt,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium,
                     ),
@@ -448,7 +485,10 @@ class _MetaPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.65),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withOpacity(0.65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

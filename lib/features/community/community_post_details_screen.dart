@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
+import 'community_user_profile_screen.dart';
 import 'community_repository.dart';
 
 class CommunityPostDetailsScreen extends StatefulWidget {
@@ -28,20 +29,25 @@ class _CommunityPostDetailsScreenState
   List<CommunityCommentModel> _comments = <CommunityCommentModel>[];
   bool _isLoading = true;
   bool _isSendingComment = false;
+  bool _isTogglingPostLike = false;
+  final Set<String> _togglingCommentLikes = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(incrementView: true);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool incrementView = false}) async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      await _repository.incrementPostView(widget.postId);
+      if (incrementView) {
+        await _repository.incrementPostView(widget.postId);
+      }
+
       final post = await _repository.fetchPostById(widget.postId);
       final comments = await _repository.fetchComments(widget.postId);
 
@@ -108,6 +114,75 @@ class _CommunityPostDetailsScreenState
     }
   }
 
+  Future<void> _togglePostLike() async {
+    final post = _post;
+    if (post == null || _isTogglingPostLike) {
+      return;
+    }
+
+    setState(() {
+      _isTogglingPostLike = true;
+    });
+
+    try {
+      await _repository.toggleLikePost(post.id);
+      await _load();
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update like: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTogglingPostLike = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleCommentLike(String commentId) async {
+    if (_togglingCommentLikes.contains(commentId)) {
+      return;
+    }
+
+    setState(() {
+      _togglingCommentLikes.add(commentId);
+    });
+
+    try {
+      await _repository.toggleLikeComment(commentId);
+      await _load();
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update comment like: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _togglingCommentLikes.remove(commentId);
+        });
+      }
+    }
+  }
+
+  void _openProfile(String? userId, String fallbackName) {
+    if (userId == null || userId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile not available')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CommunityPublicProfileScreen(
+          userId: userId,
+          fallbackName: fallbackName,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _commentController.dispose();
@@ -118,386 +193,4 @@ class _CommunityPostDetailsScreenState
   Widget build(BuildContext context) {
     final post = _post;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Post'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : post == null
-              ? const Center(child: Text('Post not found'))
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundImage: post.authorAvatarUrl != null &&
-                                    post.authorAvatarUrl!.trim().isNotEmpty
-                                ? NetworkImage(post.authorAvatarUrl!)
-                                : null,
-                            child: post.authorAvatarUrl == null ||
-                                    post.authorAvatarUrl!.trim().isEmpty
-                                ? Text(
-                                    post.authorName.isEmpty
-                                        ? '?'
-                                        : post.authorName
-                                            .substring(0, 1)
-                                            .toUpperCase(),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  post.authorName,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                Text(
-                                  DateFormat('dd MMM yyyy, HH:mm')
-                                      .format(post.createdAt),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if ((post.category ?? '').isNotEmpty)
-                            Chip(
-                              label: Text(post.category!),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        post.title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 14),
-                      if (post.imageUrls.isNotEmpty) ...<Widget>[
-                        SizedBox(
-                          height: 230,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: post.imageUrls.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 10),
-                            itemBuilder: (BuildContext context, int index) {
-                              final imageUrl = post.imageUrls[index];
-
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.of(context).push<void>(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          CommunityImageViewerScreen(
-                                        imageUrls: post.imageUrls,
-                                        initialIndex: index,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(18),
-                                  child: SizedBox(
-                                    width: 280,
-                                    child: ExtendedImage.network(
-                                      imageUrl,
-                                      fit: BoxFit.cover,
-                                      cache: true,
-                                      loadStateChanged: (state) {
-                                        if (state.extendedImageLoadState ==
-                                            LoadState.completed) {
-                                          return ExtendedRawImage(
-                                            image:
-                                                state.extendedImageInfo?.image,
-                                            fit: BoxFit.cover,
-                                          );
-                                        }
-
-                                        if (state.extendedImageLoadState ==
-                                            LoadState.failed) {
-                                          return Container(
-                                            color: Colors.black12,
-                                            alignment: Alignment.center,
-                                            child: const Icon(
-                                              Icons.broken_image_outlined,
-                                            ),
-                                          );
-                                        }
-
-                                        return Container(
-                                          color: Colors.black12,
-                                          alignment: Alignment.center,
-                                          child:
-                                              const CircularProgressIndicator(),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          color: Theme.of(context).colorScheme.surface,
-                          border: Border.all(
-                            color: Theme.of(context)
-                                .dividerColor
-                                .withOpacity(0.2),
-                          ),
-                        ),
-                        child: Text(
-                          post.bodyText.isEmpty ? post.plainText : post.bodyText,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: <Widget>[
-                          _DetailsStat(
-                            icon: Icons.mode_comment_outlined,
-                            label: '${post.commentCount}',
-                          ),
-                          const SizedBox(width: 8),
-                          _DetailsStat(
-                            icon: Icons.visibility_outlined,
-                            label: '${post.viewCount}',
-                          ),
-                          const SizedBox(width: 8),
-                          _DetailsStat(
-                            icon: Icons.favorite_border,
-                            label: '${post.likeCount}',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      Text(
-                        'Comments',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          color: Theme.of(context).colorScheme.surface,
-                        ),
-                        child: Column(
-                          children: <Widget>[
-                            TextField(
-                              controller: _commentController,
-                              minLines: 3,
-                              maxLines: 6,
-                              decoration: InputDecoration(
-                                hintText: 'Write a comment',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.icon(
-                                onPressed:
-                                    _isSendingComment ? null : _submitComment,
-                                icon: _isSendingComment
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.send_outlined),
-                                label: const Text('Post comment'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (_comments.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: Text('No comments yet'),
-                        )
-                      else
-                        ..._comments.map((comment) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: Theme.of(context)
-                                    .dividerColor
-                                    .withOpacity(0.18),
-                              ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                CircleAvatar(
-                                  radius: 16,
-                                  backgroundImage:
-                                      comment.authorAvatarUrl != null &&
-                                              comment.authorAvatarUrl!
-                                                  .trim()
-                                                  .isNotEmpty
-                                          ? NetworkImage(
-                                              comment.authorAvatarUrl!,
-                                            )
-                                          : null,
-                                  child: comment.authorAvatarUrl == null ||
-                                          comment.authorAvatarUrl!
-                                              .trim()
-                                              .isEmpty
-                                      ? Text(
-                                          comment.authorName.isEmpty
-                                              ? '?'
-                                              : comment.authorName
-                                                  .substring(0, 1)
-                                                  .toUpperCase(),
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Row(
-                                        children: <Widget>[
-                                          Expanded(
-                                            child: Text(
-                                              comment.authorName,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall
-                                                  ?.copyWith(
-                                                    fontWeight:
-                                                        FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                          Text(
-                                            DateFormat('dd MMM HH:mm')
-                                                .format(comment.createdAt),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(comment.message),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
-                ),
-    );
-  }
-}
-
-class _DetailsStat extends StatelessWidget {
-  const _DetailsStat({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-}
-
-class CommunityImageViewerScreen extends StatefulWidget {
-  const CommunityImageViewerScreen({
-    super.key,
-    required this.imageUrls,
-    required this.initialIndex,
-  });
-
-  final List<String> imageUrls;
-  final int initialIndex;
-
-  @override
-  State<CommunityImageViewerScreen> createState() =>
-      _CommunityImageViewerScreenState();
-}
-
-class _CommunityImageViewerScreenState
-    extends State<CommunityImageViewerScreen> {
-  late final PageController _pageController =
-      PageController(initialPage: widget.initialIndex);
-
-  late int _currentIndex = widget.initialIndex;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text('${_currentIndex + 1}/${widget.imageUrls.length}'),
-      ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.imageUrls.length,
-        onPageChanged: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        itemBuilder: (BuildContext context, int index) {
-          return Center(
-            child: ExtendedImage.network(
-              widget.imageUrls[index],
-              fit: BoxFit.contain,
-              mode: ExtendedImageMode.gesture,
-              cache: true,
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
+   

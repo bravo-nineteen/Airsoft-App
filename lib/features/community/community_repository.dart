@@ -9,6 +9,64 @@ class CommunityRepository {
 
   final SupabaseClient _client;
 
+  Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    final response = await _client
+        .from('profiles')
+        .select('id, call_sign, avatar_url')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (response == null) return null;
+    return Map<String, dynamic>.from(response);
+  }
+
+  Future<bool> _hasTable(String tableName) async {
+    try {
+      await _client.from(tableName).select('id').limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int> _countRows(
+    String tableName,
+    String foreignKey,
+    String foreignId,
+  ) async {
+    try {
+      final response =
+          await _client.from(tableName).select('id').eq(foreignKey, foreignId);
+      return (response as List).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<bool> _isLikedByCurrentUser(
+    String tableName,
+    String foreignKey,
+    String foreignId,
+  ) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      final response = await _client
+          .from(tableName)
+          .select('id')
+          .eq(foreignKey, foreignId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+      return response != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<List<CommunityPostModel>> fetchPosts({
     String query = '',
     String category = 'All',
@@ -16,6 +74,7 @@ class CommunityRepository {
     final response = await _client
         .from('community_posts')
         .select()
+        .eq('is_deleted', false)
         .order('is_pinned', ascending: false)
         .order('created_at', ascending: false);
 
@@ -54,22 +113,66 @@ class CommunityRepository {
         .eq('id', postId)
         .single();
 
-    return CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
+    var post = CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
+
+    final hasLikesTable = await _hasTable('community_post_likes');
+    if (hasLikesTable) {
+      final likeCount =
+          await _countRows('community_post_likes', 'post_id', postId);
+      final isLikedByMe =
+          await _isLikedByCurrentUser('community_post_likes', 'post_id', postId);
+      post = post.copyWith(
+        likeCount: likeCount,
+        isLikedByMe: isLikedByMe,
+      );
+    }
+
+    return post;
   }
 
-  Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
-
+  Future<List<CommunityCommentModel>> fetchComments(String postId) async {
     final response = await _client
-        .from('profiles')
-        .select('id, call_sign, avatar_url')
-        .eq('id', user.id)
-        .maybeSingle();
+        .from('community_comments')
+        .select(
+          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body',
+        )
+        .eq('post_id', postId)
+        .eq('is_deleted', false)
+        .order('created_at', ascending: true);
 
-    if (response == null) return null;
+    var comments = (response as List<dynamic>)
+        .map(
+          (e) => CommunityCommentModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
 
-    return Map<String, dynamic>.from(response);
+    final hasLikesTable = await _hasTable('community_comment_likes');
+    if (!hasLikesTable) {
+      return comments;
+    }
+
+    final enriched = await Future.wait(
+      comments.map((comment) async {
+        final likeCount = await _countRows(
+          'community_comment_likes',
+          'comment_id',
+          comment.id,
+        );
+        final isLikedByMe = await _isLikedByCurrentUser(
+          'community_comment_likes',
+          'comment_id',
+          comment.id,
+        );
+        return comment.copyWith(
+          likeCount: likeCount,
+          isLikedByMe: isLikedByMe,
+        );
+      }),
+    );
+
+    return enriched;
   }
 
   Future<String> createPost({
@@ -132,25 +235,6 @@ class CommunityRepository {
     }).eq('id', postId);
   }
 
-  Future<List<CommunityCommentModel>> fetchComments(String postId) async {
-    final response = await _client
-        .from('community_comments')
-        .select(
-          'id, created_at, post_id, author_id, author_name, author_avatar_url, message, body',
-        )
-        .eq('post_id', postId)
-        .eq('is_deleted', false)
-        .order('created_at', ascending: true);
-
-    return (response as List<dynamic>)
-        .map(
-          (e) => CommunityCommentModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
-        )
-        .toList();
-  }
-
   Future<void> addComment({
     required String postId,
     required String message,
@@ -183,7 +267,6 @@ class CommunityRepository {
     await _client.from('community_comments').insert(payload);
 
     final post = await fetchPostById(postId);
-
     await _client.from('community_posts').update({
       'comment_count': post.commentCount + 1,
       'updated_at': now,
@@ -191,6 +274,78 @@ class CommunityRepository {
   }
 
   Future<void> toggleLikePost(String postId) async {
-    throw UnimplementedError('Post likes are not wired yet.');
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final existing = await _client
+        .from('community_post_likes')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (existing == null) {
+      await _client.from('community_post_likes').insert({
+        'post_id': postId,
+        'user_id': user.id,
+      });
+    } else {
+      await _client
+          .from('community_post_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+    }
+
+    final likeCount =
+        await _countRows('community_post_likes', 'post_id', postId);
+
+    await _client.from('community_posts').update({
+      'like_count': likeCount,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', postId);
+  }
+
+  Future<void> toggleLikeComment(String commentId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final existing = await _client
+        .from('community_comment_likes')
+        .select('id')
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (existing == null) {
+      await _client.from('community_comment_likes').insert({
+        'comment_id': commentId,
+        'user_id': user.id,
+      });
+    } else {
+      await _client
+          .from('community_comment_likes')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchProfileByUserId(String userId) async {
+    final response = await _client
+        .from('profiles')
+        .select()
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (response == null) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(response);
   }
 }
