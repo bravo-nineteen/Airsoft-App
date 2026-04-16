@@ -89,15 +89,13 @@ class CommunityRepository {
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
 
-    final insertPayload = <String, dynamic>{
+    final payload = <String, dynamic>{
       'author_id': user.id,
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl ?? '',
       'title': title,
       'body': bodyText,
-      'body_text': bodyText,
       'plain_text': plainText,
-      'body_delta_json': '{"ops":[{"insert":"$plainText\\n"}]}',
       'image_urls': imageUrls,
       'category': category ?? 'General',
       'comment_count': 0,
@@ -108,7 +106,7 @@ class CommunityRepository {
 
     final response = await _client
         .from('community_posts')
-        .insert(insertPayload)
+        .insert(payload)
         .select('id')
         .single();
 
@@ -153,13 +151,20 @@ class CommunityRepository {
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
 
-    await _client.from('community_comments').insert({
+    final payload = <String, dynamic>{
       'post_id': postId,
       'author_id': user.id,
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl ?? '',
       'message': message,
-    });
+      'body': message,
+      'language': 'english',
+      'is_deleted': false,
+      'is_locked': false,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    await _client.from('community_comments').insert(payload);
 
     final post = await fetchPostById(postId);
 

@@ -61,7 +61,7 @@ class CommunityPostModel {
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
       title: (json['title'] ?? '').toString(),
-      bodyText: (json['body_text'] ?? '').toString(),
+      bodyText: (json['body'] ?? '').toString(),
       plainText: (json['plain_text'] ?? '').toString(),
       imageUrls: imageList,
       category: json['category']?.toString(),
@@ -103,7 +103,7 @@ class CommunityCommentModel {
       authorId: json['author_id']?.toString(),
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
-      message: (json['message'] ?? '').toString(),
+      message: (json['message'] ?? json['body'] ?? '').toString(),
       createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
     );
   }
