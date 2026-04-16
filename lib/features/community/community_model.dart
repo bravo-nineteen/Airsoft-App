@@ -26,24 +26,29 @@ class CommunityModel {
   final String? imageUrl;
 
   factory CommunityModel.fromJson(Map<String, dynamic> json) {
+    final rawUserId = _readNullableString(json['user_id']) ??
+        _readNullableString(json['author_id']) ??
+        '';
+
+    final rawLanguageCode = _readNullableString(json['language_code']) ??
+        _readNullableString(json['language']) ??
+        'en';
+
     return CommunityModel(
-      id: json['id'].toString(),
-      userId: json['user_id'].toString(),
-      title: (json['title'] ?? '') as String,
-      body: (json['body'] ?? '') as String,
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
-          DateTime.now(),
-      updatedAt: DateTime.tryParse(
-            (json['updated_at'] ?? json['created_at'] ?? '').toString(),
-          ) ??
-          DateTime.now(),
-      languageCode: ((json['language_code'] ?? 'en') as String).trim().isEmpty
-          ? 'en'
-          : (json['language_code'] as String),
-      category: ((json['category'] ?? 'off-topic') as String).trim().isEmpty
+      id: _readRequiredString(json['id']),
+      userId: rawUserId,
+      title: _readNullableString(json['title']) ?? '',
+      body: _readNullableString(json['body']) ?? '',
+      createdAt: _readDateTime(json['created_at']),
+      updatedAt: _readDateTime(json['updated_at'], fallback: json['created_at']),
+      languageCode: rawLanguageCode.trim().isEmpty ? 'en' : rawLanguageCode,
+      category: (_readNullableString(json['category']) ?? 'off-topic').trim().isEmpty
           ? 'off-topic'
-          : (json['category'] as String),
-      callSign: _readNullableString(json['call_sign']),
+          : (_readNullableString(json['category']) ?? 'off-topic'),
+      callSign: _firstNonEmpty([
+        json['call_sign'],
+        json['author_name'],
+      ]),
       avatarUrl: _readNullableString(json['avatar_url']),
       imageUrl: _readNullableString(json['image_url']),
     );
@@ -56,10 +61,43 @@ class CommunityModel {
 
   bool get hasAvatar => (avatarUrl ?? '').trim().isNotEmpty;
   bool get hasImage => (imageUrl ?? '').trim().isNotEmpty;
+  bool get hasValidUserId => _isValidUuid(userId);
+
+  static String _readRequiredString(dynamic value) {
+    final text = _readNullableString(value);
+    return text ?? '';
+  }
+
+  static DateTime _readDateTime(dynamic value, {dynamic fallback}) {
+    final primary = DateTime.tryParse((value ?? '').toString());
+    if (primary != null) return primary;
+
+    final secondary = DateTime.tryParse((fallback ?? '').toString());
+    if (secondary != null) return secondary;
+
+    return DateTime.now();
+  }
+
+  static String? _firstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      final text = _readNullableString(value);
+      if (text != null) return text;
+    }
+    return null;
+  }
 
   static String? _readNullableString(dynamic value) {
     if (value == null) return null;
     final text = value.toString().trim();
-    return text.isEmpty ? null : text;
+    if (text.isEmpty) return null;
+    if (text.toLowerCase() == 'null') return null;
+    return text;
+  }
+
+  static bool _isValidUuid(String? value) {
+    if (value == null) return false;
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}4',
+    ).hasMatch(value);
   }
 }

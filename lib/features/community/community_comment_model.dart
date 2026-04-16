@@ -21,15 +21,15 @@ class CommunityCommentModel {
 
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
     return CommunityCommentModel(
-      id: json['id'].toString(),
-      postId: json['post_id'].toString(),
-      userId: json['user_id'].toString(),
-      body: (json['body'] ?? '') as String,
+      id: _readRequiredUuid(json['id']),
+      postId: _readRequiredUuid(json['post_id']),
+      userId: _readRequiredUuid(json['user_id']),
+      body: _readNullableString(json['body']) ?? '',
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
       callSign: _readNullableString(json['call_sign']),
       avatarUrl: _readNullableString(json['avatar_url']),
-      parentCommentId: _readNullableString(json['parent_comment_id']),
+      parentCommentId: _readNullableUuid(json['parent_comment_id']),
     );
   }
 
@@ -40,9 +40,29 @@ class CommunityCommentModel {
 
   bool get hasAvatar => (avatarUrl ?? '').trim().isNotEmpty;
 
+  static String _readRequiredUuid(dynamic value) {
+    final text = _readNullableUuid(value);
+    return text ?? '';
+  }
+
+  static String? _readNullableUuid(dynamic value) {
+    final text = _readNullableString(value);
+    if (text == null) return null;
+    return _isValidUuid(text) ? text : null;
+  }
+
   static String? _readNullableString(dynamic value) {
     if (value == null) return null;
     final text = value.toString().trim();
-    return text.isEmpty ? null : text;
+    if (text.isEmpty) return null;
+    if (text.toLowerCase() == 'null') return null;
+    return text;
+  }
+
+  static bool _isValidUuid(String? value) {
+    if (value == null) return false;
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
   }
 }

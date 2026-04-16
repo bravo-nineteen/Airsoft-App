@@ -17,15 +17,16 @@ class CommunityRepository {
         .select()
         .order('updated_at', ascending: false);
 
-    var posts =
-        response.map<CommunityModel>((e) => CommunityModel.fromJson(e)).toList();
+    var posts = response
+        .map<CommunityModel>((row) => CommunityModel.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ))
+        .toList();
 
-    final enriched = await _attachProfileData(posts);
+    posts = await _attachProfileData(posts);
 
     if (languageCode != 'all') {
-      posts = enriched.where((post) => post.languageCode == languageCode).toList();
-    } else {
-      posts = enriched;
+      posts = posts.where((post) => post.languageCode == languageCode).toList();
     }
 
     if (category != 'all') {
@@ -58,6 +59,7 @@ class CommunityRepository {
 
     final trimmedTitle = title.trim();
     final trimmedBody = body.trim();
+    final safeImageUrl = _sanitizeNullableString(imageUrl);
 
     if (trimmedTitle.isEmpty) {
       throw Exception('Title is required.');
@@ -71,39 +73,61 @@ class CommunityRepository {
       'user_id': user.id,
       'title': trimmedTitle,
       'body': trimmedBody,
-      'language_code': languageCode,
-      'category': category,
-      'image_url': imageUrl,
+      'language_code': languageCode.trim().isEmpty ? 'en' : languageCode.trim(),
+      'category': category.trim().isEmpty ? 'off-topic' : category.trim(),
+      'image_url': safeImageUrl,
       'updated_at': DateTime.now().toIso8601String(),
     });
   }
 
   Future<void> bumpUpdatedAt(String postId) async {
+    final safePostId = _sanitizeUuid(postId);
+    if (safePostId == null) {
+      throw Exception('Invalid post id.');
+    }
+
     await _client.from('community_posts').update({
       'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', postId);
+    }).eq('id', safePostId);
   }
 
   Future<List<CommunityModel>> _attachProfileData(List<CommunityModel> posts) async {
     if (posts.isEmpty) return posts;
 
-    final userIds = posts.map((e) => e.userId).toSet().toList();
+    final userIds = posts
+        .map((post) => _sanitizeUuid(post.userId))
+        .whereType<String>()
+        .toSet()
+        .toList();
+
+    if (userIds.isEmpty) {
+      return posts;
+    }
 
     final profilesResponse = await _client
         .from('profiles')
         .select('id, call_sign, avatar_url')
         .inFilter('id', userIds);
 
-    final profiles = <String, Map<String, dynamic>>{
-      for (final row in profilesResponse) row['id'].toString(): row,
-    };
+    final profiles = <String, Map<String, dynamic>>{};
+    for (final row in profilesResponse) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final id = _sanitizeUuid(map['id']?.toString());
+      if (id != null) {
+        profiles[id] = map;
+      }
+    }
 
     return posts.map((post) {
       final profile = profiles[post.userId];
+      if (profile == null) {
+        return post;
+      }
+
       return CommunityModel.fromJson({
         ...postToJson(post),
-        'call_sign': profile?['call_sign'],
-        'avatar_url': profile?['avatar_url'],
+        'call_sign': profile['call_sign'],
+        'avatar_url': profile['avatar_url'],
       });
     }).toList();
   }
@@ -122,5 +146,26 @@ class CommunityRepository {
       'avatar_url': post.avatarUrl,
       'image_url': post.imageUrl,
     };
+  }
+
+  String? _sanitizeNullableString(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.toLowerCase() == 'null') return null;
+    return trimmed;
+  }
+
+  String? _sanitizeUuid(String? value) {
+    final trimmed = _sanitizeNullableString(value);
+    if (trimmed == null) return null;
+    if (!_isValidUuid(trimmed)) return null;
+    return trimmed;
+  }
+
+  bool _isValidUuid(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
   }
 }
