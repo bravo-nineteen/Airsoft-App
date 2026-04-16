@@ -57,15 +57,14 @@ class CommunityRepository {
   }
 
   Future<Map<String, dynamic>?> fetchCurrentUserProfile() async {
-  final user = _client.auth.currentUser;
-  if (user == null) {
-    return null;
-  }
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      return null;
+    }
 
-  try {
     final response = await _client
         .from('profiles')
-        .select()
+        .select('id, call_sign, avatar_url')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -74,25 +73,30 @@ class CommunityRepository {
     }
 
     return Map<String, dynamic>.from(response);
-  } catch (_) {
-    return null;
   }
-}
 
   Future<String> createPost({
-    required String authorId,
-    required String authorName,
-    required String? authorAvatarUrl,
     required String title,
     required String plainText,
     required String bodyDeltaJson,
     required List<String> imageUrls,
     required String? category,
   }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('No logged in user');
+    }
+
+    final profile = await fetchCurrentUserProfile();
+
+    final authorName =
+        (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
+    final authorAvatarUrl = profile?['avatar_url']?.toString();
+
     final response = await _client
         .from('community_posts')
         .insert(<String, dynamic>{
-          'author_id': authorId,
+          'author_id': user.id,
           'author_name': authorName,
           'author_avatar_url': authorAvatarUrl,
           'title': title,
@@ -136,14 +140,21 @@ class CommunityRepository {
 
   Future<void> addComment({
     required String postId,
-    required String authorId,
-    required String authorName,
-    required String? authorAvatarUrl,
     required String message,
   }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('No logged in user');
+    }
+
+    final profile = await fetchCurrentUserProfile();
+    final authorName =
+        (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
+    final authorAvatarUrl = profile?['avatar_url']?.toString();
+
     await _client.from('community_comments').insert(<String, dynamic>{
       'post_id': postId,
-      'author_id': authorId,
+      'author_id': user.id,
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl,
       'message': message,
