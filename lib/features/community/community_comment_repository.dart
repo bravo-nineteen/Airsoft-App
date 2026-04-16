@@ -51,27 +51,39 @@ class CommunityCommentRepository {
   }
 
   Future<void> addComment({
-    required String postId,
-    required String body,
-    String? parentCommentId,
-  }) async {
-    final user = _client.auth.currentUser;
-    if (user == null) {
-      throw Exception('You must be logged in to comment.');
-    }
-
-    final trimmedBody = body.trim();
-    if (trimmedBody.isEmpty) {
-      throw Exception('Comment cannot be empty.');
-    }
-
-    await _client.from('community_comments').insert({
-      'post_id': postId,
-      'user_id': user.id,
-      'body': trimmedBody,
-      'parent_comment_id': parentCommentId,
-    });
-
-    await _communityRepository.bumpUpdatedAt(postId);
+  required String postId,
+  required String body,
+  String? parentCommentId,
+}) async {
+  final user = _client.auth.currentUser;
+  if (user == null) {
+    throw Exception('You must be logged in to comment.');
   }
+
+  final trimmedBody = body.trim();
+  if (trimmedBody.isEmpty) {
+    throw Exception('Comment cannot be empty.');
+  }
+
+  if (postId.isEmpty) {
+    throw Exception('Invalid postId');
+  }
+
+  // Critical fix: ensure UUID or null
+  String? safeParentId;
+  if (parentCommentId != null && parentCommentId.trim().isNotEmpty) {
+    safeParentId = parentCommentId;
+  } else {
+    safeParentId = null;
+  }
+
+  await _client.from('community_comments').insert({
+    'post_id': postId,
+    'user_id': user.id,
+    'body': trimmedBody,
+    'parent_comment_id': safeParentId,
+  });
+
+  await _communityRepository.bumpUpdatedAt(postId);
+}
 }
