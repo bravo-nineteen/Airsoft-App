@@ -57,11 +57,9 @@ class CommunityRepository {
     return CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
   }
 
-  Future<Map<String, dynamic>?> fetchCurrentUserProfile() async {
+  Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
     final user = _client.auth.currentUser;
-    if (user == null) {
-      return null;
-    }
+    if (user == null) return null;
 
     final response = await _client
         .from('profiles')
@@ -69,9 +67,7 @@ class CommunityRepository {
         .eq('id', user.id)
         .maybeSingle();
 
-    if (response == null) {
-      return null;
-    }
+    if (response == null) return null;
 
     return Map<String, dynamic>.from(response);
   }
@@ -85,30 +81,34 @@ class CommunityRepository {
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
-      throw Exception('No logged in user');
+      throw Exception('User not logged in');
     }
 
-    final profile = await fetchCurrentUserProfile();
+    final profile = await _fetchCurrentUserProfile();
     final authorName =
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
 
+    final insertPayload = <String, dynamic>{
+      'author_id': user.id,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl ?? '',
+      'title': title,
+      'body': bodyText,
+      'body_text': bodyText,
+      'plain_text': plainText,
+      'body_delta_json': '{"ops":[{"insert":"$plainText\\n"}]}',
+      'image_urls': imageUrls,
+      'category': category ?? 'General',
+      'comment_count': 0,
+      'like_count': 0,
+      'view_count': 0,
+      'is_pinned': false,
+    };
+
     final response = await _client
         .from('community_posts')
-        .insert(<String, dynamic>{
-          'author_id': user.id,
-          'author_name': authorName,
-          'author_avatar_url': authorAvatarUrl,
-          'title': title,
-          'body_text': bodyText,
-          'plain_text': plainText,
-          'image_urls': imageUrls,
-          'category': category,
-          'comment_count': 0,
-          'like_count': 0,
-          'view_count': 0,
-          'is_pinned': false,
-        })
+        .insert(insertPayload)
         .select('id')
         .single();
 
@@ -117,7 +117,8 @@ class CommunityRepository {
 
   Future<void> incrementPostView(String postId) async {
     final post = await fetchPostById(postId);
-    await _client.from('community_posts').update(<String, dynamic>{
+
+    await _client.from('community_posts').update({
       'view_count': post.viewCount + 1,
     }).eq('id', postId);
   }
@@ -144,24 +145,25 @@ class CommunityRepository {
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
-      throw Exception('No logged in user');
+      throw Exception('User not logged in');
     }
 
-    final profile = await fetchCurrentUserProfile();
+    final profile = await _fetchCurrentUserProfile();
     final authorName =
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
 
-    await _client.from('community_comments').insert(<String, dynamic>{
+    await _client.from('community_comments').insert({
       'post_id': postId,
       'author_id': user.id,
       'author_name': authorName,
-      'author_avatar_url': authorAvatarUrl,
+      'author_avatar_url': authorAvatarUrl ?? '',
       'message': message,
     });
 
     final post = await fetchPostById(postId);
-    await _client.from('community_posts').update(<String, dynamic>{
+
+    await _client.from('community_posts').update({
       'comment_count': post.commentCount + 1,
     }).eq('id', postId);
   }
