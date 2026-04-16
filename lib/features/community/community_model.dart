@@ -34,7 +34,8 @@ class CommunityPostModel {
   });
 
   String get excerpt {
-    final normalized = plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final source = bodyText.isNotEmpty ? bodyText : plainText;
+    final normalized = source.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (normalized.length <= 160) {
       return normalized;
     }
@@ -42,10 +43,10 @@ class CommunityPostModel {
   }
 
   String? get primaryImageUrl {
-    if (imageUrls.isEmpty) {
-      return null;
+    if (imageUrls.isNotEmpty) {
+      return imageUrls.first;
     }
-    return imageUrls.first;
+    return null;
   }
 
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
@@ -61,7 +62,7 @@ class CommunityPostModel {
       authorName: (json['author_name'] ?? 'Unknown').toString(),
       authorAvatarUrl: json['author_avatar_url']?.toString(),
       title: (json['title'] ?? '').toString(),
-      bodyText: (json['body'] ?? '').toString(),
+      bodyText: (json['body_text'] ?? '').toString(),
       plainText: (json['plain_text'] ?? '').toString(),
       imageUrls: imageList,
       category: json['category']?.toString(),
