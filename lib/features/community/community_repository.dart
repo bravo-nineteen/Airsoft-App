@@ -121,4 +121,10 @@ class CommunityRepository {
       'comment_count': post.commentCount + 1,
     }).eq('id', postId);
   }
+
+  Future<void> bumpUpdatedAt(String postId) async {
+    await _client.from('community_posts').update(<String, dynamic>{
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', postId);
+  }
 }

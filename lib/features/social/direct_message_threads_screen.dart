@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
-import '../profile/profile_repository.dart';
 import 'direct_message_screen.dart';
 import 'direct_message_thread_model.dart';
 import 'direct_message_thread_repository.dart';
@@ -19,7 +18,6 @@ class _DirectMessageThreadsScreenState
     extends State<DirectMessageThreadsScreen> {
   final DirectMessageThreadRepository _repo =
       DirectMessageThreadRepository();
-  final ProfileRepository _profileRepo = ProfileRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
 
