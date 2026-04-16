@@ -84,14 +84,14 @@ class _CommunityCreatePostScreenState
     });
 
     try {
-      final metadata = user.userMetadata ?? <String, dynamic>{};
-      final authorName = (metadata['call_sign'] ??
-              metadata['callsign'] ??
-              metadata['full_name'] ??
-              user.email ??
-              'User')
-          .toString();
-      final authorAvatarUrl = metadata['avatar_url']?.toString();
+      final profile = await _repository.fetchCurrentUserProfile();
+
+      final authorName = (profile?['call_sign'] ??
+        user.email ??
+        'Unknown')
+    .toString();
+
+final authorAvatarUrl = profile?['avatar_url']?.toString();
 
       await _repository.createPost(
         authorId: user.id,

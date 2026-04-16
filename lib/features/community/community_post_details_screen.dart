@@ -91,14 +91,14 @@ class _CommunityPostDetailsScreenState
     });
 
     try {
-      final metadata = user.userMetadata ?? <String, dynamic>{};
-      final displayName = (metadata['call_sign'] ??
-              metadata['callsign'] ??
-              metadata['full_name'] ??
-              user.email ??
-              'User')
-          .toString();
-      final avatarUrl = metadata['avatar_url']?.toString();
+      final profile = await _repository.fetchCurrentUserProfile();
+
+      final displayName = (profile?['call_sign'] ??
+        user.email ??
+        'Unknown')
+    .toString();
+
+final avatarUrl = profile?['avatar_url']?.toString();
 
       await _repository.addComment(
         postId: _post!.id,
@@ -136,7 +136,8 @@ class _CommunityPostDetailsScreenState
         readOnly: true,
       );
     } catch (_) {
-      final fallbackDoc = quill.Document()..insert(0, 'Unable to display post body.');
+      final fallbackDoc = quill.Document()
+        ..insert(0, 'Unable to display post body.');
 
       return quill.QuillController(
         document: fallbackDoc,
@@ -239,7 +240,8 @@ class _CommunityPostDetailsScreenState
                                 onTap: () {
                                   Navigator.of(context).push<void>(
                                     MaterialPageRoute<void>(
-                                      builder: (_) => CommunityImageViewerScreen(
+                                      builder: (_) =>
+                                          CommunityImageViewerScreen(
                                         imageUrls: post.imageUrls,
                                         initialIndex: index,
                                       ),
@@ -278,7 +280,8 @@ class _CommunityPostDetailsScreenState
                                         return Container(
                                           color: Colors.black12,
                                           alignment: Alignment.center,
-                                          child: const CircularProgressIndicator(),
+                                          child:
+                                              const CircularProgressIndicator(),
                                         );
                                       },
                                     ),

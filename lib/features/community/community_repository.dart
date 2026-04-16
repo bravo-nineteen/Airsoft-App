@@ -57,27 +57,27 @@ class CommunityRepository {
   }
 
   Future<Map<String, dynamic>?> fetchCurrentUserProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) {
-      return null;
-    }
-
-    try {
-      final response = await _client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (response == null) {
-        return null;
-      }
-
-      return Map<String, dynamic>.from(response);
-    } catch (_) {
-      return null;
-    }
+  final user = _client.auth.currentUser;
+  if (user == null) {
+    return null;
   }
+
+  try {
+    final response = await _client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (response == null) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(response);
+  } catch (_) {
+    return null;
+  }
+}
 
   Future<String> createPost({
     required String authorId,
