@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -65,6 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
@@ -80,10 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const SizedBox(height: 40),
 
-                  const Text(
-                    'Airsoft App',
+                  Text(
+                    l10n.appTitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -93,8 +97,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   TextField(
                     controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
+                    decoration: InputDecoration(
+                      labelText: l10n.t('email'),
                     ),
                   ),
 
@@ -103,8 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
+                    decoration: InputDecoration(
+                      labelText: l10n.t('password'),
                     ),
                   ),
 
@@ -122,14 +126,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _loading ? null : _login,
                     child: _loading
                         ? const CircularProgressIndicator()
-                        : const Text('Login'),
+                      : Text(l10n.t('login')),
                   ),
 
                   const SizedBox(height: 10),
 
                   OutlinedButton(
                     onPressed: _loading ? null : _signup,
-                    child: const Text('Sign Up'),
+                    child: Text(l10n.t('signUp')),
                   ),
 
                   const Spacer(),

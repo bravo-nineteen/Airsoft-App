@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_details_screen.dart';
 import 'community_repository.dart';
+import 'community_rich_text.dart';
 
 class CommunityListScreen extends StatefulWidget {
   const CommunityListScreen({super.key});
@@ -64,35 +66,49 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     }
   }
 
-  String _categoryLabel(String value) {
+  String _categoryLabel(AppLocalizations l10n, String value) {
     switch (value) {
       case 'all':
-        return 'All';
+        return l10n.t('all');
       case 'meetups':
-        return 'Meetups';
+        return l10n.t('meetupsLabel');
       case 'tech-talk':
-        return 'Tech Talk';
+        return l10n.t('techTalk');
       case 'troubleshooting':
-        return 'Troubleshooting';
+        return l10n.t('troubleshooting');
       case 'events':
-        return 'Events';
+        return l10n.events;
       case 'off-topic':
-        return 'Off-topic';
+        return l10n.t('offTopic');
       case 'memes':
-        return 'Memes';
+        return l10n.t('memes');
       case 'buy-sell':
-        return 'Buy / Sell';
+        return l10n.t('buySell');
       case 'gear-showcase':
-        return 'Gear Showcase';
+        return l10n.t('gearShowcase');
       case 'field-talk':
-        return 'Field Talk';
+        return l10n.t('fieldTalk');
       default:
         return value;
     }
   }
 
-  String _languageLabel(String code) {
-    return code == 'ja' ? '日本語' : 'English';
+  String _languageLabel(AppLocalizations l10n, String code) {
+    return code == 'ja' ? l10n.t('japanese') : l10n.t('english');
+  }
+
+  String _timeLabel(AppLocalizations l10n, DateTime value) {
+    final now = DateTime.now();
+    final diff = now.difference(value);
+
+    if (diff.inMinutes < 1) return l10n.t('justNow');
+    if (diff.inMinutes < 60) {
+      return l10n.t('minutesAgoShort', args: {'value': '${diff.inMinutes}'});
+    }
+    if (diff.inHours < 24) {
+      return l10n.t('hoursAgoShort', args: {'value': '${diff.inHours}'});
+    }
+    return l10n.t('daysAgoShort', args: {'value': '${diff.inDays}'});
   }
 
   @override
@@ -101,13 +117,32 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     super.dispose();
   }
 
+  Widget _avatar(CommunityModel post) {
+    if (post.hasAvatar) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(post.avatarUrl!),
+      );
+    }
+
+    return CircleAvatar(
+      child: Text(
+        post.displayName.isEmpty ? '?' : post.displayName.characters.first.toUpperCase(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreate,
-        icon: const Icon(Icons.add),
-        label: const Text('Post'),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: SafeArea(
+        minimum: const EdgeInsets.only(right: 16, bottom: 16),
+        child: FloatingActionButton.extended(
+          onPressed: _openCreate,
+          icon: const Icon(Icons.add),
+          label: Text(l10n.t('post')),
+        ),
       ),
       body: Column(
         children: [
@@ -116,10 +151,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             child: Column(
               children: [
                 SegmentedButton<String>(
-                  segments: const [
+                  segments: [
                     ButtonSegment<String>(
                       value: 'en',
-                      label: Text('English'),
+                      label: Text(l10n.t('english')),
                     ),
                     ButtonSegment<String>(
                       value: 'ja',
@@ -139,7 +174,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                   controller: _searchController,
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
-                    hintText: 'Search posts',
+                    hintText: l10n.t('searchPosts'),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       onPressed: _refresh,
@@ -160,7 +195,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       final selected = _category == value;
 
                       return ChoiceChip(
-                        label: Text(_categoryLabel(value)),
+                        label: Text(_categoryLabel(l10n, value)),
                         selected: selected,
                         onSelected: (_) {
                           setState(() {
@@ -193,7 +228,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Text(
-                              'Failed to load board:\n${snapshot.error}',
+                              l10n.t(
+                                'failedLoadBoard',
+                                args: {'error': '${snapshot.error}'},
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -205,45 +243,23 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                   final posts = snapshot.data ?? [];
                   if (posts.isEmpty) {
                     return ListView(
-                      children: const [
+                      children: [
                         SizedBox(height: 160),
-                        Center(child: Text('No posts found.')),
+                        Center(child: Text(l10n.t('noPostsFound'))),
                       ],
                     );
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     itemCount: posts.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final post = posts[index];
                       return Card(
-                        child: ListTile(
-                          title: Text(post.title),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 6),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _TagChip(label: _categoryLabel(post.category)),
-                                  _TagChip(label: _languageLabel(post.languageCode)),
-                                  if ((post.callSign ?? '').isNotEmpty)
-                                    _TagChip(label: post.callSign!),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                post.body,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -252,6 +268,84 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                               ),
                             );
                           },
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    _avatar(post),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            post.title,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${post.displayName} • ${_timeLabel(l10n, post.updatedAt)}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    Chip(
+                                      visualDensity: VisualDensity.compact,
+                                      label: Text(_categoryLabel(l10n, post.category)),
+                                    ),
+                                    Chip(
+                                      visualDensity: VisualDensity.compact,
+                                      label: Text(_languageLabel(l10n, post.languageCode)),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                CommunityRichText(
+                                  text: post.body,
+                                  maxLines: 3,
+                                ),
+                                if (post.hasImage) ...[
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AspectRatio(
+                                      aspectRatio: 16 / 9,
+                                      child: Image.network(
+                                        post.imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) {
+                                          return Container(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                            alignment: Alignment.center,
+                                            child: const Icon(Icons.image_not_supported),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -262,22 +356,6 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TagChip extends StatelessWidget {
-  const _TagChip({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      label: Text(label),
     );
   }
 }

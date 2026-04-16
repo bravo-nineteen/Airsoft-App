@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'avatar_storage_service.dart';
 import 'profile_repository.dart';
 
@@ -65,14 +66,14 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
         uiSettings: [
           AndroidUiSettings(
-            toolbarTitle: 'Crop Avatar',
+            toolbarTitle: AppLocalizations.of(context).t('cropAvatar'),
             lockAspectRatio: true,
             hideBottomControls: false,
             initAspectRatio: CropAspectRatioPreset.square,
             cropStyle: CropStyle.circle,
           ),
           IOSUiSettings(
-            title: 'Crop Avatar',
+            title: AppLocalizations.of(context).t('cropAvatar'),
             aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: false,
             cropStyle: CropStyle.circle,
@@ -103,7 +104,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
       widget.onAvatarUpdated(uploadedUrl);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avatar updated.')),
+        SnackBar(content: Text(AppLocalizations.of(context).t('avatarUpdated'))),
       );
     } catch (error) {
       if (!mounted) return;
@@ -112,13 +113,20 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Avatar update failed: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('avatarUpdateFailed', args: {'error': '$error'}),
+          ),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasAvatar = (_avatarUrl ?? '').trim().isNotEmpty;
 
     return Column(
@@ -161,7 +169,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
         const SizedBox(height: 10),
         TextButton(
           onPressed: _isBusy ? null : _selectAndUploadAvatar,
-          child: Text(_isBusy ? 'Updating...' : 'Change Avatar'),
+          child: Text(_isBusy ? l10n.t('updating') : l10n.t('changeAvatar')),
         ),
       ],
     );

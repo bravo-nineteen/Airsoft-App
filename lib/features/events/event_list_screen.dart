@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'event_create_screen.dart';
 import 'event_details_screen.dart';
 import 'event_model.dart';
@@ -59,11 +60,17 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreate,
-        icon: const Icon(Icons.add),
-        label: const Text('Event'),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: SafeArea(
+        minimum: const EdgeInsets.only(right: 16, bottom: 16),
+        child: FloatingActionButton.extended(
+          onPressed: _openCreate,
+          icon: const Icon(Icons.add),
+          label: Text(l10n.t('event')),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -82,7 +89,10 @@ class _EventListScreenState extends State<EventListScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Failed to load events:\n${snapshot.error}',
+                        l10n.t(
+                          'failedLoadEvents',
+                          args: {'error': '${snapshot.error}'},
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -94,15 +104,15 @@ class _EventListScreenState extends State<EventListScreen> {
             final events = snapshot.data ?? [];
             if (events.isEmpty) {
               return ListView(
-                children: const [
+                children: [
                   SizedBox(height: 160),
-                  Center(child: Text('No events found.')),
+                  Center(child: Text(l10n.t('noEventsFound'))),
                 ],
               );
             }
 
             return ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: events.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {

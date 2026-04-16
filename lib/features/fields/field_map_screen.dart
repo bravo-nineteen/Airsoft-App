@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'field_details_screen.dart';
 import 'field_model.dart';
 
@@ -15,6 +16,7 @@ class FieldMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final validFields = fields
         .where((f) => f.latitude != 0 && f.longitude != 0)
         .toList();
@@ -24,7 +26,7 @@ class FieldMapScreen extends StatelessWidget {
         : const LatLng(35.681236, 139.767125);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Field Map')),
+      appBar: AppBar(title: Text(l10n.t('fieldMap'))),
       body: FlutterMap(
         options: MapOptions(
           initialCenter: center,

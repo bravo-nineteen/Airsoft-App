@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 import 'field_model.dart';
 
 class FieldDetailsScreen extends StatelessWidget {
@@ -12,6 +14,7 @@ class FieldDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final secondaryLine = [
       if ((field.prefecture ?? '').isNotEmpty) field.prefecture,
       if ((field.city ?? '').isNotEmpty) field.city,
@@ -63,7 +66,7 @@ class FieldDetailsScreen extends StatelessWidget {
               Text(
                 field.rating != null
                     ? '${field.rating!.toStringAsFixed(1)}${field.reviewCount != null ? ' (${field.reviewCount})' : ''}'
-                    : 'No rating yet',
+                    : l10n.t('noRatingYet'),
               ),
             ],
           ),
@@ -73,7 +76,7 @@ class FieldDetailsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 field.description.isEmpty
-                    ? 'No description available.'
+                    ? l10n.t('noDescriptionAvailable')
                     : field.description,
               ),
             ),
@@ -89,7 +92,7 @@ class FieldDetailsScreen extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.pin_drop),
-              title: const Text('Coordinates'),
+              title: Text(l10n.t('coordinates')),
               subtitle: Text('${field.latitude}, ${field.longitude}'),
             ),
           ),

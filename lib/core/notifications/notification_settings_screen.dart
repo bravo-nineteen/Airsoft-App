@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'notification_preferences_model.dart';
 import 'notification_repository.dart';
 
@@ -42,7 +43,13 @@ class _NotificationSettingsScreenState
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load notification settings: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedLoadNotificationSettings', args: {'error': '$e'}),
+          ),
+        ),
       );
     }
   }
@@ -69,23 +76,30 @@ class _NotificationSettingsScreenState
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save notification settings: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedSaveNotificationSettings', args: {'error': '$e'}),
+          ),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final prefs = _preferences;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(l10n.t('notifications')),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : prefs == null
-              ? const Center(child: Text('No notification settings found.'))
+              ? Center(child: Text(l10n.t('noNotificationSettingsFound')))
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
@@ -95,24 +109,24 @@ class _NotificationSettingsScreenState
                         child: LinearProgressIndicator(),
                       ),
                     SwitchListTile.adaptive(
-                      title: const Text('New Events'),
-                      subtitle: const Text('Get notified when new events go live'),
+                      title: Text(l10n.t('newEventsLabel')),
+                      subtitle: Text(l10n.t('newEventsSubtitle')),
                       value: prefs.eventNotifications,
                       onChanged: (value) {
                         _save(prefs.copyWith(eventNotifications: value));
                       },
                     ),
                     SwitchListTile.adaptive(
-                      title: const Text('Meetup Activity'),
-                      subtitle: const Text('Get notified about meetup updates'),
+                      title: Text(l10n.t('meetupActivity')),
+                      subtitle: Text(l10n.t('meetupActivitySubtitle')),
                       value: prefs.meetupNotifications,
                       onChanged: (value) {
                         _save(prefs.copyWith(meetupNotifications: value));
                       },
                     ),
                     SwitchListTile.adaptive(
-                      title: const Text('Direct Messages'),
-                      subtitle: const Text('Get notified when someone messages you'),
+                      title: Text(l10n.t('directMessages')),
+                      subtitle: Text(l10n.t('directMessagesSubtitle')),
                       value: prefs.directMessageNotifications,
                       onChanged: (value) {
                         _save(
@@ -121,9 +135,8 @@ class _NotificationSettingsScreenState
                       },
                     ),
                     SwitchListTile.adaptive(
-                      title: const Text('Field Updates'),
-                      subtitle:
-                          const Text('Get notified about field changes and news'),
+                      title: Text(l10n.t('fieldUpdates')),
+                      subtitle: Text(l10n.t('fieldUpdatesSubtitle')),
                       value: prefs.fieldUpdateNotifications,
                       onChanged: (value) {
                         _save(prefs.copyWith(fieldUpdateNotifications: value));

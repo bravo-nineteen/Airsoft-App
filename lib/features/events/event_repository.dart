@@ -32,9 +32,20 @@ class EventRepository {
     int? priceYen,
     int? maxPlayers,
   }) async {
+    final trimmedTitle = title.trim();
+    final trimmedDescription = description.trim();
+
+    if (trimmedTitle.isEmpty) {
+      throw Exception('Title is required.');
+    }
+
+    if (trimmedDescription.isEmpty) {
+      throw Exception('Description is required.');
+    }
+
     await _client.from('events').insert({
-      'title': title,
-      'description': description,
+      'title': trimmedTitle,
+      'description': trimmedDescription,
       'starts_at': startsAt.toIso8601String(),
       'ends_at': endsAt.toIso8601String(),
       'location': _nullIfEmpty(location),

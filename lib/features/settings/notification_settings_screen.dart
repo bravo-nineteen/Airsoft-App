@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -17,28 +19,29 @@ class _NotificationSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(l10n.t('notifications'))),
       body: ListView(
         children: [
           SwitchListTile(
-            title: const Text('New event notifications'),
+            title: Text(l10n.t('newEventNotifications')),
             value: eventNotifications,
             onChanged: (value) => setState(() => eventNotifications = value),
           ),
           SwitchListTile(
-            title: const Text('Meet-up activity notifications'),
+            title: Text(l10n.t('meetupActivityNotifications')),
             value: meetupNotifications,
             onChanged: (value) => setState(() => meetupNotifications = value),
           ),
           SwitchListTile(
-            title: const Text('Direct message notifications'),
+            title: Text(l10n.t('directMessageNotifications')),
             value: directMessageNotifications,
             onChanged: (value) =>
                 setState(() => directMessageNotifications = value),
           ),
           SwitchListTile(
-            title: const Text('Field update notifications'),
+            title: Text(l10n.t('fieldUpdateNotifications')),
             value: fieldUpdateNotifications,
             onChanged: (value) =>
                 setState(() => fieldUpdateNotifications = value),

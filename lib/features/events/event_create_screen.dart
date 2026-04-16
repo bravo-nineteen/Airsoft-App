@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'event_repository.dart';
 
 class EventCreateScreen extends StatefulWidget {
@@ -109,7 +110,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
     if (!newEnd.isAfter(_startAt)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('End time must be after start time.')),
+        SnackBar(content: Text(AppLocalizations.of(context).t('endAfterStart'))),
       );
       return;
     }
@@ -125,14 +126,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title is required.')),
+        SnackBar(content: Text(AppLocalizations.of(context).t('titleRequired'))),
       );
       return;
     }
 
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Description is required.')),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).t('descriptionRequired')),
+        ),
       );
       return;
     }
@@ -165,7 +168,13 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create event: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedCreateEvent', args: {'error': '$e'}),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -199,14 +208,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(title: Text(l10n.t('createEvent'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
             controller: _titleController,
-            decoration: const InputDecoration(labelText: 'Title'),
+            decoration: InputDecoration(labelText: l10n.title),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -223,7 +234,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               if (value == null) return;
               setState(() => _eventType = value);
             },
-            decoration: const InputDecoration(labelText: 'Event Type'),
+            decoration: InputDecoration(labelText: l10n.t('eventType')),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -240,7 +251,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               if (value == null) return;
               setState(() => _language = value);
             },
-            decoration: const InputDecoration(labelText: 'Language'),
+            decoration: InputDecoration(labelText: l10n.language),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -257,61 +268,61 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               if (value == null) return;
               setState(() => _skillLevel = value);
             },
-            decoration: const InputDecoration(labelText: 'Skill Level'),
+            decoration: InputDecoration(labelText: l10n.t('skillLevel')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _locationController,
-            decoration: const InputDecoration(labelText: 'Location / Field'),
+            decoration: InputDecoration(labelText: l10n.t('locationField')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _prefectureController,
-            decoration: const InputDecoration(labelText: 'Prefecture'),
+            decoration: InputDecoration(labelText: l10n.t('prefecture')),
           ),
           const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Start'),
+            title: Text(l10n.t('start')),
             subtitle: Text(_formatDateTime(_startAt)),
             trailing: OutlinedButton(
               onPressed: _pickStartDateTime,
-              child: const Text('Change'),
+              child: Text(l10n.t('change')),
             ),
           ),
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('End'),
+            title: Text(l10n.t('end')),
             subtitle: Text(_formatDateTime(_endAt)),
             trailing: OutlinedButton(
               onPressed: _pickEndDateTime,
-              child: const Text('Change'),
+              child: Text(l10n.t('change')),
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _priceController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Price (JPY)'),
+            decoration: InputDecoration(labelText: l10n.t('priceJpy')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _maxPlayersController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Max Players'),
+            decoration: InputDecoration(labelText: l10n.t('maxPlayers')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _organizerController,
-            decoration: const InputDecoration(labelText: 'Organizer Name'),
+            decoration: InputDecoration(labelText: l10n.t('organizerName')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _contactController,
-            decoration: const InputDecoration(
-              labelText: 'Contact Info',
-              hintText: 'Email, Instagram, LINE, etc.',
+            decoration: InputDecoration(
+              labelText: l10n.t('contactInfo'),
+              hintText: l10n.t('contactInfoHint'),
             ),
           ),
           const SizedBox(height: 12),
@@ -319,15 +330,15 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             controller: _descriptionController,
             minLines: 5,
             maxLines: 10,
-            decoration: const InputDecoration(labelText: 'Description'),
+            decoration: InputDecoration(labelText: l10n.t('description')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _notesController,
             minLines: 3,
             maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Rules / Notes',
+            decoration: InputDecoration(
+              labelText: l10n.t('rulesNotes'),
             ),
           ),
           const SizedBox(height: 20),
@@ -339,7 +350,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                     height: 22,
                     child: CircularProgressIndicator(strokeWidth: 2.4),
                   )
-                : const Text('Save Event'),
+                : Text(l10n.t('saveEvent')),
           ),
         ],
       ),

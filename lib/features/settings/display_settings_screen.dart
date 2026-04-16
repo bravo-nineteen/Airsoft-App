@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 class DisplaySettingsScreen extends StatelessWidget {
   const DisplaySettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Display')),
+      appBar: AppBar(title: Text(l10n.t('display'))),
       body: ListView(
-        children: const [
+        children: [
           ListTile(
-            title: Text('Theme'),
-            subtitle: Text('Dark theme currently active'),
+            title: Text(l10n.theme),
+            subtitle: Text(l10n.t('displayThemeSubtitle')),
           ),
           ListTile(
-            title: Text('Font size'),
-            subtitle: Text('Font size control placeholder'),
+            title: Text(l10n.fontSize),
+            subtitle: Text(l10n.t('fontSizePlaceholder')),
           ),
         ],
       ),

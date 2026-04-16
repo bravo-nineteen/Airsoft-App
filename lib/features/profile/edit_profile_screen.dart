@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'avatar_picker_widget.dart';
 import 'profile_model.dart';
 import 'profile_repository.dart';
@@ -64,7 +65,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save profile: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedSaveProfile', args: {'error': '$e'}),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -85,8 +92,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit profile')),
+      appBar: AppBar(title: Text(l10n.editProfile)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -103,44 +111,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 20),
           TextField(
             controller: _callSignController,
-            decoration: const InputDecoration(labelText: 'Call sign'),
+            decoration: InputDecoration(labelText: l10n.callSign),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _areaController,
-            decoration: const InputDecoration(labelText: 'Area'),
+            decoration: InputDecoration(labelText: l10n.area),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _teamController,
-            decoration: const InputDecoration(labelText: 'Team'),
+            decoration: InputDecoration(labelText: l10n.teamName),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _loadoutController,
-            decoration: const InputDecoration(labelText: 'Loadout'),
+            decoration: InputDecoration(labelText: l10n.loadout),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _instagramController,
-            decoration: const InputDecoration(labelText: 'Instagram'),
+            decoration: InputDecoration(labelText: l10n.instagram),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _facebookController,
-            decoration: const InputDecoration(labelText: 'Facebook'),
+            decoration: InputDecoration(labelText: l10n.facebook),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _youtubeController,
-            decoration: const InputDecoration(labelText: 'YouTube'),
+            decoration: InputDecoration(labelText: l10n.youtube),
           ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _isSaving ? null : _save,
             child: _isSaving
                 ? const CircularProgressIndicator()
-                : const Text('Save changes'),
+                : Text(l10n.t('saveChanges')),
           ),
         ],
       ),

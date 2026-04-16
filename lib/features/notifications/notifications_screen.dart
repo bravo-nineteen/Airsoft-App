@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../social/contacts_screen.dart';
 import 'notification_model.dart';
 import 'notification_repository.dart';
@@ -82,28 +83,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await _refresh();
   }
 
-  String _timeLabel(DateTime value) {
+  String _timeLabel(AppLocalizations l10n, DateTime value) {
     final now = DateTime.now();
     final difference = now.difference(value);
 
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
-    if (difference.inHours < 24) return '${difference.inHours}h ago';
-    return '${difference.inDays}d ago';
+    if (difference.inMinutes < 1) return l10n.t('justNow');
+    if (difference.inMinutes < 60) {
+      return l10n.t('minutesAgoShort', args: {'value': '${difference.inMinutes}'});
+    }
+    if (difference.inHours < 24) {
+      return l10n.t('hoursAgoShort', args: {'value': '${difference.inHours}'});
+    }
+    return l10n.t('daysAgoShort', args: {'value': '${difference.inDays}'});
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(l10n.t('notifications')),
         actions: [
           TextButton(
             onPressed: () async {
               await _repository.markAllRead();
               await _refresh();
             },
-            child: const Text('Mark all read'),
+            child: Text(l10n.t('markAllRead')),
           ),
         ],
       ),
@@ -124,7 +130,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Failed to load notifications:\n${snapshot.error}',
+                        l10n.t(
+                          'failedLoadNotifications',
+                          args: {'error': '${snapshot.error}'},
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -137,9 +146,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             if (items.isEmpty) {
               return ListView(
-                children: const [
+                children: [
                   SizedBox(height: 160),
-                  Center(child: Text('No notifications yet.')),
+                  Center(child: Text(l10n.t('noNotificationsYet'))),
                 ],
               );
             }
@@ -164,7 +173,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Text(item.body),
                         const SizedBox(height: 6),
                         Text(
-                          _timeLabel(item.createdAt),
+                          _timeLabel(l10n, item.createdAt),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],

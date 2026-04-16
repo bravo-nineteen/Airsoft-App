@@ -6,6 +6,8 @@ class CommunityCommentModel {
     required this.body,
     required this.createdAt,
     this.callSign,
+    this.avatarUrl,
+    this.parentCommentId,
   });
 
   final String id;
@@ -14,6 +16,8 @@ class CommunityCommentModel {
   final String body;
   final DateTime createdAt;
   final String? callSign;
+  final String? avatarUrl;
+  final String? parentCommentId;
 
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
     return CommunityCommentModel(
@@ -23,7 +27,22 @@ class CommunityCommentModel {
       body: (json['body'] ?? '') as String,
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
-      callSign: json['call_sign'] as String?,
+      callSign: _readNullableString(json['call_sign']),
+      avatarUrl: _readNullableString(json['avatar_url']),
+      parentCommentId: _readNullableString(json['parent_comment_id']),
     );
+  }
+
+  String get displayName {
+    final value = (callSign ?? '').trim();
+    return value.isEmpty ? 'Operator' : value;
+  }
+
+  bool get hasAvatar => (avatarUrl ?? '').trim().isNotEmpty;
+
+  static String? _readNullableString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
   }
 }

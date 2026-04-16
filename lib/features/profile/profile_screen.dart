@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import 'avatar_picker_widget.dart';
 import 'edit_profile_screen.dart';
@@ -64,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return FutureBuilder<ProfileModel?>(
       future: _future,
       builder: (context, snapshot) {
@@ -76,7 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                'Profile error:\n${snapshot.error}',
+                l10n.t('profileError', args: {'error': '${snapshot.error}'}),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -86,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = snapshot.data;
 
         if (profile == null) {
-          return const Center(child: Text('No profile available.'));
+          return Center(child: Text(l10n.t('noProfileAvailable')));
         }
 
         return ListView(
@@ -121,12 +123,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         OutlinedButton.icon(
                           onPressed: () => _edit(profile),
                           icon: const Icon(Icons.edit),
-                          label: const Text('Edit'),
+                          label: Text(l10n.t('edit')),
                         ),
                         OutlinedButton.icon(
                           onPressed: _openSettings,
                           icon: const Icon(Icons.settings),
-                          label: const Text('Settings'),
+                          label: Text(l10n.settings),
                         ),
                       ],
                     ),
@@ -137,19 +139,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 12),
 
-            _InfoCard(title: 'Area', value: profile.area),
-            _InfoCard(title: 'Team', value: profile.teamName),
-            _InfoCard(title: 'Loadout', value: profile.loadout),
-            _InfoCard(title: 'Instagram', value: profile.instagram),
-            _InfoCard(title: 'Facebook', value: profile.facebook),
-            _InfoCard(title: 'YouTube', value: profile.youtube),
+            _InfoCard(title: l10n.area, value: profile.area),
+            _InfoCard(title: l10n.teamName, value: profile.teamName),
+            _InfoCard(title: l10n.loadout, value: profile.loadout),
+            _InfoCard(title: l10n.instagram, value: profile.instagram),
+            _InfoCard(title: l10n.facebook, value: profile.facebook),
+            _InfoCard(title: l10n.youtube, value: profile.youtube),
 
             const SizedBox(height: 12),
 
             Card(
               child: ListTile(
                 leading: const Icon(Icons.mail),
-                title: const Text('Signed-in account'),
+                title: Text(l10n.t('signedInAccount')),
                 subtitle: Text(
                   Supabase.instance.client.auth.currentUser?.email ?? '',
                 ),

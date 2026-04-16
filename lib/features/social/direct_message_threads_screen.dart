@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../app/localization/app_localizations.dart';
+import '../profile/profile_repository.dart';
+import 'direct_message_screen.dart';
+import 'direct_message_thread_model.dart';
+import 'direct_message_thread_repository.dart';
+
+class DirectMessageThreadsScreen extends StatefulWidget {
+  const DirectMessageThreadsScreen({super.key});
+
+  @override
+  State<DirectMessageThreadsScreen> createState() =>
+      _DirectMessageThreadsScreenState();
+}
+
+class _DirectMessageThreadsScreenState
+    extends State<DirectMessageThreadsScreen> {
+  final DirectMessageThreadRepository _repo =
+      DirectMessageThreadRepository();
+  final ProfileRepository _profileRepo = ProfileRepository();
+
+  late Future<List<DirectMessageThreadModel>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repo.getThreads();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _future = _repo.getThreads();
+    });
+    await _future;
+  }
+
+  Future<String> _resolveName(String userId) async {
+    final l10n = AppLocalizations.of(context);
+    final data = await Supabase.instance.client
+        .from('profiles')
+        .select('call_sign')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (data == null) {
+      return l10n.t('operator');
+    }
+
+    final value = (data['call_sign'] ?? l10n.t('operator')).toString().trim();
+    return value.isEmpty ? l10n.t('operator') : value;
+  }
+
+  String _timeLabel(AppLocalizations l10n, DateTime value) {
+    final now = DateTime.now();
+    final diff = now.difference(value);
+
+    if (diff.inMinutes < 1) return l10n.t('now');
+    if (diff.inMinutes < 60) {
+      return l10n.t('minutesShort', args: {'value': '${diff.inMinutes}'});
+    }
+    if (diff.inHours < 24) {
+      return l10n.t('hoursShort', args: {'value': '${diff.inHours}'});
+    }
+    return l10n.t('daysShort', args: {'value': '${diff.inDays}'});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<List<DirectMessageThreadModel>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData &&
+                snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return ListView(
+                children: [
+                  const SizedBox(height: 120),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        l10n.t(
+                          'failedLoadMessages',
+                          args: {'error': '${snapshot.error}'},
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final threads = snapshot.data ?? [];
+
+            if (threads.isEmpty) {
+              return ListView(
+                children: [
+                  SizedBox(height: 120),
+                  Center(child: Text(l10n.t('noMessagesYet'))),
+                ],
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: threads.length,
+              itemBuilder: (context, index) {
+                final thread = threads[index];
+
+                return FutureBuilder<String>(
+                  future: _resolveName(thread.otherUserId),
+                  builder: (context, nameSnap) {
+                    final name = nameSnap.data ?? '...';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text(name.isEmpty ? '?' : name[0]),
+                        ),
+                        title: Text(name),
+                        subtitle: Text(
+                          thread.lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(_timeLabel(l10n, thread.lastMessageAt)),
+                            if (thread.unreadCount > 0)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${thread.unreadCount}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => DirectMessageScreen(
+                                otherUserId: thread.otherUserId,
+                                otherDisplayName: name,
+                              ),
+                            ),
+                          );
+                          await _refresh();
+                        },
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'event_model.dart';
 
 class EventDetailsScreen extends StatelessWidget {
@@ -21,6 +22,7 @@ class EventDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final subtitleParts = <String>[
       if ((event.prefecture ?? '').isNotEmpty) event.prefecture!,
       if ((event.location ?? '').isNotEmpty) event.location!,
@@ -51,73 +53,73 @@ class EventDetailsScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _DetailTile(
             icon: Icons.schedule,
-            title: 'Start',
+            title: l10n.t('start'),
             value: _formatDateTime(event.startsAt),
           ),
           _DetailTile(
             icon: Icons.flag,
-            title: 'End',
+            title: l10n.t('end'),
             value: _formatDateTime(event.endsAt),
           ),
           if ((event.eventType ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.category,
-              title: 'Type',
+              title: l10n.t('type'),
               value: event.eventType!,
             ),
           if ((event.language ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.translate,
-              title: 'Language',
+              title: l10n.language,
               value: event.language!,
             ),
           if ((event.skillLevel ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.military_tech,
-              title: 'Skill Level',
+              title: l10n.t('skillLevel'),
               value: event.skillLevel!,
             ),
           if ((event.location ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.place,
-              title: 'Location',
+              title: l10n.location,
               value: event.location!,
             ),
           if ((event.prefecture ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.map,
-              title: 'Prefecture',
+              title: l10n.t('prefecture'),
               value: event.prefecture!,
             ),
           if (event.priceYen != null)
             _DetailTile(
               icon: Icons.payments,
-              title: 'Price',
+              title: l10n.t('price'),
               value: '¥${event.priceYen}',
             ),
           if (event.maxPlayers != null)
             _DetailTile(
               icon: Icons.groups,
-              title: 'Max Players',
+              title: l10n.t('maxPlayers'),
               value: '${event.maxPlayers}',
             ),
           if ((event.organizerName ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.badge,
-              title: 'Organizer',
+              title: l10n.t('organizer'),
               value: event.organizerName!,
             ),
           if ((event.contactInfo ?? '').isNotEmpty)
             _DetailTile(
               icon: Icons.contact_mail,
-              title: 'Contact',
+              title: l10n.t('contact'),
               value: event.contactInfo!,
             ),
           if ((event.notes ?? '').isNotEmpty)
             Card(
               child: ListTile(
                 leading: const Icon(Icons.rule),
-                title: const Text('Rules / Notes'),
+                title: Text(l10n.t('rulesNotes')),
                 subtitle: Text(event.notes!),
               ),
             ),

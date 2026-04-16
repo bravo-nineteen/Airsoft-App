@@ -12,6 +12,7 @@ import 'features/home/home_dashboard_screen.dart';
 import 'features/notifications/notification_repository.dart';
 import 'features/notifications/notifications_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/social/direct_message_threads_screen.dart';
 
 class AirsoftApp extends StatefulWidget {
   const AirsoftApp({super.key});
@@ -161,6 +162,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           const FieldsScreen(),
           const EventListScreen(),
           const CommunityListScreen(),
+          const DirectMessageThreadsScreen(),
           ProfileScreen(
             currentLocale: widget.locale,
             onLocaleChanged: widget.onLocaleChanged,
@@ -175,6 +177,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           });
           await _loadNotifications();
         },
+        type: BottomNavigationBarType.fixed,
         items: [
           BottomNavigationBarItem(
             icon: const Icon(Icons.home),
@@ -188,9 +191,13 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
             icon: const Icon(Icons.event),
             label: l10n.events,
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.forum),
-            label: 'Board',
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.forum),
+            label: l10n.t('board'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: l10n.messages,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),
@@ -210,11 +217,13 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
       case 2:
         return l10n.events;
       case 3:
-        return 'Board';
+        return l10n.t('board');
       case 4:
+        return l10n.messages;
+      case 5:
         return l10n.profile;
       default:
-        return 'FieldOps';
+        return l10n.t('fieldOps');
     }
   }
 }
@@ -230,11 +239,12 @@ class _NotificationBellButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final badgeText = count > 99 ? '99+' : '$count';
     final showBadge = count > 0;
 
     return IconButton(
-      tooltip: 'Notifications',
+      tooltip: l10n.t('notifications'),
       onPressed: onPressed,
       icon: Stack(
         clipBehavior: Clip.none,

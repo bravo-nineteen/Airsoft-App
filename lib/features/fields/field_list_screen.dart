@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 import 'field_details_screen.dart';
 import 'field_map_screen.dart';
 import 'field_model.dart';
@@ -79,6 +81,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
         Padding(
@@ -89,7 +92,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'Search field name, 日本語, location, type, description',
+                  hintText: l10n.t('searchFieldsHint'),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.refresh),
@@ -104,7 +107,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedLocation,
-                      decoration: const InputDecoration(labelText: 'Location'),
+                      decoration: InputDecoration(labelText: l10n.location),
                       items: _locations
                           .map(
                             (value) => DropdownMenuItem<String>(
@@ -125,7 +128,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedFieldType,
-                      decoration: const InputDecoration(labelText: 'Field Type'),
+                      decoration: InputDecoration(labelText: l10n.t('fieldType')),
                       items: _fieldTypes
                           .map(
                             (value) => DropdownMenuItem<String>(
@@ -150,9 +153,9 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<double>(
                       initialValue: _minRating,
-                      decoration: const InputDecoration(labelText: 'Min Rating'),
-                      items: const [
-                        DropdownMenuItem(value: 0, child: Text('Any')),
+                      decoration: InputDecoration(labelText: l10n.t('minRating')),
+                      items: [
+                        DropdownMenuItem(value: 0, child: Text(l10n.t('any'))),
                         DropdownMenuItem(value: 3, child: Text('3.0+')),
                         DropdownMenuItem(value: 4, child: Text('4.0+')),
                         DropdownMenuItem(value: 4.5, child: Text('4.5+')),
@@ -168,15 +171,15 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: SegmentedButton<bool>(
-                      segments: const [
+                      segments: [
                         ButtonSegment<bool>(
                           value: false,
-                          label: Text('List'),
+                          label: Text(l10n.list),
                           icon: Icon(Icons.view_list),
                         ),
                         ButtonSegment<bool>(
                           value: true,
-                          label: Text('Map'),
+                          label: Text(l10n.map),
                           icon: Icon(Icons.map),
                         ),
                       ],
@@ -206,7 +209,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Failed to load fields: ${snapshot.error}',
+                      l10n.t('failedLoadFields', args: {'error': '${snapshot.error}'}),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -216,7 +219,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
               final fields = snapshot.data ?? [];
 
               if (fields.isEmpty) {
-                return const Center(child: Text('No fields found.'));
+                return Center(child: Text(l10n.t('noFieldsFound')));
               }
 
               if (_mapView) {
@@ -259,9 +262,10 @@ class _FieldListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final ratingText = field.rating != null
-        ? field.rating!.toStringAsFixed(1)
-        : 'No rating';
+      ? field.rating!.toStringAsFixed(1)
+      : l10n.t('noRating');
 
     return Card(
       clipBehavior: Clip.antiAlias,

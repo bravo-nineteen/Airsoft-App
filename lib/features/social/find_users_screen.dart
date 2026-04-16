@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_repository.dart';
 import 'contact_repository.dart';
@@ -44,13 +45,21 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
       await _contactRepository.sendRequest(profile.id);
 
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Contact request sent to ${profile.displayName}.')),
+        SnackBar(
+          content: Text(
+            l10n.t('contactRequestSent', args: {'name': profile.displayName}),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send request: $e')),
+        SnackBar(
+          content: Text(l10n.t('failedSendRequest', args: {'error': '$e'})),
+        ),
       );
     } finally {
       if (!mounted) return;
@@ -86,9 +95,10 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Find Users'),
+        title: Text(l10n.t('findUsers')),
       ),
       body: Column(
         children: [
@@ -98,7 +108,7 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
               controller: _searchController,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Search call sign, code, area, team',
+                hintText: l10n.t('searchUsersHint'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   onPressed: _search,
@@ -121,7 +131,10 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Failed to load users:\n${snapshot.error}',
+                        l10n.t(
+                          'failedLoadUsers',
+                          args: {'error': '${snapshot.error}'},
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -131,7 +144,7 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
                 final profiles = snapshot.data ?? [];
 
                 if (profiles.isEmpty) {
-                  return const Center(child: Text('No users found.'));
+                  return Center(child: Text(l10n.t('noUsersFound')));
                 }
 
                 return ListView.builder(
@@ -159,7 +172,7 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
                                 onPressed: _isBusy
                                     ? null
                                     : () => _sendRequest(profile),
-                                child: const Text('Add'),
+                                child: Text(l10n.t('add')),
                               ),
                       ),
                     );

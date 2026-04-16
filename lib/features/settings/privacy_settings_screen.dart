@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
 
@@ -14,22 +16,23 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy')),
+      appBar: AppBar(title: Text(l10n.t('privacy'))),
       body: ListView(
         children: [
           SwitchListTile(
-            title: const Text('Show area on profile'),
+            title: Text(l10n.t('showAreaProfile')),
             value: showArea,
             onChanged: (value) => setState(() => showArea = value),
           ),
           SwitchListTile(
-            title: const Text('Show team name on profile'),
+            title: Text(l10n.t('showTeamProfile')),
             value: showTeam,
             onChanged: (value) => setState(() => showTeam = value),
           ),
           SwitchListTile(
-            title: const Text('Allow direct messages'),
+            title: Text(l10n.t('allowDirectMessages')),
             value: allowMessages,
             onChanged: (value) => setState(() => allowMessages = value),
           ),

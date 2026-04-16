@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
 import 'direct_message_repository.dart';
@@ -116,7 +117,13 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedSendMessage', args: {'error': '$e'}),
+          ),
+        ),
       );
     } finally {
       if (!mounted) return;
@@ -138,6 +145,8 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     if (_loadingPermission) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.otherDisplayName)),
@@ -148,11 +157,11 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     if (!_isAllowed) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.otherDisplayName)),
-        body: const Center(
+        body: Center(
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Direct messaging is only available for accepted contacts.',
+              l10n.t('dmOnlyAccepted'),
               textAlign: TextAlign.center,
             ),
           ),
@@ -177,7 +186,10 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Failed to load messages:\n${snapshot.error}',
+                        l10n.t(
+                          'failedLoadMessages',
+                          args: {'error': '${snapshot.error}'},
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -187,8 +199,8 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                 final messages = snapshot.data ?? [];
 
                 if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet.'),
+                  return Center(
+                    child: Text(l10n.t('noMessagesYet')),
                   );
                 }
 
@@ -250,8 +262,8 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                       controller: _messageController,
                       minLines: 1,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Write a message',
+                      decoration: InputDecoration(
+                        hintText: l10n.t('writeMessage'),
                       ),
                     ),
                   ),
@@ -264,7 +276,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2.2),
                           )
-                        : const Text('Send'),
+                        : Text(l10n.t('send')),
                   ),
                 ],
               ),

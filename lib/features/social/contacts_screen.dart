@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'contact_model.dart';
 import 'contact_repository.dart';
 import 'direct_message_screen.dart';
@@ -46,14 +47,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   String _otherDisplayName(ContactModel contact) {
+      final l10n = AppLocalizations.of(context);
     if (contact.requesterId == _currentUserId) {
       return (contact.addresseeCallSign ?? '').trim().isEmpty
-          ? 'Operator'
+        ? l10n.t('operator')
           : contact.addresseeCallSign!;
     }
 
     return (contact.requesterCallSign ?? '').trim().isEmpty
-        ? 'Operator'
+      ? l10n.t('operator')
         : contact.requesterCallSign!;
   }
 
@@ -67,12 +69,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Contacts'),
+        title: Text(l10n.contacts),
         actions: [
           IconButton(
-            tooltip: 'Find Users',
+            tooltip: l10n.t('findUsers'),
             onPressed: _openFindUsers,
             icon: const Icon(Icons.person_add_alt_1),
           ),
@@ -91,7 +94,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Failed to load contacts:\n${snapshot.error}',
+                  l10n.t(
+                    'failedLoadContacts',
+                    args: {'error': '${snapshot.error}'},
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -107,12 +113,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('No contacts yet.'),
+                    Text(l10n.t('noContactsYet')),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _openFindUsers,
                       icon: const Icon(Icons.person_search),
-                      label: const Text('Find Users'),
+                      label: Text(l10n.t('findUsers')),
                     ),
                   ],
                 ),

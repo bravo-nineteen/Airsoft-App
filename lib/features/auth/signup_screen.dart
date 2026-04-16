@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -28,14 +30,16 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signup successful. You can now log in.')),
+        SnackBar(content: Text(l10n.t('signupSuccess'))),
       );
       Navigator.of(context).pop();
     } on AuthException catch (e) {
       _showMessage(e.message);
     } catch (e) {
-      _showMessage('Signup failed: $e');
+      final l10n = AppLocalizations.of(context);
+      _showMessage(l10n.t('signupFailed', args: {'error': '$e'}));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -59,8 +63,10 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
+      appBar: AppBar(title: Text(l10n.t('createAccount'))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
@@ -74,24 +80,24 @@ class _SignupScreenState extends State<SignupScreen> {
                   children: [
                     TextField(
                       controller: _callSignController,
-                      decoration: const InputDecoration(
-                        labelText: 'Call sign',
+                      decoration: InputDecoration(
+                        labelText: l10n.callSign,
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
+                      decoration: InputDecoration(
+                        labelText: l10n.t('email'),
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
+                      decoration: InputDecoration(
+                        labelText: l10n.t('password'),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -105,7 +111,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 width: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Create account'),
+                            : Text(l10n.t('createAccount')),
                       ),
                     ),
                   ],

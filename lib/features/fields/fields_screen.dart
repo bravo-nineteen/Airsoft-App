@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+
 import 'field_details_screen.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
@@ -60,6 +62,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
         Padding(
@@ -69,7 +72,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: 'Search by field name or location',
+                  hintText: l10n.t('searchFieldsHint'),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.refresh),
@@ -84,7 +87,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedLocation,
-                      decoration: const InputDecoration(labelText: 'Location'),
+                      decoration: InputDecoration(labelText: l10n.location),
                       items: _locations
                           .map((value) => DropdownMenuItem<String>(
                                 value: value,
@@ -103,7 +106,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedFieldType,
-                      decoration: const InputDecoration(labelText: 'Field Type'),
+                      decoration: InputDecoration(labelText: l10n.t('fieldType')),
                       items: _fieldTypes
                           .map((value) => DropdownMenuItem<String>(
                                 value: value,
@@ -122,15 +125,15 @@ class _FieldsScreenState extends State<FieldsScreen> {
               ),
               const SizedBox(height: 12),
               SegmentedButton<bool>(
-                segments: const [
+                segments: [
                   ButtonSegment<bool>(
                     value: false,
-                    label: Text('List'),
+                    label: Text(l10n.list),
                     icon: Icon(Icons.view_list),
                   ),
                   ButtonSegment<bool>(
                     value: true,
-                    label: Text('Map'),
+                    label: Text(l10n.map),
                     icon: Icon(Icons.map),
                   ),
                 ],
@@ -146,7 +149,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
         ),
         Expanded(
           child: _mapView
-              ? const Center(child: Text('Map view placeholder'))
+              ? Center(child: Text(l10n.t('mapViewPlaceholder')))
               : FutureBuilder<List<FieldModel>>(
                   future: _fieldsFuture,
                   builder: (context, snapshot) {
@@ -158,7 +161,12 @@ class _FieldsScreenState extends State<FieldsScreen> {
                       return Center(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: Text('Failed to load fields: ${snapshot.error}'),
+                          child: Text(
+                            l10n.t(
+                              'failedLoadFields',
+                              args: {'error': '${snapshot.error}'},
+                            ),
+                          ),
                         ),
                       );
                     }
@@ -166,7 +174,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                     final fields = snapshot.data ?? [];
 
                     if (fields.isEmpty) {
-                      return const Center(child: Text('No fields found.'));
+                      return Center(child: Text(l10n.t('noFieldsFound')));
                     }
 
                     return ListView.builder(

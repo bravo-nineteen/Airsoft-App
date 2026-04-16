@@ -17,6 +17,7 @@ class SettingsScreen extends StatelessWidget {
   final ValueChanged<Locale>? onLocaleChanged;
 
   Future<void> _showLanguagePicker(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     final selected = currentLocale ?? Localizations.localeOf(context);
 
     await showModalBottomSheet<void>(
@@ -28,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.language),
-                title: const Text('English'),
+                title: Text(l10n.t('english')),
                 trailing: selected.languageCode == 'en'
                     ? const Icon(Icons.check)
                     : null,
@@ -69,29 +70,36 @@ class SettingsScreen extends StatelessWidget {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Logout failed: $e')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('logoutFailed', args: {'error': '$e'}),
+          ),
+        ),
       );
     }
   }
 
   void _showLogoutConfirm(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Do you want to sign out of your account?'),
+          title: Text(l10n.t('logout')),
+          content: Text(l10n.t('logoutConfirmMessage')),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+              child: Text(l10n.t('cancel')),
             ),
             FilledButton(
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
                 await _logout(context);
               },
-              child: const Text('Logout'),
+              child: Text(l10n.t('logout')),
             ),
           ],
         );
@@ -105,16 +113,16 @@ class SettingsScreen extends StatelessWidget {
     final selectedLanguageCode =
         (currentLocale ?? Localizations.localeOf(context)).languageCode;
     final selectedLanguageLabel =
-        selectedLanguageCode == 'ja' ? '日本語' : 'English';
+        selectedLanguageCode == 'ja' ? l10n.t('japanese') : l10n.t('english');
 
     final items = [
       _SettingsGroup(
-        title: 'Display',
+        title: l10n.t('display'),
         tiles: [
           _SettingsTileData(
             icon: Icons.palette_outlined,
             title: l10n.theme,
-            subtitle: 'Light and dark display controls',
+            subtitle: l10n.t('lightDarkControls'),
           ),
           _SettingsTileData(
             icon: Icons.language_outlined,
@@ -125,12 +133,12 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
       _SettingsGroup(
-        title: 'Notifications',
+        title: l10n.t('notifications'),
         tiles: [
           _SettingsTileData(
             icon: Icons.notifications_outlined,
-            title: 'Push Notifications',
-            subtitle: 'Manage event, board, DM, and field alerts',
+            title: l10n.t('pushNotifications'),
+            subtitle: l10n.t('manageAlerts'),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -142,32 +150,32 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
       _SettingsGroup(
-        title: 'Privacy',
-        tiles: const [
+        title: l10n.t('privacy'),
+        tiles: [
           _SettingsTileData(
             icon: Icons.lock_outline,
-            title: 'Privacy Controls',
-            subtitle: 'Profile visibility and interaction permissions',
+            title: l10n.t('privacyControls'),
+            subtitle: l10n.t('profileVisibilityPermissions'),
           ),
           _SettingsTileData(
             icon: Icons.block_outlined,
-            title: 'Blocked Users',
-            subtitle: 'Manage blocked accounts',
+            title: l10n.t('blockedUsers'),
+            subtitle: l10n.t('manageBlockedAccounts'),
           ),
         ],
       ),
       _SettingsGroup(
-        title: 'Account',
+        title: l10n.t('account'),
         tiles: [
-          const _SettingsTileData(
+          _SettingsTileData(
             icon: Icons.person_outline,
-            title: 'Edit Profile',
-            subtitle: 'Call sign, avatar, and account details',
+            title: l10n.editProfile,
+            subtitle: l10n.t('profileAccountDetails'),
           ),
           _SettingsTileData(
             icon: Icons.people_outline,
             title: l10n.contacts,
-            subtitle: 'Manage your contacts and requests',
+            subtitle: l10n.t('manageContactsRequests'),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -176,10 +184,10 @@ class SettingsScreen extends StatelessWidget {
               );
             },
           ),
-          const _SettingsTileData(
+          _SettingsTileData(
             icon: Icons.mail_outline,
-            title: 'Email',
-            subtitle: 'View your signed-in email account',
+            title: l10n.t('email'),
+            subtitle: l10n.t('viewSignedInEmail'),
           ),
         ],
       ),
@@ -187,7 +195,7 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(l10n.settings),
       ),
       body: SafeArea(
         child: Column(
@@ -211,7 +219,7 @@ class SettingsScreen extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => _showLogoutConfirm(context),
                   icon: const Icon(Icons.logout),
-                  label: const Text('Logout'),
+                  label: Text(l10n.t('logout')),
                 ),
               ),
             ),
