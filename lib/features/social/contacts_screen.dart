@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'contact_model.dart';
 import 'contact_repository.dart';
 import 'direct_message_screen.dart';
+import 'find_users_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -29,6 +30,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
       _future = _repo.getContacts();
     });
     await _future;
+  }
+
+  Future<void> _openFindUsers() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FindUsersScreen()),
+    );
+    await _refresh();
   }
 
   String _otherUserId(ContactModel contact) {
@@ -62,6 +70,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Contacts'),
+        actions: [
+          IconButton(
+            tooltip: 'Find Users',
+            onPressed: _openFindUsers,
+            icon: const Icon(Icons.person_add_alt_1),
+          ),
+        ],
       ),
       body: FutureBuilder<List<ContactModel>>(
         future: _future,
@@ -86,7 +101,23 @@ class _ContactsScreenState extends State<ContactsScreen> {
           final contacts = snapshot.data ?? [];
 
           if (contacts.isEmpty) {
-            return const Center(child: Text('No contacts yet.'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('No contacts yet.'),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _openFindUsers,
+                      icon: const Icon(Icons.person_search),
+                      label: const Text('Find Users'),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
           return RefreshIndicator(

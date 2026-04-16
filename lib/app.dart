@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
@@ -8,10 +9,9 @@ import 'features/community/community_list_screen.dart';
 import 'features/events/event_list_screen.dart';
 import 'features/fields/field_list_screen.dart';
 import 'features/home/home_dashboard_screen.dart';
+import 'features/notifications/notification_repository.dart';
+import 'features/notifications/notifications_screen.dart';
 import 'features/profile/profile_screen.dart';
-import 'features/social/contact_repository.dart';
-import 'features/social/contacts_screen.dart';
-import 'features/social/direct_message_repository.dart';
 
 class AirsoftApp extends StatefulWidget {
   const AirsoftApp({super.key});
@@ -84,28 +84,33 @@ class AirsoftHomeShell extends StatefulWidget {
 }
 
 class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
+
   int _index = 0;
-
-  final ContactRepository _contactRepo = ContactRepository();
-  final DirectMessageRepository _dmRepo = DirectMessageRepository();
-
   int _notificationCount = 0;
+  RealtimeChannel? _notificationChannel;
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+
+    _notificationChannel = _notificationRepository.subscribeToNotifications(
+      onNotification: () async {
+        await _loadNotifications();
+      },
+    );
   }
 
   Future<void> _loadNotifications() async {
     try {
-      final unreadMessages = await _dmRepo.getUnreadCount();
-      final pendingRequests = await _contactRepo.getPendingRequestsCount();
+      final unread = await _notificationRepository.getUnreadCount();
 
       if (!mounted) return;
 
       setState(() {
-        _notificationCount = unreadMessages + pendingRequests;
+        _notificationCount = unread;
       });
     } catch (_) {}
   }
@@ -113,11 +118,19 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   Future<void> _openNotifications() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const ContactsScreen(),
+        builder: (_) => const NotificationsScreen(),
       ),
     );
 
     await _loadNotifications();
+  }
+
+  @override
+  void dispose() {
+    if (_notificationChannel != null) {
+      Supabase.instance.client.removeChannel(_notificationChannel!);
+    }
+    super.dispose();
   }
 
   @override
