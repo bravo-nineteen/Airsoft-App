@@ -7,7 +7,18 @@ import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.currentLocale,
+    this.onLocaleChanged,
+    this.currentThemeMode,
+    this.onThemeModeChanged,
+  });
+
+  final Locale? currentLocale;
+  final ValueChanged<Locale?>? onLocaleChanged;
+  final ThemeMode? currentThemeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   void _navigate(BuildContext context, Widget screen) {
     Navigator.of(context).push(
@@ -60,16 +71,22 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          // ===== DISPLAY =====
           _sectionTitle('Display'),
           _tile(
             context: context,
             icon: Icons.palette_outlined,
             title: 'Display Settings',
-            onTap: () => _navigate(context, const DisplaySettingsScreen()),
+            onTap: () => _navigate(
+              context,
+              DisplaySettingsScreen(
+                currentThemeMode: currentThemeMode,
+                onThemeModeChanged: onThemeModeChanged,
+                currentLocale: currentLocale,
+                onLocaleChanged: onLocaleChanged,
+              ),
+            ),
           ),
 
-          // ===== NOTIFICATIONS =====
           _sectionTitle('Notifications'),
           _tile(
             context: context,
@@ -79,45 +96,4 @@ class SettingsScreen extends StatelessWidget {
                 _navigate(context, const NotificationSettingsScreen()),
           ),
 
-          // ===== PRIVACY =====
-          _sectionTitle('Privacy'),
-          _tile(
-            context: context,
-            icon: Icons.lock_outline,
-            title: 'Privacy Settings',
-            onTap: () =>
-                _navigate(context, const PrivacySettingsScreen()),
-          ),
-
-          // ===== ACCOUNT =====
-          _sectionTitle('Account'),
-          _tile(
-            context: context,
-            icon: Icons.person_outline,
-            title: 'Account Settings',
-            onTap: () =>
-                _navigate(context, const AccountSettingsScreen()),
-          ),
-
-          const SizedBox(height: 30),
-
-          // ===== LOGOUT =====
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ElevatedButton.icon(
-              onPressed: () => _logout(context),
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-}
+    [... ELLIPSIZATION ...]
