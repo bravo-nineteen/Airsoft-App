@@ -18,7 +18,12 @@ enum HomeInterestFilter {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    this.onOpenEventsTab,
+  });
+
+  final VoidCallback? onOpenEventsTab;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -50,22 +55,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _fetchBlogPosts(),
       ]);
 
-      if (!mounted) {
-        return;
-      }
-
-      final posts = (results[0] as List<CommunityPostModel>).take(6).toList();
-      final blogPosts = results[1] as List<AojBlogPost>;
+      if (!mounted) return;
 
       setState(() {
-        _latestPosts = posts;
-        _blogPosts = blogPosts;
+        _latestPosts =
+            (results[0] as List<CommunityPostModel>).take(6).toList();
+        _blogPosts = results[1] as List<AojBlogPost>;
         _isLoading = false;
       });
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _isLoading = false;
@@ -107,14 +106,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openEventsPage() {
-    Navigator.of(context).pushNamed('/events');
+    if (widget.onOpenEventsTab != null) {
+      widget.onOpenEventsTab!();
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Events tab callback not connected'),
+      ),
+    );
   }
 
   Future<void> _openBlogPost(AojBlogPost post) async {
     final uri = Uri.tryParse(post.link);
-    if (uri == null) {
-      return;
-    }
+    if (uri == null) return;
 
     final launched = await launchUrl(
       uri,
@@ -595,15 +601,15 @@ class _HomePostCard extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 6,
                       children: <Widget>[
-                        _MetaText(
+                        _MetaItem(
                           icon: Icons.thumb_up_alt_outlined,
                           text: '${post.likeCount}',
                         ),
-                        _MetaText(
+                        _MetaItem(
                           icon: Icons.mode_comment_outlined,
                           text: '${post.commentCount}',
                         ),
-                        _MetaText(
+                        _MetaItem(
                           icon: Icons.visibility_outlined,
                           text: '${post.viewCount}',
                         ),
@@ -730,7 +736,7 @@ class _BlogPostCard extends StatelessWidget {
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 8),
-                    _MetaText(
+                    const _MetaItem(
                       icon: Icons.open_in_new,
                       text: 'Open article',
                     ),
@@ -948,8 +954,8 @@ class _MiniBadge extends StatelessWidget {
   }
 }
 
-class _MetaText extends StatelessWidget {
-  const _MetaText({
+class _MetaItem extends StatelessWidget {
+  const _MetaItem({
     required this.icon,
     required this.text,
   });
@@ -964,12 +970,7 @@ class _MetaText extends StatelessWidget {
       children: <Widget>[
         Icon(icon, size: 14),
         const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            text,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        Text(text),
       ],
     );
   }
