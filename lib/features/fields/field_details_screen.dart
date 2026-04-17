@@ -23,13 +23,14 @@ class FieldDetailsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(field.name)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ClipRRect(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isTablet = constraints.maxWidth >= 900;
+
+          final imagePanel = ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: AspectRatio(
-              aspectRatio: 16 / 9,
+              aspectRatio: isTablet ? 4 / 5 : 16 / 9,
               child: (field.imageUrl ?? '').isNotEmpty
                   ? Image.network(
                       field.imageUrl!,
@@ -40,63 +41,91 @@ class FieldDetailsScreen extends StatelessWidget {
                     )
                   : _FieldImagePlaceholder(name: field.name),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            field.name,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            field.fullLocation,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          if (secondaryLine.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              secondaryLine,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
+          );
+
+          final detailsPanel = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _RatingStars(rating: field.rating ?? 0),
-              const SizedBox(width: 8),
               Text(
-                field.rating != null
-                    ? '${field.rating!.toStringAsFixed(1)}${field.reviewCount != null ? ' (${field.reviewCount})' : ''}'
-                    : l10n.t('noRatingYet'),
+                field.name,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                field.fullLocation,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (secondaryLine.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  secondaryLine,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _RatingStars(rating: field.rating ?? 0),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      field.rating != null
+                          ? '${field.rating!.toStringAsFixed(1)}${field.reviewCount != null ? ' (${field.reviewCount})' : ''}'
+                          : l10n.t('noRatingYet'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    field.description.isEmpty
+                        ? l10n.t('noDescriptionAvailable')
+                        : field.description,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.place),
+                  title: Text(field.locationName),
+                  subtitle: Text(field.fullLocation),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.pin_drop),
+                  title: Text(l10n.t('coordinates')),
+                  subtitle: Text('${field.latitude}, ${field.longitude}'),
+                ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                field.description.isEmpty
-                    ? l10n.t('noDescriptionAvailable')
-                    : field.description,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.place),
-              title: Text(field.locationName),
-              subtitle: Text(field.fullLocation),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.pin_drop),
-              title: Text(l10n.t('coordinates')),
-              subtitle: Text('${field.latitude}, ${field.longitude}'),
-            ),
-          ),
-        ],
+          );
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: isTablet
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 5, child: imagePanel),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 6, child: detailsPanel),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      imagePanel,
+                      const SizedBox(height: 16),
+                      detailsPanel,
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

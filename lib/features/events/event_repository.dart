@@ -42,6 +42,7 @@ class EventRepository {
     required String description,
     required DateTime startsAt,
     required DateTime endsAt,
+    bool isOfficial = false,
     String? location,
     String? prefecture,
     String? eventType,
@@ -85,6 +86,7 @@ class EventRepository {
       'price_yen': priceYen,
       'max_players': maxPlayers,
       'host_user_id': user.id,
+      'is_official': isOfficial,
     });
   }
 

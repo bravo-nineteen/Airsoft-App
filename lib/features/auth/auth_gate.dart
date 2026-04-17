@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../admin/admin_repository.dart';
+import '../admin/banned_screen.dart';
 import '../shell/airsoft_home_shell.dart';
 import 'login_screen.dart';
 
@@ -33,11 +35,24 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        return AirsoftHomeShell(
-          currentLocale: currentLocale,
-          onLocaleChanged: onLocaleChanged,
-          currentThemeMode: currentThemeMode,
-          onThemeModeChanged: onThemeModeChanged,
+        return FutureBuilder<AdminBanRecord?>(
+          future: AdminRepository().getActiveBanForCurrentUser(),
+          builder: (context, banSnapshot) {
+            if (banSnapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (banSnapshot.data != null) {
+              return BannedScreen(ban: banSnapshot.data!);
+            }
+
+            return AirsoftHomeShell(
+              currentLocale: currentLocale,
+              onLocaleChanged: onLocaleChanged,
+              currentThemeMode: currentThemeMode,
+              onThemeModeChanged: onThemeModeChanged,
+            );
+          },
         );
       },
     );

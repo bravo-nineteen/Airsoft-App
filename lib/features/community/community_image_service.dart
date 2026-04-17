@@ -29,30 +29,29 @@ class CommunityImageService {
     String uploadSourcePath = pickedFile.path;
     Uint8List bytes = await pickedFile.readAsBytes();
 
-    try {
-      final CroppedFile? croppedFile = await ImageCropper().cropImage(
-        sourcePath: pickedFile.path,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 88,
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Image',
-            lockAspectRatio: false,
-            hideBottomControls: false,
-            initAspectRatio: CropAspectRatioPreset.original,
-          ),
-          IOSUiSettings(
-            title: 'Crop Image',
-          ),
-        ],
-      );
+    final bool shouldCrop = !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.iOS;
 
-      if (croppedFile != null) {
-        uploadSourcePath = croppedFile.path;
-        bytes = await XFile(croppedFile.path).readAsBytes();
+    if (shouldCrop) {
+      try {
+        final CroppedFile? croppedFile = await ImageCropper().cropImage(
+          sourcePath: pickedFile.path,
+          compressFormat: ImageCompressFormat.jpg,
+          compressQuality: 88,
+          uiSettings: [
+            IOSUiSettings(
+              title: 'Crop Image',
+            ),
+          ],
+        );
+
+        if (croppedFile != null) {
+          uploadSourcePath = croppedFile.path;
+          bytes = await XFile(croppedFile.path).readAsBytes();
+        }
+      } catch (_) {
+        // If cropper fails, continue with original image.
       }
-    } catch (_) {
-      // If cropper fails (plugin/runtime issue), continue with original image.
     }
 
     final User? user = _client.auth.currentUser;

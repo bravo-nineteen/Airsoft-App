@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../admin/admin_repository.dart';
+import '../admin/admin_screen.dart';
 import 'account_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -25,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final AdminRepository _adminRepository = AdminRepository();
   late ThemeMode _selectedThemeMode;
   String? _selectedLanguageCode;
 
@@ -212,6 +215,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.manage_accounts_outlined,
             title: l10n.t('viewSignedInEmail'),
             onTap: () => _navigate(context, const AccountSettingsScreen()),
+          ),
+          FutureBuilder<bool>(
+            future: _adminRepository.isCurrentUserAdmin(),
+            builder: (context, snapshot) {
+              if (snapshot.data != true) {
+                return const SizedBox.shrink();
+              }
+
+              return _tile(
+                context: context,
+                icon: Icons.admin_panel_settings_outlined,
+                title: 'Admin Area',
+                onTap: () => _navigate(context, const AdminScreen()),
+              );
+            },
           ),
           _tile(
             context: context,

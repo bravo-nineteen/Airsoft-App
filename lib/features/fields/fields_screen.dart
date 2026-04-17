@@ -185,7 +185,27 @@ class _FieldsScreenState extends State<FieldsScreen> {
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: ListTile(
+                            contentPadding: const EdgeInsets.all(10),
                             onTap: () => _openField(field),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: 72,
+                                height: 72,
+                                child: field.hasImage
+                                    ? Image.network(
+                                        field.imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            _FieldListThumbnailPlaceholder(
+                                          name: field.name,
+                                        ),
+                                      )
+                                    : _FieldListThumbnailPlaceholder(
+                                        name: field.name,
+                                      ),
+                              ),
+                            ),
                             title: Text(field.name),
                             subtitle: Text(
                               '${field.locationName}${(field.fieldType ?? '').isNotEmpty ? ' • ${field.fieldType}' : ''}',
@@ -199,6 +219,36 @@ class _FieldsScreenState extends State<FieldsScreen> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _FieldListThumbnailPlaceholder extends StatelessWidget {
+  const _FieldListThumbnailPlaceholder({
+    required this.name,
+  });
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.terrain, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ],
+      ),
     );
   }
 }

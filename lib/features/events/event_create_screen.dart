@@ -4,7 +4,12 @@ import '../../app/localization/app_localizations.dart';
 import 'event_repository.dart';
 
 class EventCreateScreen extends StatefulWidget {
-  const EventCreateScreen({super.key});
+  const EventCreateScreen({
+    super.key,
+    this.isOfficial = false,
+  });
+
+  final bool isOfficial;
 
   @override
   State<EventCreateScreen> createState() => _EventCreateScreenState();
@@ -161,6 +166,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
         description: description,
         startsAt: _startAt,
         endsAt: _endAt,
+        isOfficial: widget.isOfficial,
         location: _locationController.text.trim(),
         prefecture: _prefectureController.text.trim(),
         eventType: _eventType,
@@ -227,7 +233,9 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('createEvent'))),
+      appBar: AppBar(
+        title: Text(widget.isOfficial ? 'Create Official Event' : l10n.t('createEvent')),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -378,7 +386,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
-                label: const Text('Create Event'),
+                label: Text(widget.isOfficial ? 'Create Official Event' : 'Create Event'),
               ),
             ),
           ],

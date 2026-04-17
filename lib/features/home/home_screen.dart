@@ -172,32 +172,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  String _filterTitle() {
-    switch (_selectedFilter) {
-      case HomeInterestFilter.all:
-        return 'Member Feed';
-      case HomeInterestFilter.posts:
-        return 'Latest Posts';
-      case HomeInterestFilter.events:
-        return 'Events';
-      case HomeInterestFilter.blog:
-        return 'Airsoft Blog';
-    }
-  }
-
-  String _filterSubtitle() {
-    switch (_selectedFilter) {
-      case HomeInterestFilter.all:
-        return 'Community activity, events and blog updates.';
-      case HomeInterestFilter.posts:
-        return 'Recent discussion and community posts.';
-      case HomeInterestFilter.events:
-        return 'Go straight to posted events.';
-      case HomeInterestFilter.blog:
-        return 'Latest articles from Airsoft Online Japan.';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -213,12 +187,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
                 children: <Widget>[
                   const _HomeTopBar(),
-                  const SizedBox(height: 16),
-                  _HomeHeroCard(
-                    title: _filterTitle(),
-                    subtitle: _filterSubtitle(),
-                    onPrimaryTap: _openBoards,
-                  ),
                   const SizedBox(height: 16),
                   _InterestSelector(
                     selectedFilter: _selectedFilter,
@@ -310,69 +278,13 @@ class _HomeTopBar extends StatelessWidget {
       children: <Widget>[
         Expanded(
           child: Text(
-            'FieldOps',
+            'FieldOps News Feed',
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HomeHeroCard extends StatelessWidget {
-  const _HomeHeroCard({
-    required this.title,
-    required this.subtitle,
-    required this.onPrimaryTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final VoidCallback onPrimaryTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: theme.colorScheme.primaryContainer,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            Icons.dynamic_feed_outlined,
-            size: 30,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer.withOpacity(0.9),
-            ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: onPrimaryTap,
-            icon: const Icon(Icons.forum_outlined),
-            label: const Text('Open Boards'),
-          ),
-        ],
-      ),
     );
   }
 }
