@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'app/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
-import 'features/home/home_screen.dart';
 
 class AirsoftApp extends StatefulWidget {
   const AirsoftApp({
@@ -45,15 +44,13 @@ class _AirsoftAppState extends State<AirsoftApp> {
       themeMode: _themeMode,
       locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
-      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         AppLocalizations.delegate,
         DefaultWidgetsLocalizations.delegate,
         DefaultMaterialLocalizations.delegate,
         DefaultCupertinoLocalizations.delegate,
       ],
-      home: AuthGate(
-        homeBuilder: () => const HomeScreen(),
-      ),
+      home: const AuthGate(),
     );
   }
 }
