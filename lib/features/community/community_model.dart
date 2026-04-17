@@ -16,6 +16,8 @@ class CommunityPostModel {
   final DateTime? updatedAt;
   final bool isPinned;
   final bool isLikedByMe;
+  final String postContext;
+  final String? targetUserId;
 
   const CommunityPostModel({
     required this.id,
@@ -35,6 +37,8 @@ class CommunityPostModel {
     required this.updatedAt,
     required this.isPinned,
     required this.isLikedByMe,
+    required this.postContext,
+    required this.targetUserId,
   });
 
   CommunityPostModel copyWith({
@@ -55,6 +59,8 @@ class CommunityPostModel {
     DateTime? updatedAt,
     bool? isPinned,
     bool? isLikedByMe,
+    String? postContext,
+    String? targetUserId,
   }) {
     return CommunityPostModel(
       id: id ?? this.id,
@@ -74,6 +80,8 @@ class CommunityPostModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isPinned: isPinned ?? this.isPinned,
       isLikedByMe: isLikedByMe ?? this.isLikedByMe,
+      postContext: postContext ?? this.postContext,
+      targetUserId: targetUserId ?? this.targetUserId,
     );
   }
 
@@ -95,6 +103,8 @@ class CommunityPostModel {
     }
     return null;
   }
+
+  bool get isProfilePost => postContext == 'profile';
 
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
     final dynamic rawImageUrls = json['image_urls'];
@@ -133,6 +143,8 @@ class CommunityPostModel {
           ?.toLocal(),
       isPinned: json['is_pinned'] == true,
       isLikedByMe: json['is_liked_by_me'] == true || json['liked_by_me'] == true,
+      postContext: _readNullableString(json['post_context']) ?? 'community',
+      targetUserId: _readNullableString(json['target_user_id']),
     );
   }
 }
