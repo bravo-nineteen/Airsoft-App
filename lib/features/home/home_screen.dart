@@ -21,9 +21,11 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.onOpenEventsTab,
+    this.onOpenBoardsTab,
   });
 
   final VoidCallback? onOpenEventsTab;
+  final VoidCallback? onOpenBoardsTab;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -55,7 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _fetchBlogPosts(),
       ]);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _latestPosts =
@@ -64,7 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _isLoading = false;
@@ -98,6 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openBoards() {
+    if (widget.onOpenBoardsTab != null) {
+      widget.onOpenBoardsTab!();
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const CommunityListScreen(),
@@ -113,14 +124,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Events tab callback not connected'),
+        content: Text('Events tab is not connected'),
       ),
     );
   }
 
   Future<void> _openBlogPost(AojBlogPost post) async {
     final uri = Uri.tryParse(post.link);
-    if (uri == null) return;
+    if (uri == null) {
+      return;
+    }
 
     final launched = await launchUrl(
       uri,
@@ -190,7 +203,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return SafeArea(
       bottom: false,
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : RefreshIndicator(
               onRefresh: _loadHomeData,
               child: ListView(
