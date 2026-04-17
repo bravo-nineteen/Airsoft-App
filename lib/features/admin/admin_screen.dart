@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../community/community_model.dart';
 import '../events/event_create_screen.dart';
 import '../events/event_model.dart';
+import '../fields/field_model.dart';
 import '../profile/profile_model.dart';
 import 'admin_create_field_screen.dart';
 import 'admin_repository.dart';
@@ -35,6 +36,7 @@ class _AdminScreenState extends State<AdminScreen>
       _repository.getRecentPosts(),
       _repository.getRecentComments(),
       _repository.getRecentEvents(),
+      _repository.getRecentFields(),
       _repository.getRecentBans(),
     ]);
 
@@ -42,7 +44,8 @@ class _AdminScreenState extends State<AdminScreen>
       posts: results[0] as List<CommunityPostModel>,
       comments: results[1] as List<CommunityCommentModel>,
       events: results[2] as List<EventModel>,
-      bans: results[3] as List<AdminBanRecord>,
+      fields: results[3] as List<FieldModel>,
+      bans: results[4] as List<AdminBanRecord>,
     );
   }
 
@@ -234,6 +237,31 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
+  Future<void> _editEvent(EventModel event) async {
+    final bool? updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EventCreateScreen(
+          isOfficial: event.isOfficial,
+          existingEvent: event,
+        ),
+      ),
+    );
+    if (updated == true) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _editField(FieldModel field) async {
+    final bool? updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminCreateFieldScreen(existingField: field),
+      ),
+    );
+    if (updated == true) {
+      await _refresh();
+    }
+  }
+
   Widget _buildModerationTab() {
     return FutureBuilder<_AdminDashboardData>(
       future: _dashboardFuture,
@@ -376,28 +404,68 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Widget _buildOfficialTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.event_available),
-            title: const Text('Create Official Event'),
-            subtitle: const Text('Publish an admin-managed event listing.'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _openOfficialEvent,
-          ),
-        ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.terrain),
-            title: const Text('Create Official Field Listing'),
-            subtitle: const Text('Add an official field entry to the directory.'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _openOfficialField,
-          ),
-        ),
-      ],
+    return FutureBuilder<_AdminDashboardData>(
+      future: _dashboardFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Failed to load official content: ${snapshot.error}', textAlign: TextAlign.center)));
+        }
+        final data = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.event_available),
+                title: const Text('Create Official Event'),
+                subtitle: const Text('Publish an admin-managed event listing.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openOfficialEvent,
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.terrain),
+                title: const Text('Create Official Field Listing'),
+                subtitle: const Text('Add an official field entry to the directory.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openOfficialField,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Recent Events', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            ...data.events.map((event) => Card(
+              child: ListTile(
+                leading: event.isOfficial ? const Icon(Icons.verified, color: Colors.blue) : const Icon(Icons.event),
+                title: Text(event.title),
+                subtitle: Text(event.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _editEvent(event),
+                ),
+              ),
+            )),
+            const SizedBox(height: 16),
+            Text('Recent Fields', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            ...data.fields.map((field) => Card(
+              child: ListTile(
+                leading: field.isOfficial ? const Icon(Icons.verified, color: Colors.blue) : const Icon(Icons.terrain),
+                title: Text(field.name),
+                subtitle: Text(field.fullLocation, maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _editField(field),
+                ),
+              ),
+            )),
+          ],
+        );
+      },
     );
   }
 
@@ -439,11 +507,13 @@ class _AdminDashboardData {
     required this.posts,
     required this.comments,
     required this.events,
+    required this.fields,
     required this.bans,
   });
 
   final List<CommunityPostModel> posts;
   final List<CommunityCommentModel> comments;
   final List<EventModel> events;
+  final List<FieldModel> fields;
   final List<AdminBanRecord> bans;
 }

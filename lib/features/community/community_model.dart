@@ -9,6 +9,8 @@ class CommunityPostModel {
   final String? imageUrl;
   final List<String> imageUrls;
   final String? category;
+  final String? language;
+  final String? languageCode;
   final int commentCount;
   final int likeCount;
   final int viewCount;
@@ -30,6 +32,8 @@ class CommunityPostModel {
     required this.imageUrl,
     required this.imageUrls,
     required this.category,
+    required this.language,
+    required this.languageCode,
     required this.commentCount,
     required this.likeCount,
     required this.viewCount,
@@ -52,6 +56,8 @@ class CommunityPostModel {
     String? imageUrl,
     List<String>? imageUrls,
     String? category,
+    String? language,
+    String? languageCode,
     int? commentCount,
     int? likeCount,
     int? viewCount,
@@ -73,6 +79,8 @@ class CommunityPostModel {
       imageUrl: imageUrl ?? this.imageUrl,
       imageUrls: imageUrls ?? this.imageUrls,
       category: category ?? this.category,
+      language: language ?? this.language,
+      languageCode: languageCode ?? this.languageCode,
       commentCount: commentCount ?? this.commentCount,
       likeCount: likeCount ?? this.likeCount,
       viewCount: viewCount ?? this.viewCount,
@@ -133,6 +141,8 @@ class CommunityPostModel {
       imageUrl: _readNullableString(json['image_url']),
       imageUrls: parsedImageUrls,
       category: _readNullableString(json['category']),
+      language: _readNullableString(json['language']),
+      languageCode: _readNullableString(json['language_code']),
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,

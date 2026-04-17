@@ -78,6 +78,7 @@ class CommunityRepository {
   Future<List<CommunityPostModel>> fetchPosts({
     String query = '',
     String category = 'All',
+    String preferredLanguage = 'english',
   }) async {
     final response = await _client
         .from('community_posts')
@@ -112,6 +113,17 @@ class CommunityRepository {
             (CommunityPostModel post) => (post.category ?? 'General') == category,
           )
           .toList();
+    }
+
+    final String normalizedLanguage = _normalizePostLanguage(preferredLanguage);
+    if (normalizedLanguage != 'all') {
+      posts = posts.where((CommunityPostModel post) {
+        final String postLanguage = _normalizePostLanguage(post.language);
+        if (normalizedLanguage == 'bilingual') {
+          return true;
+        }
+        return postLanguage == normalizedLanguage || postLanguage == 'bilingual';
+      }).toList();
     }
 
     return posts;
@@ -249,6 +261,7 @@ class CommunityRepository {
     required String plainText,
     required List<String> imageUrls,
     required String? category,
+    String language = 'english',
     String postContext = 'community',
     String? targetUserId,
   }) async {
@@ -266,6 +279,7 @@ class CommunityRepository {
     final authorName =
         (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
+    final String normalizedLanguage = _normalizePostLanguage(language);
 
     final payload = <String, dynamic>{
       'author_id': user.id,
@@ -273,13 +287,13 @@ class CommunityRepository {
       'author_name': authorName,
       'author_avatar_url': authorAvatarUrl ?? '',
       'title': title,
-      'language': 'english',
+      'language': normalizedLanguage,
       'is_bulletin': false,
       'is_pinned': false,
       'is_locked': false,
       'is_deleted': false,
       'visibility': 'public',
-      'language_code': 'en',
+      'language_code': _languageCodeFor(normalizedLanguage),
       'category': category ?? (postContext == 'profile' ? 'Timeline' : 'General'),
       'image_url': imageUrls.isNotEmpty ? imageUrls.first : null,
       'image_urls': imageUrls,
@@ -309,6 +323,7 @@ class CommunityRepository {
     required String bodyText,
     required String plainText,
     required List<String> imageUrls,
+    String language = 'english',
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -324,6 +339,7 @@ class CommunityRepository {
       bodyText: bodyText,
       plainText: plainText,
       imageUrls: imageUrls,
+      language: language,
       category: 'Timeline',
       postContext: 'profile',
       targetUserId: targetUserId,
@@ -661,6 +677,40 @@ class CommunityRepository {
       'incomingPending': incomingPending,
       'canMessage': areFriends,
     };
+  }
+
+  String _normalizePostLanguage(String? value) {
+    final String normalized = (value ?? '').trim().toLowerCase();
+    switch (normalized) {
+      case 'ja':
+      case 'jp':
+      case 'japanese':
+        return 'japanese';
+      case 'bi':
+      case 'both':
+      case 'bilingual':
+      case 'english / japanese':
+      case 'japanese / english':
+        return 'bilingual';
+      case 'all':
+        return 'all';
+      case 'en':
+      case 'english':
+      default:
+        return 'english';
+    }
+  }
+
+  String _languageCodeFor(String language) {
+    switch (language) {
+      case 'japanese':
+        return 'ja';
+      case 'bilingual':
+        return 'bi';
+      case 'english':
+      default:
+        return 'en';
+    }
   }
 
   Future<void> sendFriendRequest(String otherUserId) async {

@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
+import '../fields/field_model.dart';
 import 'admin_repository.dart';
 
 class AdminCreateFieldScreen extends StatefulWidget {
-  const AdminCreateFieldScreen({super.key});
+  const AdminCreateFieldScreen({
+    super.key,
+    this.existingField,
+  });
+
+  final FieldModel? existingField;
 
   @override
   State<AdminCreateFieldScreen> createState() => _AdminCreateFieldScreenState();
@@ -22,7 +29,28 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
   final TextEditingController _longitudeController = TextEditingController();
   bool _isSaving = false;
 
+  bool get _isEditing => widget.existingField != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final FieldModel? field = widget.existingField;
+    if (field == null) {
+      return;
+    }
+    _nameController.text = field.name;
+    _locationController.text = field.locationName;
+    _prefectureController.text = field.prefecture ?? '';
+    _cityController.text = field.city ?? '';
+    _typeController.text = field.fieldType ?? '';
+    _descriptionController.text = field.description;
+    _imageUrlController.text = field.imageUrl ?? '';
+    _latitudeController.text = field.latitude.toString();
+    _longitudeController.text = field.longitude.toString();
+  }
+
   Future<void> _save() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final latitude = double.tryParse(_latitudeController.text.trim());
     final longitude = double.tryParse(_longitudeController.text.trim());
     if (_nameController.text.trim().isEmpty ||
@@ -31,7 +59,7 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
         latitude == null ||
         longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name, location, description, latitude and longitude are required.')),
+        SnackBar(content: Text(l10n.t('fieldRequiredValues'))),
       );
       return;
     }
@@ -41,17 +69,33 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
     });
 
     try {
-      await _repository.createOfficialField(
-        name: _nameController.text,
-        locationName: _locationController.text,
-        description: _descriptionController.text,
-        latitude: latitude,
-        longitude: longitude,
-        prefecture: _prefectureController.text,
-        city: _cityController.text,
-        fieldType: _typeController.text,
-        imageUrl: _imageUrlController.text,
-      );
+      if (_isEditing) {
+        await _repository.updateField(
+          fieldId: widget.existingField!.id,
+          name: _nameController.text,
+          locationName: _locationController.text,
+          description: _descriptionController.text,
+          latitude: latitude,
+          longitude: longitude,
+          prefecture: _prefectureController.text,
+          city: _cityController.text,
+          fieldType: _typeController.text,
+          imageUrl: _imageUrlController.text,
+          isOfficial: widget.existingField!.isOfficial,
+        );
+      } else {
+        await _repository.createOfficialField(
+          name: _nameController.text,
+          locationName: _locationController.text,
+          description: _descriptionController.text,
+          latitude: latitude,
+          longitude: longitude,
+          prefecture: _prefectureController.text,
+          city: _cityController.text,
+          fieldType: _typeController.text,
+          imageUrl: _imageUrlController.text,
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -61,7 +105,14 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create field: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).t(
+              _isEditing ? 'failedUpdateField' : 'failedCreateField',
+              args: {'error': '$error'},
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -88,33 +139,38 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Official Field Listing')),
+      appBar: AppBar(
+        title: Text(
+          _isEditing ? l10n.t('editField') : l10n.t('officialFieldListing'),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Field name')),
+          TextField(controller: _nameController, decoration: InputDecoration(labelText: l10n.t('fieldName'))),
           const SizedBox(height: 12),
-          TextField(controller: _locationController, decoration: const InputDecoration(labelText: 'Location name')),
+          TextField(controller: _locationController, decoration: InputDecoration(labelText: l10n.t('locationName'))),
           const SizedBox(height: 12),
-          TextField(controller: _prefectureController, decoration: const InputDecoration(labelText: 'Prefecture')),
+          TextField(controller: _prefectureController, decoration: InputDecoration(labelText: l10n.t('prefecture'))),
           const SizedBox(height: 12),
-          TextField(controller: _cityController, decoration: const InputDecoration(labelText: 'City')),
+          TextField(controller: _cityController, decoration: InputDecoration(labelText: l10n.t('city'))),
           const SizedBox(height: 12),
-          TextField(controller: _typeController, decoration: const InputDecoration(labelText: 'Field type')),
+          TextField(controller: _typeController, decoration: InputDecoration(labelText: l10n.t('fieldType'))),
           const SizedBox(height: 12),
-          TextField(controller: _imageUrlController, decoration: const InputDecoration(labelText: 'Image URL')),
+          TextField(controller: _imageUrlController, decoration: InputDecoration(labelText: l10n.t('imageUrl'))),
           const SizedBox(height: 12),
-          TextField(controller: _latitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Latitude')),
+          TextField(controller: _latitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: l10n.t('latitude'))),
           const SizedBox(height: 12),
-          TextField(controller: _longitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Longitude')),
+          TextField(controller: _longitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: l10n.t('longitude'))),
           const SizedBox(height: 12),
-          TextField(controller: _descriptionController, minLines: 4, maxLines: 8, decoration: const InputDecoration(labelText: 'Description')),
+          TextField(controller: _descriptionController, minLines: 4, maxLines: 8, decoration: InputDecoration(labelText: l10n.t('description'))),
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: _isSaving ? null : _save,
             icon: _isSaving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_business),
-            label: const Text('Create Official Field'),
+            label: Text(_isEditing ? l10n.t('updateOfficialField') : l10n.t('createOfficialField')),
           ),
         ],
       ),

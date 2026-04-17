@@ -2,6 +2,7 @@ import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_categories.dart';
@@ -23,6 +24,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isLoading = true;
   String _selectedCategory = CommunityPostCategories.all;
+  String _selectedLanguagePreference = 'english';
+  bool _didInitLanguagePreference = false;
 
   static const List<String> _categories =
       CommunityPostCategories.communityCategoriesWithAll;
@@ -30,6 +33,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitLanguagePreference) {
+      return;
+    }
+    _didInitLanguagePreference = true;
+    _selectedLanguagePreference =
+        AppLocalizations.of(context).locale.languageCode == 'ja'
+            ? 'japanese'
+            : 'english';
     _loadPosts();
   }
 
@@ -42,6 +58,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       final posts = await _repository.fetchPosts(
         query: _searchController.text,
         category: _selectedCategory,
+        preferredLanguage: _selectedLanguagePreference,
       );
 
       if (!mounted) {
@@ -70,7 +87,13 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load posts: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedLoadPosts', args: {'error': '$error'}),
+          ),
+        ),
       );
     }
   }
@@ -98,7 +121,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   void _openProfile(String? userId, String fallbackName) {
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile not available')),
+        SnackBar(content: Text(AppLocalizations.of(context).t('profileNotAvailable'))),
       );
       return;
     }
@@ -120,35 +143,48 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   }
 
   String _timeAgo(DateTime dateTime) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final difference = DateTime.now().difference(dateTime);
 
     if (difference.inMinutes < 1) {
-      return 'now';
+      return l10n.t('now');
     }
     if (difference.inHours < 1) {
-      return '${difference.inMinutes}m';
+      return l10n.t('minutesShort', args: {'value': '${difference.inMinutes}'});
     }
     if (difference.inDays < 1) {
-      return '${difference.inHours}h';
+      return l10n.t('hoursShort', args: {'value': '${difference.inHours}'});
     }
     if (difference.inDays < 7) {
-      return '${difference.inDays}d';
+      return l10n.t('daysShort', args: {'value': '${difference.inDays}'});
     }
-    return DateFormat('dd MMM').format(dateTime);
+    return DateFormat('dd MMM', l10n.locale.languageCode).format(dateTime);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final Map<String, String> languageLabels = <String, String>{
+      'english': l10n.t('preferEnglishPosts'),
+      'japanese': l10n.t('preferJapanesePosts'),
+      'bilingual': l10n.t('preferBilingualPosts'),
+    };
+    final String languageSummary = switch (_selectedLanguagePreference) {
+      'english' => l10n.t('preferEnglishPosts'),
+      'japanese' => l10n.t('preferJapanesePosts'),
+      'bilingual' => l10n.t('preferBilingualPosts'),
+      _ => l10n.t('allLanguages'),
+    };
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Boards'),
+        title: Text(l10n.t('boards')),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateScreen,
         icon: const Icon(Icons.edit_outlined),
-        label: const Text('New post'),
+        label: Text(l10n.t('newPost')),
       ),
       body: RefreshIndicator(
         onRefresh: _loadPosts,
@@ -164,7 +200,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _loadPosts(),
                     decoration: InputDecoration(
-                      hintText: 'Search posts',
+                      hintText: l10n.t('searchPosts'),
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: IconButton(
                         onPressed: _loadPosts,
@@ -174,6 +210,30 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedLanguagePreference,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('viewLanguage'),
+                    ),
+                    items: languageLabels.entries
+                        .map(
+                          (MapEntry<String, String> entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (String? value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedLanguagePreference = value;
+                      });
+                      _loadPosts();
+                    },
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
@@ -202,8 +262,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                   const SizedBox(height: 10),
                   Text(
                     _selectedCategory == CommunityPostCategories.all
-                        ? 'Showing all board categories'
-                        : 'Showing ${_selectedCategory.toLowerCase()} posts',
+                        ? l10n.t('showingAllBoardCategories')
+                        : l10n.t(
+                            'showingCategoryPosts',
+                            args: {'category': _selectedCategory.toLowerCase()},
+                          ),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.t(
+                      'showingPostsForLanguage',
+                      args: {'language': languageSummary},
+                    ),
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -215,9 +286,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                   : _posts.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          children: const <Widget>[
-                            SizedBox(height: 120),
-                            Center(child: Text('No posts found')),
+                          children: <Widget>[
+                            const SizedBox(height: 120),
+                            Center(child: Text(l10n.t('noPostsFound'))),
                           ],
                         )
                       : ListView.builder(
@@ -230,6 +301,11 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                             return _CompactPostCard(
                               post: post,
                               timeAgo: _timeAgo(post.createdAt),
+                              languageLabel: switch (post.language) {
+                                'japanese' => l10n.t('japanese'),
+                                'bilingual' => l10n.t('bilingual'),
+                                _ => l10n.t('english'),
+                              },
                               onTap: () => _openPostDetails(post),
                               onAuthorTap: () =>
                                   _openProfile(post.authorId, post.authorName),
@@ -248,12 +324,14 @@ class _CompactPostCard extends StatelessWidget {
   const _CompactPostCard({
     required this.post,
     required this.timeAgo,
+    required this.languageLabel,
     required this.onTap,
     required this.onAuthorTap,
   });
 
   final CommunityPostModel post;
   final String timeAgo;
+  final String languageLabel;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
 
@@ -388,7 +466,7 @@ class _CompactPostCard extends StatelessWidget {
                       children: <Widget>[
                         if (post.isPinned)
                           _MiniBadge(
-                            text: 'Pinned',
+                            text: AppLocalizations.of(context).t('pinned'),
                             color: theme.colorScheme.primary.withOpacity(0.14),
                             textColor: theme.colorScheme.primary,
                           ),
@@ -396,6 +474,11 @@ class _CompactPostCard extends StatelessWidget {
                           text: normalizedCategory,
                           color: theme.colorScheme.secondary.withOpacity(0.14),
                           textColor: theme.colorScheme.secondary,
+                        ),
+                        _MiniBadge(
+                          text: languageLabel,
+                          color: theme.colorScheme.tertiary.withOpacity(0.14),
+                          textColor: theme.colorScheme.tertiary,
                         ),
                       ],
                     ),
@@ -411,7 +494,7 @@ class _CompactPostCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       post.excerpt.isEmpty
-                          ? 'No preview text available.'
+                          ? AppLocalizations.of(context).t('noPreviewTextAvailable')
                           : post.excerpt,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

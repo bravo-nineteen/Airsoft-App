@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../app/localization/app_localizations.dart';
 import 'field_details_screen.dart';
 import 'field_model.dart';
 
@@ -16,51 +15,66 @@ class FieldMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final validFields = fields
+    final List<FieldModel> validFields = fields
         .where((f) => f.latitude != 0 && f.longitude != 0)
         .toList();
 
-    final center = validFields.isNotEmpty
+    final LatLng center = validFields.isNotEmpty
         ? LatLng(validFields.first.latitude, validFields.first.longitude)
         : const LatLng(35.681236, 139.767125);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('fieldMap'))),
-      body: FlutterMap(
-        options: MapOptions(
-          initialCenter: center,
-          initialZoom: validFields.length == 1 ? 12 : 7,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all,
+    return Stack(
+      children: [
+        FlutterMap(
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: validFields.length == 1 ? 12 : 7,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+            ),
           ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.airsoft_app',
+            ),
+            MarkerLayer(
+              markers: validFields.map((field) {
+                return Marker(
+                  point: LatLng(field.latitude, field.longitude),
+                  width: 56,
+                  height: 56,
+                  child: _FieldMarker(
+                    field: field,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FieldDetailsScreen(field: field),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.airsoft_app',
-          ),
-          MarkerLayer(
-            markers: validFields.map((field) {
-              return Marker(
-                point: LatLng(field.latitude, field.longitude),
-                width: 56,
-                height: 56,
-                child: _FieldMarker(
-                  field: field,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FieldDetailsScreen(field: field),
-                      ),
-                    );
-                  },
+        if (validFields.isEmpty)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'No field coordinates available yet. Showing the default map area.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-              );
-            }).toList(),
+              ),
+            ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }

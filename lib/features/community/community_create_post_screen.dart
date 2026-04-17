@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'community_image_service.dart';
 import 'community_post_categories.dart';
 import 'community_post_details_screen.dart';
@@ -31,7 +32,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
 
   bool _isSubmitting = false;
   String _selectedCategory = CommunityPostCategories.general;
+  String _selectedLanguage = 'english';
   final List<String> _uploadedImageUrls = <String>[];
+  bool _didInitLanguage = false;
 
   bool get _isProfilePost => widget.postContext == 'profile';
 
@@ -40,6 +43,19 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       return CommunityPostCategories.timelineCategories;
     }
     return CommunityPostCategories.communityCategories;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitLanguage) {
+      return;
+    }
+    _didInitLanguage = true;
+    _selectedLanguage =
+        AppLocalizations.of(context).locale.languageCode == 'ja'
+            ? 'japanese'
+            : 'english';
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -62,7 +78,13 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload image: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedUploadImage', args: {'error': '$error'}),
+          ),
+        ),
       );
     }
   }
@@ -73,7 +95,11 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
 
     if (title.isEmpty || body.isEmpty || _isSubmitting) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title and content are required')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).t('titleAndContentRequired'),
+          ),
+        ),
       );
       return;
     }
@@ -90,12 +116,14 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
               bodyText: body,
               plainText: body,
               imageUrls: _uploadedImageUrls,
+              language: _selectedLanguage,
             )
           : await _repository.createPost(
               title: title,
               bodyText: body,
               plainText: body,
               imageUrls: _uploadedImageUrls,
+              language: _selectedLanguage,
               category: CommunityPostCategories.normalizeCommunityCategory(
                 _selectedCategory,
               ),
@@ -117,7 +145,13 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create post: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedCreatePost', args: {'error': '$error'}),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -138,12 +172,18 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final Map<String, String> languageLabels = <String, String>{
+      'english': l10n.t('english'),
+      'japanese': l10n.t('japanese'),
+      'bilingual': l10n.t('bilingual'),
+    };
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           widget.appBarTitle ??
-              (_isProfilePost ? 'New Timeline Post' : 'Create Post'),
+              (_isProfilePost ? l10n.t('newTimelinePost') : l10n.t('createPost')),
         ),
       ),
       body: SafeArea(
@@ -162,17 +202,40 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                   TextField(
                     controller: _titleController,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      hintText: 'Enter a title',
+                    decoration: InputDecoration(
+                      labelText: l10n.title,
+                      hintText: l10n.t('enterTitle'),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedLanguage,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('postLanguage'),
+                    ),
+                    items: languageLabels.entries
+                        .map(
+                          (MapEntry<String, String> entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (String? value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedLanguage = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 14),
                   if (!_isProfilePost)
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
+                      decoration: InputDecoration(
+                        labelText: l10n.t('category'),
                       ),
                       items: _categories.map((String value) {
                         return DropdownMenuItem<String>(
@@ -202,13 +265,13 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                         color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: <Widget>[
-                          Icon(Icons.timeline),
-                          SizedBox(width: 10),
+                          const Icon(Icons.timeline),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'This will be posted to your profile timeline',
+                              l10n.t('profileTimelineHint'),
                             ),
                           ),
                         ],
@@ -219,9 +282,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                     controller: _bodyController,
                     minLines: 8,
                     maxLines: 14,
-                    decoration: const InputDecoration(
-                      labelText: 'Content',
-                      hintText: 'Write your post',
+                    decoration: InputDecoration(
+                      labelText: l10n.content,
+                      hintText: l10n.t('writePostHint'),
                       alignLabelWithHint: true,
                     ),
                   ),
@@ -266,7 +329,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                       OutlinedButton.icon(
                         onPressed: _pickAndUploadImage,
                         icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('Add Image'),
+                        label: Text(l10n.t('addImage')),
                       ),
                     ],
                   ),
@@ -283,7 +346,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                             )
                           : const Icon(Icons.send),
                       label: Text(
-                        _isProfilePost ? 'Post to Timeline' : 'Publish Post',
+                        _isProfilePost
+                            ? l10n.t('postToTimeline')
+                            : l10n.t('publishPost'),
                       ),
                     ),
                   ),

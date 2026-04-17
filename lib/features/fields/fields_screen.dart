@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/localization/app_localizations.dart';
 
 import 'field_details_screen.dart';
+import 'field_map_screen.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
 
@@ -19,12 +20,28 @@ class _FieldsScreenState extends State<FieldsScreen> {
 
   String _selectedLocation = 'All';
   String _selectedFieldType = 'All';
+  double _minRating = 0;
   bool _mapView = false;
 
   late Future<List<FieldModel>> _fieldsFuture;
 
-  final List<String> _locations = ['All', 'Chiba', 'Tokyo', 'Kanagawa'];
-  final List<String> _fieldTypes = ['All', 'Outdoor', 'Indoor', 'CQB'];
+  final List<String> _locations = const [
+    'All',
+    'Tokyo',
+    'Chiba',
+    'Kanagawa',
+    'Saitama',
+    'Ibaraki',
+    'Yamanashi',
+    'Shizuoka',
+  ];
+  final List<String> _fieldTypes = const [
+    'All',
+    'Outdoor',
+    'Indoor',
+    'CQB',
+    'Mixed',
+  ];
 
   @override
   void initState() {
@@ -43,6 +60,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
       search: _searchController.text,
       location: _selectedLocation,
       fieldType: _selectedFieldType,
+      minRating: _minRating,
     );
   }
 
@@ -71,6 +89,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
             children: [
               TextField(
                 controller: _searchController,
+                textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: l10n.t('searchFieldsHint'),
                   prefixIcon: const Icon(Icons.search),
@@ -124,111 +143,145 @@ class _FieldsScreenState extends State<FieldsScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              SegmentedButton<bool>(
-                segments: [
-                  ButtonSegment<bool>(
-                    value: false,
-                    label: Text(l10n.list),
-                    icon: Icon(Icons.view_list),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<double>(
+                      initialValue: _minRating,
+                      decoration: InputDecoration(labelText: l10n.t('minRating')),
+                      items: [
+                        DropdownMenuItem(value: 0, child: Text(l10n.t('any'))),
+                        const DropdownMenuItem(value: 3, child: Text('3.0+')),
+                        const DropdownMenuItem(value: 4, child: Text('4.0+')),
+                        const DropdownMenuItem(value: 4.5, child: Text('4.5+')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _minRating = value ?? 0;
+                        });
+                        _refreshFields();
+                      },
+                    ),
                   ),
-                  ButtonSegment<bool>(
-                    value: true,
-                    label: Text(l10n.map),
-                    icon: Icon(Icons.map),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SegmentedButton<bool>(
+                      segments: [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text(l10n.list),
+                          icon: const Icon(Icons.view_list),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text(l10n.map),
+                          icon: const Icon(Icons.map),
+                        ),
+                      ],
+                      selected: {_mapView},
+                      onSelectionChanged: (selection) {
+                        setState(() {
+                          _mapView = selection.first;
+                        });
+                      },
+                    ),
                   ),
                 ],
-                selected: {_mapView},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _mapView = selection.first;
-                  });
-                },
               ),
             ],
           ),
         ),
         Expanded(
-          child: _mapView
-              ? Center(child: Text(l10n.t('mapViewPlaceholder')))
-              : FutureBuilder<List<FieldModel>>(
-                  future: _fieldsFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+          child: FutureBuilder<List<FieldModel>>(
+            future: _fieldsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            l10n.t(
-                              'failedLoadFields',
-                              args: {'error': '${snapshot.error}'},
-                            ),
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      l10n.t(
+                        'failedLoadFields',
+                        args: {'error': '${snapshot.error}'},
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+
+              final List<FieldModel> fields = snapshot.data ?? <FieldModel>[];
+
+              if (fields.isEmpty) {
+                return Center(child: Text(l10n.t('noFieldsFound')));
+              }
+
+              if (_mapView) {
+                return FieldMapScreen(fields: fields);
+              }
+
+              return RefreshIndicator(
+                onRefresh: () async => _refreshFields(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: fields.length,
+                  itemBuilder: (context, index) {
+                    final FieldModel field = fields[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(10),
+                        onTap: () => _openField(field),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: 72,
+                            height: 72,
+                            child: field.hasImage
+                                ? Image.network(
+                                    field.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) =>
+                                        _FieldListThumbnailPlaceholder(
+                                      name: field.name,
+                                    ),
+                                  )
+                                : _FieldListThumbnailPlaceholder(
+                                    name: field.name,
+                                  ),
                           ),
                         ),
-                      );
-                    }
-
-                    final fields = snapshot.data ?? [];
-
-                    if (fields.isEmpty) {
-                      return Center(child: Text(l10n.t('noFieldsFound')));
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: fields.length,
-                      itemBuilder: (context, index) {
-                        final field = fields[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(10),
-                            onTap: () => _openField(field),
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: SizedBox(
-                                width: 72,
-                                height: 72,
-                                child: field.hasImage
-                                    ? Image.network(
-                                        field.imageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            _FieldListThumbnailPlaceholder(
-                                          name: field.name,
-                                        ),
-                                      )
-                                    : _FieldListThumbnailPlaceholder(
-                                        name: field.name,
-                                      ),
+                        title: Row(
+                          children: [
+                            Flexible(child: Text(field.name)),
+                            if (field.isOfficial) ...[
+                              const SizedBox(width: 6),
+                              const Tooltip(
+                                message: 'Official listing',
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
                               ),
-                            ),
-                            title: Row(
-                              children: [
-                                Flexible(child: Text(field.name)),
-                                if (field.isOfficial) ...[
-                                  const SizedBox(width: 6),
-                                  const Tooltip(
-                                    message: 'Official listing',
-                                    child: Icon(Icons.verified,
-                                        size: 16, color: Colors.blue),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            subtitle: Text(
-                              '${field.locationName}${(field.fieldType ?? '').isNotEmpty ? ' • ${field.fieldType}' : ''}',
-                            ),
-                            trailing: const Icon(Icons.chevron_right),
-                          ),
-                        );
-                      },
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          '${field.locationName}${(field.fieldType ?? '').isNotEmpty ? ' • ${field.fieldType}' : ''}',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                      ),
                     );
                   },
                 ),
+              );
+            },
+          ),
         ),
       ],
     );

@@ -90,6 +90,54 @@ class EventRepository {
     });
   }
 
+  Future<void> updateEvent({
+    required String eventId,
+    required String title,
+    required String description,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    bool isOfficial = false,
+    String? location,
+    String? prefecture,
+    String? eventType,
+    String? language,
+    String? skillLevel,
+    String? organizerName,
+    String? contactInfo,
+    String? notes,
+    int? priceYen,
+    int? maxPlayers,
+  }) async {
+    final String trimmedTitle = title.trim();
+    final String trimmedDescription = description.trim();
+
+    if (trimmedTitle.isEmpty) {
+      throw Exception('Title is required.');
+    }
+
+    if (trimmedDescription.isEmpty) {
+      throw Exception('Description is required.');
+    }
+
+    await _client.from('events').update({
+      'title': trimmedTitle,
+      'description': trimmedDescription,
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'ends_at': endsAt.toUtc().toIso8601String(),
+      'location': _nullIfEmpty(location),
+      'prefecture': _nullIfEmpty(prefecture),
+      'event_type': _nullIfEmpty(eventType),
+      'language': _nullIfEmpty(language),
+      'skill_level': _nullIfEmpty(skillLevel),
+      'organizer_name': _nullIfEmpty(organizerName),
+      'contact_info': _nullIfEmpty(contactInfo),
+      'notes': _nullIfEmpty(notes),
+      'price_yen': priceYen,
+      'max_players': maxPlayers,
+      'is_official': isOfficial,
+    }).eq('id', eventId);
+  }
+
   Future<void> attendEvent(String eventId) async {
     final User? user = currentUser;
     if (user == null) {

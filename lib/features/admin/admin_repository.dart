@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_model.dart';
 import '../events/event_model.dart';
+import '../fields/field_model.dart';
 import '../profile/profile_model.dart';
 
 class AdminRepository {
@@ -101,6 +102,18 @@ class AdminRepository {
         .toList();
   }
 
+  Future<List<FieldModel>> getRecentFields({int limit = 25}) async {
+    final response = await _client
+        .from('fields')
+        .select()
+        .order('updated_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map((dynamic row) => FieldModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
   Future<List<ProfileModel>> searchProfiles(String query) async {
     final trimmed = query.trim().toLowerCase();
     final response = await _client
@@ -197,6 +210,33 @@ class AdminRepository {
       'image_url': _nullIfEmpty(imageUrl),
       'is_official': true,
     });
+  }
+
+  Future<void> updateField({
+    required String fieldId,
+    required String name,
+    required String locationName,
+    required String description,
+    required double latitude,
+    required double longitude,
+    String? prefecture,
+    String? city,
+    String? fieldType,
+    String? imageUrl,
+    bool isOfficial = true,
+  }) async {
+    await _client.from('fields').update({
+      'name': name.trim(),
+      'location_name': locationName.trim(),
+      'description': description.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'prefecture': _nullIfEmpty(prefecture),
+      'city': _nullIfEmpty(city),
+      'field_type': _nullIfEmpty(fieldType),
+      'image_url': _nullIfEmpty(imageUrl),
+      'is_official': isOfficial,
+    }).eq('id', fieldId);
   }
 
   String? _nullIfEmpty(String? value) {

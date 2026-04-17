@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import 'event_model.dart';
 import 'event_repository.dart';
 
 class EventCreateScreen extends StatefulWidget {
   const EventCreateScreen({
     super.key,
     this.isOfficial = false,
+    this.existingEvent,
   });
 
   final bool isOfficial;
+  final EventModel? existingEvent;
 
   @override
   State<EventCreateScreen> createState() => _EventCreateScreenState();
@@ -37,6 +40,8 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
   bool _isSaving = false;
 
+  bool get _isEditing => widget.existingEvent != null;
+
   static const List<String> _eventTypes = <String>[
     'Skirmish',
     'Milsim',
@@ -58,6 +63,29 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     'Intermediate',
     'Experienced Only',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final EventModel? event = widget.existingEvent;
+    if (event == null) {
+      return;
+    }
+    _titleController.text = event.title;
+    _descriptionController.text = event.description;
+    _locationController.text = event.location ?? '';
+    _prefectureController.text = event.prefecture ?? '';
+    _organizerController.text = event.organizerName ?? '';
+    _contactController.text = event.contactInfo ?? '';
+    _notesController.text = event.notes ?? '';
+    _priceController.text = event.priceYen?.toString() ?? '';
+    _maxPlayersController.text = event.maxPlayers?.toString() ?? '';
+    _startAt = event.startsAt;
+    _endAt = event.endsAt;
+    _eventType = event.eventType ?? _eventType;
+    _language = event.language ?? _language;
+    _skillLevel = event.skillLevel ?? _skillLevel;
+  }
 
   Future<void> _pickStartDateTime() async {
     final DateTime? pickedDate = await showDatePicker(
@@ -161,23 +189,44 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     });
 
     try {
-      await _repository.createEvent(
-        title: title,
-        description: description,
-        startsAt: _startAt,
-        endsAt: _endAt,
-        isOfficial: widget.isOfficial,
-        location: _locationController.text.trim(),
-        prefecture: _prefectureController.text.trim(),
-        eventType: _eventType,
-        language: _language,
-        skillLevel: _skillLevel,
-        organizerName: _organizerController.text.trim(),
-        contactInfo: _contactController.text.trim(),
-        notes: _notesController.text.trim(),
-        priceYen: priceYen,
-        maxPlayers: maxPlayers,
-      );
+      if (_isEditing) {
+        await _repository.updateEvent(
+          eventId: widget.existingEvent!.id,
+          title: title,
+          description: description,
+          startsAt: _startAt,
+          endsAt: _endAt,
+          isOfficial: widget.isOfficial,
+          location: _locationController.text.trim(),
+          prefecture: _prefectureController.text.trim(),
+          eventType: _eventType,
+          language: _language,
+          skillLevel: _skillLevel,
+          organizerName: _organizerController.text.trim(),
+          contactInfo: _contactController.text.trim(),
+          notes: _notesController.text.trim(),
+          priceYen: priceYen,
+          maxPlayers: maxPlayers,
+        );
+      } else {
+        await _repository.createEvent(
+          title: title,
+          description: description,
+          startsAt: _startAt,
+          endsAt: _endAt,
+          isOfficial: widget.isOfficial,
+          location: _locationController.text.trim(),
+          prefecture: _prefectureController.text.trim(),
+          eventType: _eventType,
+          language: _language,
+          skillLevel: _skillLevel,
+          organizerName: _organizerController.text.trim(),
+          contactInfo: _contactController.text.trim(),
+          notes: _notesController.text.trim(),
+          priceYen: priceYen,
+          maxPlayers: maxPlayers,
+        );
+      }
 
       if (!mounted) {
         return;
@@ -234,7 +283,11 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isOfficial ? 'Create Official Event' : l10n.t('createEvent')),
+        title: Text(
+          _isEditing
+              ? (widget.isOfficial ? l10n.t('editEvent') : l10n.t('editEvent'))
+              : (widget.isOfficial ? l10n.t('createOfficialEvent') : l10n.t('createEvent')),
+        ),
       ),
       body: SafeArea(
         child: ListView(
@@ -372,7 +425,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               controller: _notesController,
               minLines: 3,
               maxLines: 6,
-              decoration: InputDecoration(labelText: l10n.t('rules')),
+              decoration: InputDecoration(labelText: l10n.t('rules')), 
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -386,7 +439,11 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
-                label: Text(widget.isOfficial ? 'Create Official Event' : 'Create Event'),
+                label: Text(
+                  _isEditing
+                      ? (widget.isOfficial ? l10n.t('updateOfficialEvent') : l10n.t('updateEvent'))
+                      : (widget.isOfficial ? l10n.t('createOfficialEvent') : l10n.t('createEvent')),
+                ),
               ),
             ),
           ],
