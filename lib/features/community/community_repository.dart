@@ -83,6 +83,7 @@ class CommunityRepository {
         .from('community_posts')
         .select()
         .eq('is_deleted', false)
+        .eq('post_context', 'community')
         .order('is_pinned', ascending: false)
         .order('created_at', ascending: false);
 
@@ -116,13 +117,50 @@ class CommunityRepository {
     return posts;
   }
 
-  Future<List<CommunityPostModel>> fetchPostsByAuthor(String userId) async {
-    final response = await _client
+  Future<List<CommunityPostModel>> fetchPostsByAuthor(
+    String userId, {
+    int? limit,
+  }) async {
+    dynamic query = _client
         .from('community_posts')
         .select()
         .eq('is_deleted', false)
+        .eq('post_context', 'community')
         .or('author_id.eq.$userId,user_id.eq.$userId')
         .order('created_at', ascending: false);
+
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    final response = await query;
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic e) => CommunityPostModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<CommunityPostModel>> fetchProfileTimelinePosts(
+    String userId, {
+    int? limit,
+  }) async {
+    dynamic query = _client
+        .from('community_posts')
+        .select()
+        .eq('is_deleted', false)
+        .eq('post_context', 'profile')
+        .eq('target_user_id', userId)
+        .order('created_at', ascending: false);
+
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    final response = await query;
 
     return (response as List<dynamic>)
         .map(
@@ -211,10 +249,17 @@ class CommunityRepository {
     required String plainText,
     required List<String> imageUrls,
     required String? category,
+    String postContext = 'community',
+    String? targetUserId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw Exception('User not logged in');
+    }
+
+    if (postContext == 'profile' &&
+        (targetUserId == null || targetUserId.trim().isEmpty)) {
+      throw Exception('Profile target is required');
     }
 
     final profile = await _fetchCurrentUserProfile();
@@ -235,7 +280,7 @@ class CommunityRepository {
       'is_deleted': false,
       'visibility': 'public',
       'language_code': 'en',
-      'category': category ?? 'General',
+      'category': category ?? (postContext == 'profile' ? 'Timeline' : 'General'),
       'image_url': imageUrls.isNotEmpty ? imageUrls.first : null,
       'image_urls': imageUrls,
       'plain_text': plainText,
@@ -245,6 +290,8 @@ class CommunityRepository {
       'like_count': 0,
       'view_count': 0,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'post_context': postContext,
+      'target_user_id': targetUserId,
     };
 
     final response = await _client
@@ -254,6 +301,33 @@ class CommunityRepository {
         .single();
 
     return response['id'].toString();
+  }
+
+  Future<String> createProfileTimelinePost({
+    required String targetUserId,
+    required String title,
+    required String bodyText,
+    required String plainText,
+    required List<String> imageUrls,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    if (user.id != targetUserId) {
+      throw Exception('Only the profile owner can post to this timeline');
+    }
+
+    return createPost(
+      title: title,
+      bodyText: bodyText,
+      plainText: plainText,
+      imageUrls: imageUrls,
+      category: 'Timeline',
+      postContext: 'profile',
+      targetUserId: targetUserId,
+    );
   }
 
   Future<void> incrementPostView(String postId) async {
@@ -473,9 +547,7 @@ class CommunityRepository {
 
     final hasRequestsTable = await _hasTable('friend_requests');
     if (!hasRequestsTable) {
-      throw Exception(
-        'friend_requests table does not exist yet',
-      );
+      throw Exception('friend_requests table does not exist yet');
     }
 
     final state = await fetchFriendshipState(otherUserId);
