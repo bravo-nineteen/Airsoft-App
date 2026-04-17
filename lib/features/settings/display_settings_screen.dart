@@ -26,6 +26,10 @@ class DisplaySettingsScreen extends StatelessWidget {
       appBar: AppBar(title: Text(l10n.t('display'))),
       body: ListView(
         children: [
+          ListTile(
+            title: Text(l10n.t('theme')),
+            subtitle: Text(l10n.t('lightDarkControls')),
+          ),
           RadioListTile<ThemeMode>(
             title: Text(l10n.t('system')),
             value: ThemeMode.system,

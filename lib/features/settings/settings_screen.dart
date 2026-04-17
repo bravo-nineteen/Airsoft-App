@@ -41,6 +41,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
+          title: Text(l10n.t('logout')),
           content: Text(l10n.t('logoutConfirmMessage')),
           actions: [
             TextButton(
