@@ -18,6 +18,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
 
   Future<void> _signup() async {
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
     try {
