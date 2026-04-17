@@ -31,7 +31,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Future<void> _openCreate() async {
-    final created = await Navigator.of(context).push<bool>(
+    final bool? created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const EventCreateScreen()),
     );
 
@@ -41,14 +41,14 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   String _formatDate(DateTime value) {
-    final yyyy = value.year.toString().padLeft(4, '0');
-    final mm = value.month.toString().padLeft(2, '0');
-    final dd = value.day.toString().padLeft(2, '0');
+    final String yyyy = value.year.toString().padLeft(4, '0');
+    final String mm = value.month.toString().padLeft(2, '0');
+    final String dd = value.day.toString().padLeft(2, '0');
     return '$yyyy-$mm-$dd';
   }
 
   String _buildSubtitle(EventModel event) {
-    final parts = <String>[
+    final List<String> parts = <String>[
       _formatDate(event.startsAt),
       if ((event.prefecture ?? '').isNotEmpty) event.prefecture!,
       if ((event.location ?? '').isNotEmpty) event.location!,
@@ -58,32 +58,50 @@ class _EventListScreenState extends State<EventListScreen> {
     return parts.join(' • ');
   }
 
+  String? _statusLabel(EventModel event) {
+    switch (event.currentUserAttendanceStatus) {
+      case 'attending':
+        return 'Attending';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'attended':
+        return 'Attended';
+      case 'no_show':
+        return 'No Show';
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.t('event')),
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: SafeArea(
         minimum: const EdgeInsets.only(right: 16, bottom: 16),
         child: FloatingActionButton.extended(
           onPressed: _openCreate,
           icon: const Icon(Icons.add),
-          label: Text(l10n.t('event')),
+          label: const Text('New event'),
         ),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<EventModel>>(
           future: _future,
-          builder: (context, snapshot) {
+          builder: (BuildContext context, AsyncSnapshot<List<EventModel>> snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
 
             if (snapshot.hasError) {
               return ListView(
-                children: [
+                children: <Widget>[
                   const SizedBox(height: 140),
                   Center(
                     child: Padding(
@@ -101,11 +119,11 @@ class _EventListScreenState extends State<EventListScreen> {
               );
             }
 
-            final events = snapshot.data ?? [];
+            final List<EventModel> events = snapshot.data ?? <EventModel>[];
             if (events.isEmpty) {
               return ListView(
-                children: [
-                  SizedBox(height: 160),
+                children: <Widget>[
+                  const SizedBox(height: 160),
                   Center(child: Text(l10n.t('noEventsFound'))),
                 ],
               );
@@ -114,20 +132,49 @@ class _EventListScreenState extends State<EventListScreen> {
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: events.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final event = events[index];
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (BuildContext context, int index) {
+                final EventModel event = events[index];
+                final String? statusLabel = _statusLabel(event);
+
                 return Card(
                   child: ListTile(
                     title: Text(event.title),
-                    subtitle: Text(_buildSubtitle(event)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const SizedBox(height: 4),
+                        Text(_buildSubtitle(event)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: <Widget>[
+                            _MiniInfoChip(
+                              icon: Icons.event_available,
+                              label: 'Going ${event.attendingCount}',
+                            ),
+                            _MiniInfoChip(
+                              icon: Icons.verified,
+                              label: 'Attended ${event.attendedCount}',
+                            ),
+                            if (statusLabel != null)
+                              _MiniInfoChip(
+                                icon: Icons.person,
+                                label: statusLabel,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
                           builder: (_) => EventDetailsScreen(event: event),
                         ),
                       );
+                      await _refresh();
                     },
                   ),
                 );
@@ -135,6 +182,35 @@ class _EventListScreenState extends State<EventListScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _MiniInfoChip extends StatelessWidget {
+  const _MiniInfoChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14),
+          const SizedBox(width: 4),
+          Text(label),
+        ],
       ),
     );
   }
