@@ -217,18 +217,45 @@ class EventRepository {
       throw Exception('Only the host can confirm attendance.');
     }
 
-    await _client
-        .from('event_attendees')
-        .update({
-          'status': status,
-          'confirmed_by_host': status == 'attended' || status == 'no_show',
-          'confirmed_at': status == 'attended' || status == 'no_show'
-              ? DateTime.now().toUtc().toIso8601String()
-              : null,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('event_id', eventId)
-        .eq('user_id', attendeeUserId);
+    final bool hostConfirmed = status == 'attended' || status == 'no_show';
+    final String nowIso = DateTime.now().toUtc().toIso8601String();
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'status': status,
+      'confirmed_by_host': hostConfirmed,
+      'confirmed_at': hostConfirmed ? nowIso : null,
+      'updated_at': nowIso,
+    };
+
+    try {
+      await _client
+          .from('event_attendees')
+          .update(payload)
+          .eq('event_id', eventId)
+          .eq('user_id', attendeeUserId);
+    } on PostgrestException catch (error) {
+      if (!_isMissingConfirmedAtColumnError(error)) {
+        rethrow;
+      }
+
+      payload.remove('confirmed_at');
+      await _client
+          .from('event_attendees')
+          .update(payload)
+          .eq('event_id', eventId)
+          .eq('user_id', attendeeUserId);
+    }
+  }
+
+  bool _isMissingConfirmedAtColumnError(PostgrestException error) {
+    if (error.code != 'PGRST204') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains('confirmed_at') &&
+        summary.contains('event_attendees');
   }
 
   Future<List<EventAttendanceRecord>> getEventAttendeesForHost(

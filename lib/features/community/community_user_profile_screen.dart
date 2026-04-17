@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
+import '../social/contacts_screen.dart';
 import '../social/direct_message_screen.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
@@ -294,7 +295,11 @@ class _CommunityPublicProfileScreenState
       friendIcon = Icons.schedule;
     } else if (_incomingPending) {
       friendLabel = 'Respond in Requests';
-      friendAction = null;
+      friendAction = () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ContactsScreen()),
+        );
+      };
       friendIcon = Icons.mark_email_unread_outlined;
     } else if (_isSendingFriendRequest) {
       friendLabel = 'Sending...';

@@ -236,6 +236,11 @@ create table if not exists public.event_attendees (
   unique (event_id, user_id)
 );
 
+alter table public.event_attendees
+  add column if not exists confirmed_by_host boolean not null default false;
+alter table public.event_attendees
+  add column if not exists confirmed_at timestamptz;
+
 create index if not exists idx_event_attendees_event_id
   on public.event_attendees (event_id);
 create index if not exists idx_event_attendees_user_id
@@ -390,11 +395,19 @@ create policy notifications_select_own
   using (auth.uid() = user_id);
 
 drop policy if exists notifications_insert_own on public.notifications;
-create policy notifications_insert_own
+drop policy if exists notifications_insert_authenticated on public.notifications;
+create policy notifications_insert_authenticated
   on public.notifications
   for insert
   to authenticated
-  with check (auth.uid() is not null);
+  with check (true);
+
+drop policy if exists notifications_insert_service_role on public.notifications;
+create policy notifications_insert_service_role
+  on public.notifications
+  for insert
+  to service_role
+  with check (true);
 
 drop policy if exists notifications_update_own on public.notifications;
 create policy notifications_update_own
