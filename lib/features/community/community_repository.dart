@@ -11,15 +11,20 @@ class CommunityRepository {
 
   Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
     final user = _client.auth.currentUser;
-    if (user == null) return null;
+    if (user == null) {
+      return null;
+    }
 
     final response = await _client
         .from('profiles')
-        .select('id, call_sign, avatar_url')
+        .select('id, call_sign, avatar_url, bio')
         .eq('id', user.id)
         .maybeSingle();
 
-    if (response == null) return null;
+    if (response == null) {
+      return null;
+    }
+
     return Map<String, dynamic>.from(response);
   }
 
@@ -52,7 +57,9 @@ class CommunityRepository {
     String foreignId,
   ) async {
     final user = _client.auth.currentUser;
-    if (user == null) return false;
+    if (user == null) {
+      return false;
+    }
 
     try {
       final response = await _client
@@ -61,6 +68,7 @@ class CommunityRepository {
           .eq(foreignKey, foreignId)
           .eq('user_id', user.id)
           .maybeSingle();
+
       return response != null;
     } catch (_) {
       return false;
@@ -80,7 +88,7 @@ class CommunityRepository {
 
     var posts = (response as List<dynamic>)
         .map(
-          (e) => CommunityPostModel.fromJson(
+          (dynamic e) => CommunityPostModel.fromJson(
             Map<String, dynamic>.from(e as Map),
           ),
         )
@@ -88,7 +96,7 @@ class CommunityRepository {
 
     final normalizedQuery = query.trim().toLowerCase();
     if (normalizedQuery.isNotEmpty) {
-      posts = posts.where((post) {
+      posts = posts.where((CommunityPostModel post) {
         return post.title.toLowerCase().contains(normalizedQuery) ||
             post.plainText.toLowerCase().contains(normalizedQuery) ||
             post.bodyText.toLowerCase().contains(normalizedQuery) ||
@@ -99,11 +107,30 @@ class CommunityRepository {
 
     if (category != 'All') {
       posts = posts
-          .where((post) => (post.category ?? 'General') == category)
+          .where(
+            (CommunityPostModel post) => (post.category ?? 'General') == category,
+          )
           .toList();
     }
 
     return posts;
+  }
+
+  Future<List<CommunityPostModel>> fetchPostsByAuthor(String userId) async {
+    final response = await _client
+        .from('community_posts')
+        .select()
+        .eq('is_deleted', false)
+        .or('author_id.eq.$userId,user_id.eq.$userId')
+        .order('created_at', ascending: false);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic e) => CommunityPostModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
   }
 
   Future<CommunityPostModel> fetchPostById(String postId) async {
@@ -121,6 +148,7 @@ class CommunityRepository {
           await _countRows('community_post_likes', 'post_id', postId);
       final isLikedByMe =
           await _isLikedByCurrentUser('community_post_likes', 'post_id', postId);
+
       post = post.copyWith(
         likeCount: likeCount,
         isLikedByMe: isLikedByMe,
@@ -134,15 +162,15 @@ class CommunityRepository {
     final response = await _client
         .from('community_comments')
         .select(
-          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body',
+          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count',
         )
         .eq('post_id', postId)
         .eq('is_deleted', false)
         .order('created_at', ascending: true);
 
-    var comments = (response as List<dynamic>)
+    final comments = (response as List<dynamic>)
         .map(
-          (e) => CommunityCommentModel.fromJson(
+          (dynamic e) => CommunityCommentModel.fromJson(
             Map<String, dynamic>.from(e as Map),
           ),
         )
@@ -153,8 +181,9 @@ class CommunityRepository {
       return comments;
     }
 
-    final enriched = await Future.wait(
-      comments.map((comment) async {
+    final List<CommunityCommentModel> enriched =
+        await Future.wait<CommunityCommentModel>(
+      comments.map((CommunityCommentModel comment) async {
         final likeCount = await _countRows(
           'community_comment_likes',
           'comment_id',
@@ -165,9 +194,10 @@ class CommunityRepository {
           'comment_id',
           comment.id,
         );
+
         return comment.copyWith(
           likeCount: likeCount,
-          isLikedByMe: isLikedByMe,
+          likedByMe: isLikedByMe,
         );
       }),
     );
