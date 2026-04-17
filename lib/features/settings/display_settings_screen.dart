@@ -16,6 +16,17 @@ class DisplaySettingsScreen extends StatelessWidget {
   final Locale? currentLocale;
   final ValueChanged<Locale?>? onLocaleChanged;
 
+  String _localeLabel(AppLocalizations l10n, Locale locale) {
+    switch (locale.languageCode) {
+      case 'en':
+        return l10n.t('english');
+      case 'ja':
+        return l10n.t('japanese');
+      default:
+        return locale.languageCode.toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -72,7 +83,7 @@ class DisplaySettingsScreen extends StatelessWidget {
           ),
           ...AppLocalizations.supportedLocales.map(
             (locale) => RadioListTile<Locale>(
-              title: Text(locale.languageCode.toUpperCase()),
+              title: Text(_localeLabel(l10n, locale)),
               value: locale,
               groupValue: selectedLocale,
               onChanged: onLocaleChanged,
