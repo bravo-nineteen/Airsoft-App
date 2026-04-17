@@ -378,4 +378,118 @@ class CommunityRepository {
 
     return Map<String, dynamic>.from(response);
   }
+
+  Future<Map<String, dynamic>> fetchFriendshipState(String otherUserId) async {
+    final user = _client.auth.currentUser;
+
+    if (user == null) {
+      return <String, dynamic>{
+        'isSelf': false,
+        'isLoggedIn': false,
+        'areFriends': false,
+        'outgoingPending': false,
+        'incomingPending': false,
+        'canMessage': false,
+      };
+    }
+
+    if (user.id == otherUserId) {
+      return <String, dynamic>{
+        'isSelf': true,
+        'isLoggedIn': true,
+        'areFriends': false,
+        'outgoingPending': false,
+        'incomingPending': false,
+        'canMessage': false,
+      };
+    }
+
+    final hasFriendshipsTable = await _hasTable('friendships');
+    final hasRequestsTable = await _hasTable('friend_requests');
+
+    bool areFriends = false;
+    bool outgoingPending = false;
+    bool incomingPending = false;
+
+    if (hasFriendshipsTable) {
+      try {
+        final friendship = await _client
+            .from('friendships')
+            .select('id')
+            .or(
+              'and(user_id.eq.${user.id},friend_id.eq.$otherUserId),and(user_id.eq.$otherUserId,friend_id.eq.${user.id})',
+            )
+            .maybeSingle();
+
+        areFriends = friendship != null;
+      } catch (_) {}
+    }
+
+    if (!areFriends && hasRequestsTable) {
+      try {
+        final outgoing = await _client
+            .from('friend_requests')
+            .select('id, status')
+            .eq('sender_id', user.id)
+            .eq('receiver_id', otherUserId)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        outgoingPending = outgoing != null;
+      } catch (_) {}
+
+      try {
+        final incoming = await _client
+            .from('friend_requests')
+            .select('id, status')
+            .eq('sender_id', otherUserId)
+            .eq('receiver_id', user.id)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        incomingPending = incoming != null;
+      } catch (_) {}
+    }
+
+    return <String, dynamic>{
+      'isSelf': false,
+      'isLoggedIn': true,
+      'areFriends': areFriends,
+      'outgoingPending': outgoingPending,
+      'incomingPending': incomingPending,
+      'canMessage': areFriends,
+    };
+  }
+
+  Future<void> sendFriendRequest(String otherUserId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    if (user.id == otherUserId) {
+      throw Exception('You cannot add yourself');
+    }
+
+    final hasRequestsTable = await _hasTable('friend_requests');
+    if (!hasRequestsTable) {
+      throw Exception(
+        'friend_requests table does not exist yet',
+      );
+    }
+
+    final state = await fetchFriendshipState(otherUserId);
+    if (state['areFriends'] == true) {
+      return;
+    }
+    if (state['outgoingPending'] == true) {
+      return;
+    }
+
+    await _client.from('friend_requests').insert({
+      'sender_id': user.id,
+      'receiver_id': otherUserId,
+      'status': 'pending',
+    });
+  }
 }
