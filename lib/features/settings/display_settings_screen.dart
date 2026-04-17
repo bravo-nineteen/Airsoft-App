@@ -20,7 +20,7 @@ class DisplaySettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final selectedThemeMode = currentThemeMode ?? ThemeMode.system;
-    final selectedLocale = currentLocale?.languageCode;
+    final selectedLanguageCode = currentLocale?.languageCode;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('display'))),
@@ -33,22 +33,22 @@ class DisplaySettingsScreen extends StatelessWidget {
             onChanged: onThemeModeChanged,
           ),
           RadioListTile<ThemeMode>(
-            title: Text(l10n.lightMode),
+            title: Text(l10n.t('lightMode')),
             value: ThemeMode.light,
             groupValue: selectedThemeMode,
             onChanged: onThemeModeChanged,
           ),
           RadioListTile<ThemeMode>(
-            title: Text(l10n.darkMode),
+            title: Text(l10n.t('darkMode')),
             value: ThemeMode.dark,
             groupValue: selectedThemeMode,
             onChanged: onThemeModeChanged,
           ),
           const Divider(height: 1),
           ListTile(
-            title: Text(l10n.language),
+            title: Text(l10n.t('language')),
             trailing: DropdownButton<String?>(
-              value: selectedLocale,
+              value: selectedLanguageCode,
               onChanged: (languageCode) {
                 onLocaleChanged?.call(
                   languageCode == null ? null : Locale(languageCode),

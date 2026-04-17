@@ -96,7 +96,7 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.settings),
+        title: Text(l10n.t('settings')),
       ),
       body: ListView(
         children: [
