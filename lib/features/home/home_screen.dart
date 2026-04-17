@@ -1,10 +1,13 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
 import '../community/community_repository.dart';
+import '../community/community_user_profile_screen.dart';
+import '../events/event_list_screen.dart';
 
 enum HomeInterestFilter {
   all,
@@ -15,13 +18,132 @@ enum HomeInterestFilter {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    this.themeMode,
+    this.onThemeChanged,
+    this.locale,
+    this.onLocaleChanged,
+  });
+
+  final ThemeMode? themeMode;
+  final ValueChanged<ThemeMode>? onThemeChanged;
+  final Locale? locale;
+  final ValueChanged<Locale?>? onLocaleChanged;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+  String? _currentUserId;
+  String _currentUserFallbackName = 'Profile';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final User? user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    String fallbackName = user.email ?? 'Profile';
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('call_sign')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final String? callSign = response?['call_sign']?.toString().trim();
+      if (callSign != null && callSign.isNotEmpty) {
+        fallbackName = callSign;
+      }
+    } catch (_) {}
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentUserId = user.id;
+      _currentUserFallbackName = fallbackName;
+    });
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_currentIndex) {
+      case 0:
+        return const _HomeDashboardTab();
+      case 1:
+        return const CommunityListScreen();
+      case 2:
+        return const EventListScreen();
+      case 3:
+        if (_currentUserId == null) {
+          return const _ProfileUnavailableTab();
+        }
+        return CommunityPublicProfileScreen(
+          userId: _currentUserId!,
+          fallbackName: _currentUserFallbackName,
+        );
+      default:
+        return const _HomeDashboardTab();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _buildCurrentTab(),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (int index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const <NavigationDestination>[
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum),
+            label: 'Boards',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_outlined),
+            selectedIcon: Icon(Icons.event),
+            label: 'Events',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeDashboardTab extends StatefulWidget {
+  const _HomeDashboardTab();
+
+  @override
+  State<_HomeDashboardTab> createState() => _HomeDashboardTabState();
+}
+
+class _HomeDashboardTabState extends State<_HomeDashboardTab> {
   final CommunityRepository _communityRepository = CommunityRepository();
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
@@ -86,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final posts = await _communityRepository.fetchPosts();
+      final List<CommunityPostModel> posts = await _communityRepository.fetchPosts();
 
       if (!mounted) {
         return;
@@ -119,6 +241,14 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const CommunityListScreen(),
+      ),
+    );
+  }
+
+  void _openEvents() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const EventListScreen(),
       ),
     );
   }
@@ -161,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -188,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 18),
                     if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.posts) ...[
+                        _selectedFilter == HomeInterestFilter.posts) ...<Widget>[
                       _SectionHeader(
                         title: 'Recent Posts',
                         subtitle: 'What members are talking about now',
@@ -210,17 +340,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 20),
                     ],
                     if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.events) ...[
+                        _selectedFilter == HomeInterestFilter.events) ...<Widget>[
                       _SectionHeader(
                         title: 'Events',
                         subtitle: 'Upcoming activities and group plans',
-                        onViewAll: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Events screen not connected yet'),
-                            ),
-                          );
-                        },
+                        onViewAll: _openEvents,
                       ),
                       const SizedBox(height: 12),
                       ..._eventItems.map(
@@ -229,25 +353,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           subtitle: item.subtitle,
                           meta: item.meta,
                           icon: item.icon,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(item.title)),
-                            );
-                          },
+                          onTap: _openEvents,
                         ),
                       ),
                       const SizedBox(height: 20),
                     ],
                     if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.fields) ...[
+                        _selectedFilter == HomeInterestFilter.fields) ...<Widget>[
                       _SectionHeader(
                         title: 'Field Updates',
                         subtitle: 'Conditions, notices and operational info',
                         onViewAll: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content:
-                                  Text('Field updates screen not connected yet'),
+                              content: Text('Field updates screen not connected yet'),
                             ),
                           );
                         },
@@ -269,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 20),
                     ],
                     if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.blog) ...[
+                        _selectedFilter == HomeInterestFilter.blog) ...<Widget>[
                       _SectionHeader(
                         title: 'Airsoft Blog',
                         subtitle: 'Guides, opinion and longer reads',
@@ -300,18 +419,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     _QuickAccessStrip(
                       theme: theme,
                       onBoardsTap: _openBoards,
-                      onEventsTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Events screen not connected yet'),
-                          ),
-                        );
-                      },
+                      onEventsTap: _openEvents,
                       onFieldsTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content:
-                                Text('Field finder screen not connected yet'),
+                            content: Text('Field finder screen not connected yet'),
                           ),
                         );
                       },
@@ -331,6 +443,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _ProfileUnavailableTab extends StatelessWidget {
+  const _ProfileUnavailableTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+      ),
+      body: const Center(
+        child: Text('Please log in to view your profile.'),
+      ),
+    );
+  }
+}
+
 class _HomeHeroCard extends StatelessWidget {
   const _HomeHeroCard({
     required this.title,
@@ -344,7 +472,7 @@ class _HomeHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -471,7 +599,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,9 +642,9 @@ class _HomePostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final imageUrl = post.primaryImageUrl;
-    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+    final ThemeData theme = Theme.of(context);
+    final String? imageUrl = post.primaryImageUrl;
+    final bool hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -673,7 +801,7 @@ class _InfoFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -810,7 +938,7 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -902,7 +1030,7 @@ class _EmptyBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Container(
       height: 112,
