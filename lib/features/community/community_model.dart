@@ -15,6 +15,7 @@ class CommunityPostModel {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isPinned;
+  final bool isLikedByMe;
 
   const CommunityPostModel({
     required this.id,
@@ -33,7 +34,48 @@ class CommunityPostModel {
     required this.createdAt,
     required this.updatedAt,
     required this.isPinned,
+    required this.isLikedByMe,
   });
+
+  CommunityPostModel copyWith({
+    String? id,
+    String? authorId,
+    String? authorName,
+    String? authorAvatarUrl,
+    String? title,
+    String? bodyText,
+    String? plainText,
+    String? imageUrl,
+    List<String>? imageUrls,
+    String? category,
+    int? commentCount,
+    int? likeCount,
+    int? viewCount,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isPinned,
+    bool? isLikedByMe,
+  }) {
+    return CommunityPostModel(
+      id: id ?? this.id,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      title: title ?? this.title,
+      bodyText: bodyText ?? this.bodyText,
+      plainText: plainText ?? this.plainText,
+      imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
+      category: category ?? this.category,
+      commentCount: commentCount ?? this.commentCount,
+      likeCount: likeCount ?? this.likeCount,
+      viewCount: viewCount ?? this.viewCount,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isPinned: isPinned ?? this.isPinned,
+      isLikedByMe: isLikedByMe ?? this.isLikedByMe,
+    );
+  }
 
   String get excerpt {
     final source = bodyText.isNotEmpty ? bodyText : plainText;
@@ -55,31 +97,42 @@ class CommunityPostModel {
   }
 
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
-    final imageList = (json['image_urls'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .where((e) => e.trim().isNotEmpty)
-            .toList() ??
-        <String>[];
+    final dynamic rawImageUrls = json['image_urls'];
+    final List<String> parsedImageUrls;
+
+    if (rawImageUrls is List) {
+      parsedImageUrls = rawImageUrls
+          .map((dynamic e) => e.toString().trim())
+          .where((String e) => e.isNotEmpty)
+          .toList();
+    } else {
+      parsedImageUrls = <String>[];
+    }
+
+    final authorId = _readNullableString(json['author_id']) ??
+        _readNullableString(json['user_id']);
 
     return CommunityPostModel(
-      id: json['id'].toString(),
-      authorId: json['author_id']?.toString(),
-      authorName: (json['author_name'] ?? 'Unknown').toString(),
-      authorAvatarUrl: json['author_avatar_url']?.toString(),
-      title: (json['title'] ?? '').toString(),
-      bodyText: (json['body_text'] ?? '').toString(),
-      plainText: (json['plain_text'] ?? '').toString(),
-      imageUrl: json['image_url']?.toString(),
-      imageUrls: imageList,
-      category: json['category']?.toString(),
+      id: (json['id'] ?? '').toString(),
+      authorId: authorId,
+      authorName: _readNullableString(json['author_name']) ?? 'Unknown',
+      authorAvatarUrl: _readNullableString(json['author_avatar_url']),
+      title: _readNullableString(json['title']) ?? '',
+      bodyText: _readNullableString(json['body_text']) ?? '',
+      plainText: _readNullableString(json['plain_text']) ?? '',
+      imageUrl: _readNullableString(json['image_url']),
+      imageUrls: parsedImageUrls,
+      category: _readNullableString(json['category']),
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
-      updatedAt: json['updated_at'] == null
-          ? null
-          : DateTime.parse(json['updated_at'].toString()).toLocal(),
+      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
+              ?.toLocal() ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse((json['updated_at'] ?? '').toString())
+          ?.toLocal(),
       isPinned: json['is_pinned'] == true,
+      isLikedByMe: json['is_liked_by_me'] == true || json['liked_by_me'] == true,
     );
   }
 }
@@ -108,33 +161,58 @@ class CommunityCommentModel {
   });
 
   CommunityCommentModel copyWith({
+    String? id,
+    String? postId,
+    String? authorId,
+    String? authorName,
+    String? authorAvatarUrl,
+    String? message,
     int? likeCount,
     bool? likedByMe,
+    DateTime? createdAt,
   }) {
     return CommunityCommentModel(
-      id: id,
-      postId: postId,
-      authorId: authorId,
-      authorName: authorName,
-      authorAvatarUrl: authorAvatarUrl,
-      message: message,
+      id: id ?? this.id,
+      postId: postId ?? this.postId,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      message: message ?? this.message,
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
+    final authorId = _readNullableString(json['author_id']) ??
+        _readNullableString(json['user_id']);
+
     return CommunityCommentModel(
-      id: json['id'].toString(),
-      postId: json['post_id'].toString(),
-      authorId: json['author_id']?.toString(),
-      authorName: (json['author_name'] ?? 'Unknown').toString(),
-      authorAvatarUrl: json['author_avatar_url']?.toString(),
-      message: (json['message'] ?? json['body'] ?? '').toString(),
+      id: (json['id'] ?? '').toString(),
+      postId: (json['post_id'] ?? '').toString(),
+      authorId: authorId,
+      authorName: _readNullableString(json['author_name']) ?? 'Unknown',
+      authorAvatarUrl: _readNullableString(json['author_avatar_url']),
+      message: _readNullableString(json['message']) ??
+          _readNullableString(json['body']) ??
+          '',
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       likedByMe: json['liked_by_me'] == true,
-      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
+      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
+              ?.toLocal() ??
+          DateTime.now(),
     );
   }
+}
+
+String? _readNullableString(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  if (text.isEmpty || text.toLowerCase() == 'null') {
+    return null;
+  }
+  return text;
 }
