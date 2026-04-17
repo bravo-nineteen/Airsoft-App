@@ -31,7 +31,7 @@ class DisplaySettingsScreen extends StatelessWidget {
             subtitle: Text(l10n.t('displayThemeSubtitle')),
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('System'),
+            title: Text(l10n.t('system')),
             value: ThemeMode.system,
             groupValue: selectedThemeMode,
             onChanged: onThemeModeChanged == null
