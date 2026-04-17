@@ -4,9 +4,9 @@ class CommunityPostCategories {
   static const String news = 'News';
   static const String discussion = 'Discussion';
   static const String gear = 'Gear';
-  static const String field = 'Fields';
+  static const String field = 'Field';
   static const String events = 'Events';
-  static const String team = 'Team Up';
+  static const String team = 'Team';
   static const String advice = 'Advice';
   static const String timeline = 'Timeline';
 
@@ -15,9 +15,9 @@ class CommunityPostCategories {
     news,
     discussion,
     gear,
-    fields,
+    field,
     events,
-    team up,
+    team,
     advice,
   ];
 
@@ -27,9 +27,9 @@ class CommunityPostCategories {
     news,
     discussion,
     gear,
-    fields,
+    field,
     events,
-    team up,
+    team,
     advice,
   ];
 
@@ -49,7 +49,7 @@ class CommunityPostCategories {
       return general;
     }
 
-    final trimmed = value.trim();
+    final String trimmed = value.trim();
     if (communityCategories.contains(trimmed)) {
       return trimmed;
     }
@@ -61,7 +61,6 @@ class CommunityPostCategories {
     if (value == null || value.trim().isEmpty) {
       return timeline;
     }
-
     return timeline;
   }
 }
