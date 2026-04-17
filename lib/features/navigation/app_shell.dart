@@ -28,8 +28,8 @@ class _AppShellState extends State<AppShell> {
 
   late final List<Widget> _tabs = <Widget>[
     HomeScreen(
-      onOpenEventsTab: () => _setTab(2),
       onOpenBoardsTab: () => _setTab(1),
+      onOpenEventsTab: () => _setTab(2),
     ),
     const CommunityListScreen(),
     const EventsScreen(),
