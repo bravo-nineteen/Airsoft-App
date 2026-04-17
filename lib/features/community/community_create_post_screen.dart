@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'community_image_service.dart';
+import 'community_post_categories.dart';
 import 'community_post_details_screen.dart';
 import 'community_repository.dart';
 
@@ -29,24 +30,16 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   final TextEditingController _bodyController = TextEditingController();
 
   bool _isSubmitting = false;
-  String _selectedCategory = 'General';
+  String _selectedCategory = CommunityPostCategories.general;
   final List<String> _uploadedImageUrls = <String>[];
 
-  List<String> get _categories {
-    if (widget.postContext == 'profile') {
-      return <String>['Timeline'];
-    }
+  bool get _isProfilePost => widget.postContext == 'profile';
 
-    return <String>[
-      'General',
-      'News',
-      'Discussion',
-      'Gear',
-      'Field',
-      'Events',
-      'Team',
-      'Advice',
-    ];
+  List<String> get _categories {
+    if (_isProfilePost) {
+      return CommunityPostCategories.timelineCategories;
+    }
+    return CommunityPostCategories.communityCategories;
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -90,7 +83,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
     });
 
     try {
-      final postId = widget.postContext == 'profile'
+      final postId = _isProfilePost
           ? await _repository.createProfileTimelinePost(
               targetUserId: widget.targetUserId ?? '',
               title: title,
@@ -103,7 +96,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
               bodyText: body,
               plainText: body,
               imageUrls: _uploadedImageUrls,
-              category: _selectedCategory,
+              category: CommunityPostCategories.normalizeCommunityCategory(
+                _selectedCategory,
+              ),
               postContext: 'community',
             );
 
@@ -143,11 +138,13 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isProfilePost = widget.postContext == 'profile';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.appBarTitle ?? (isProfilePost ? 'New Timeline Post' : 'Create Post')),
+        title: Text(
+          widget.appBarTitle ??
+              (_isProfilePost ? 'New Timeline Post' : 'Create Post'),
+        ),
       ),
       body: SafeArea(
         child: ListView(
@@ -171,7 +168,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  if (!isProfilePost)
+                  if (!_isProfilePost)
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: const InputDecoration(
@@ -188,7 +185,10 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                           return;
                         }
                         setState(() {
-                          _selectedCategory = value;
+                          _selectedCategory =
+                              CommunityPostCategories.normalizeCommunityCategory(
+                            value,
+                          );
                         });
                       },
                     )
@@ -207,7 +207,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                           Icon(Icons.timeline),
                           SizedBox(width: 10),
                           Expanded(
-                            child: Text('This will be posted to your profile timeline'),
+                            child: Text(
+                              'This will be posted to your profile timeline',
+                            ),
                           ),
                         ],
                       ),
@@ -280,7 +282,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.send),
-                      label: Text(isProfilePost ? 'Post to Timeline' : 'Publish Post'),
+                      label: Text(
+                        _isProfilePost ? 'Post to Timeline' : 'Publish Post',
+                      ),
                     ),
                   ),
                 ],
