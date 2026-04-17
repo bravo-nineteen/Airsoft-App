@@ -4,9 +4,10 @@ import 'package:intl/intl.dart';
 
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
+import 'community_post_categories.dart';
 import 'community_post_details_screen.dart';
-import 'community_user_profile_screen.dart';
 import 'community_repository.dart';
+import 'community_user_profile_screen.dart';
 
 class CommunityListScreen extends StatefulWidget {
   const CommunityListScreen({super.key});
@@ -21,17 +22,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isLoading = true;
-  String _selectedCategory = 'All';
+  String _selectedCategory = CommunityPostCategories.all;
 
-  static const List<String> _categories = <String>[
-    'All',
-    'General',
-    'Question',
-    'Event',
-    'Review',
-    'Sale',
-    'Guide',
-  ];
+  static const List<String> _categories =
+      CommunityPostCategories.communityCategoriesWithAll;
 
   @override
   void initState() {
@@ -55,7 +49,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       }
 
       setState(() {
-        _posts = posts;
+        _posts = posts
+            .map(
+              (CommunityPostModel post) => post.copyWith(
+                category: CommunityPostCategories.normalizeCommunityCategory(
+                  post.category,
+                ),
+              ),
+            )
+            .toList();
         _isLoading = false;
       });
     } catch (error) {
@@ -74,15 +76,13 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   }
 
   Future<void> _openCreateScreen() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => const CommunityCreatePostScreen(),
       ),
     );
 
-    if (created == true) {
-      await _loadPosts();
-    }
+    await _loadPosts();
   }
 
   Future<void> _openPostDetails(CommunityPostModel post) async {
@@ -139,6 +139,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Boards'),
@@ -155,6 +157,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   TextField(
                     controller: _searchController,
@@ -180,8 +183,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       itemCount: _categories.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (BuildContext context, int index) {
-                        final category = _categories[index];
-                        final isSelected = category == _selectedCategory;
+                        final String category = _categories[index];
+                        final bool isSelected = category == _selectedCategory;
 
                         return ChoiceChip(
                           label: Text(category),
@@ -195,6 +198,13 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                         );
                       },
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _selectedCategory == CommunityPostCategories.all
+                        ? 'Showing all board categories'
+                        : 'Showing ${_selectedCategory.toLowerCase()} posts',
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -215,7 +225,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
                           itemCount: _posts.length,
                           itemBuilder: (BuildContext context, int index) {
-                            final post = _posts[index];
+                            final CommunityPostModel post = _posts[index];
 
                             return _CompactPostCard(
                               post: post,
@@ -249,9 +259,11 @@ class _CompactPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final imageUrl = post.primaryImageUrl;
-    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+    final ThemeData theme = Theme.of(context);
+    final String? imageUrl = post.primaryImageUrl;
+    final bool hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+    final String normalizedCategory =
+        CommunityPostCategories.normalizeCommunityCategory(post.category);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -380,12 +392,11 @@ class _CompactPostCard extends StatelessWidget {
                             color: theme.colorScheme.primary.withOpacity(0.14),
                             textColor: theme.colorScheme.primary,
                           ),
-                        if ((post.category ?? '').isNotEmpty)
-                          _MiniBadge(
-                            text: post.category!,
-                            color: theme.colorScheme.secondary.withOpacity(0.14),
-                            textColor: theme.colorScheme.secondary,
-                          ),
+                        _MiniBadge(
+                          text: normalizedCategory,
+                          color: theme.colorScheme.secondary.withOpacity(0.14),
+                          textColor: theme.colorScheme.secondary,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
