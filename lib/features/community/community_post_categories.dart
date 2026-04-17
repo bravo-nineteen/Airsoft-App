@@ -4,9 +4,9 @@ class CommunityPostCategories {
   static const String news = 'News';
   static const String discussion = 'Discussion';
   static const String gear = 'Gear';
-  static const String field = 'Field';
+  static const String field = 'Fields';
   static const String events = 'Events';
-  static const String team = 'Team';
+  static const String team = 'Team Up';
   static const String advice = 'Advice';
   static const String timeline = 'Timeline';
 
@@ -15,9 +15,9 @@ class CommunityPostCategories {
     news,
     discussion,
     gear,
-    field,
+    fields,
     events,
-    team,
+    team up,
     advice,
   ];
 
@@ -27,9 +27,9 @@ class CommunityPostCategories {
     news,
     discussion,
     gear,
-    field,
+    fields,
     events,
-    team,
+    team up,
     advice,
   ];
 
