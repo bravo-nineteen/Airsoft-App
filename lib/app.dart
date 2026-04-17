@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'app/localization/app_localizations.dart';
@@ -44,7 +45,7 @@ class _AirsoftAppState extends State<AirsoftApp> {
       themeMode: _themeMode,
       locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
-      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
         AppLocalizations.delegate,
         DefaultWidgetsLocalizations.delegate,
         DefaultMaterialLocalizations.delegate,
