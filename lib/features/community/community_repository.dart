@@ -439,6 +439,92 @@ class CommunityRepository {
     }
   }
 
+  Future<List<CommunityCommentModel>> fetchCommentsByAuthor(
+    String userId, {
+    int? limit,
+  }) async {
+    dynamic query = _client
+        .from('community_comments')
+        .select(
+          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count',
+        )
+        .eq('is_deleted', false)
+        .or('author_id.eq.$userId,user_id.eq.$userId')
+        .order('created_at', ascending: false);
+
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    final response = await query;
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic e) => CommunityCommentModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<int> fetchUserReceivedLikesCount(String userId) async {
+    final bool hasPostLikesTable = await _hasTable('community_post_likes');
+    final bool hasCommentLikesTable =
+        await _hasTable('community_comment_likes');
+
+    if (!hasPostLikesTable && !hasCommentLikesTable) {
+      return 0;
+    }
+
+    final List<String> postIds = await _fetchAuthorPostIds(userId);
+    final List<String> commentIds = await _fetchAuthorCommentIds(userId);
+
+    int postLikes = 0;
+    int commentLikes = 0;
+
+    if (hasPostLikesTable && postIds.isNotEmpty) {
+      final postLikesResponse = await _client
+          .from('community_post_likes')
+          .select('id')
+          .inFilter('post_id', postIds);
+      postLikes = (postLikesResponse as List).length;
+    }
+
+    if (hasCommentLikesTable && commentIds.isNotEmpty) {
+      final commentLikesResponse = await _client
+          .from('community_comment_likes')
+          .select('id')
+          .inFilter('comment_id', commentIds);
+      commentLikes = (commentLikesResponse as List).length;
+    }
+
+    return postLikes + commentLikes;
+  }
+
+  Future<List<String>> _fetchAuthorPostIds(String userId) async {
+    final response = await _client
+        .from('community_posts')
+        .select('id')
+        .eq('is_deleted', false)
+        .or('author_id.eq.$userId,user_id.eq.$userId');
+
+    return (response as List<dynamic>)
+        .map((dynamic e) => e['id'].toString())
+        .toList();
+  }
+
+  Future<List<String>> _fetchAuthorCommentIds(String userId) async {
+    final response = await _client
+        .from('community_comments')
+        .select('id')
+        .eq('is_deleted', false)
+        .or('author_id.eq.$userId,user_id.eq.$userId');
+
+    return (response as List<dynamic>)
+        .map((dynamic e) => e['id'].toString())
+        .toList();
+  }
+
   Future<Map<String, dynamic>?> fetchProfileByUserId(String userId) async {
     final response = await _client
         .from('profiles')
@@ -478,6 +564,7 @@ class CommunityRepository {
       };
     }
 
+    final hasContactsTable = await _hasTable('user_contacts');
     final hasFriendshipsTable = await _hasTable('friendships');
     final hasRequestsTable = await _hasTable('friend_requests');
 
@@ -485,7 +572,22 @@ class CommunityRepository {
     bool outgoingPending = false;
     bool incomingPending = false;
 
-    if (hasFriendshipsTable) {
+    if (hasContactsTable) {
+      try {
+        final accepted = await _client
+            .from('user_contacts')
+            .select('id')
+            .or(
+              'and(requester_id.eq.${user.id},addressee_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,addressee_id.eq.${user.id})',
+            )
+            .eq('status', 'accepted')
+            .maybeSingle();
+
+        areFriends = accepted != null;
+      } catch (_) {}
+    }
+
+    if (!areFriends && hasFriendshipsTable) {
       try {
         final friendship = await _client
             .from('friendships')
@@ -499,7 +601,33 @@ class CommunityRepository {
       } catch (_) {}
     }
 
-    if (!areFriends && hasRequestsTable) {
+    if (!areFriends && hasContactsTable) {
+      try {
+        final outgoing = await _client
+            .from('user_contacts')
+            .select('id')
+            .eq('requester_id', user.id)
+            .eq('addressee_id', otherUserId)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        outgoingPending = outgoing != null;
+      } catch (_) {}
+
+      try {
+        final incoming = await _client
+            .from('user_contacts')
+            .select('id')
+            .eq('requester_id', otherUserId)
+            .eq('addressee_id', user.id)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        incomingPending = incoming != null;
+      } catch (_) {}
+    }
+
+    if (!areFriends && !outgoingPending && !incomingPending && hasRequestsTable) {
       try {
         final outgoing = await _client
             .from('friend_requests')
@@ -545,9 +673,11 @@ class CommunityRepository {
       throw Exception('You cannot add yourself');
     }
 
+    final hasContactsTable = await _hasTable('user_contacts');
     final hasRequestsTable = await _hasTable('friend_requests');
-    if (!hasRequestsTable) {
-      throw Exception('friend_requests table does not exist yet');
+
+    if (!hasContactsTable && !hasRequestsTable) {
+      throw Exception('No request table is available');
     }
 
     final state = await fetchFriendshipState(otherUserId);
@@ -555,6 +685,15 @@ class CommunityRepository {
       return;
     }
     if (state['outgoingPending'] == true) {
+      return;
+    }
+
+    if (hasContactsTable) {
+      await _client.from('user_contacts').insert({
+        'requester_id': user.id,
+        'addressee_id': otherUserId,
+        'status': 'pending',
+      });
       return;
     }
 

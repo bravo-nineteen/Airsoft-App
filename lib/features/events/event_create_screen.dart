@@ -357,7 +357,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               controller: _descriptionController,
               minLines: 5,
               maxLines: 8,
-              decoration: InputDecoration(labelText: l10n.description),
+              decoration: InputDecoration(labelText: l10n.t('description')),
             ),
             const SizedBox(height: 12),
             TextField(

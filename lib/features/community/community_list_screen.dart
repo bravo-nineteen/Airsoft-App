@@ -289,7 +289,7 @@ class _CompactPostCard extends StatelessWidget {
                   height: 72,
                   child: hasImage
                       ? ExtendedImage.network(
-                          imageUrl!,
+                        imageUrl,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {

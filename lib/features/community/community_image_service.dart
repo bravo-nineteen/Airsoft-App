@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -28,25 +26,33 @@ class CommunityImageService {
       return null;
     }
 
-    final CroppedFile? croppedFile = await ImageCropper().cropImage(
-      sourcePath: pickedFile.path,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 88,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Image',
-          lockAspectRatio: false,
-          hideBottomControls: false,
-          initAspectRatio: CropAspectRatioPreset.original,
-        ),
-        IOSUiSettings(
-          title: 'Crop Image',
-        ),
-      ],
-    );
+    String uploadSourcePath = pickedFile.path;
+    Uint8List bytes = await pickedFile.readAsBytes();
 
-    if (croppedFile == null) {
-      return null;
+    try {
+      final CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 88,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            lockAspectRatio: false,
+            hideBottomControls: false,
+            initAspectRatio: CropAspectRatioPreset.original,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        uploadSourcePath = croppedFile.path;
+        bytes = await XFile(croppedFile.path).readAsBytes();
+      }
+    } catch (_) {
+      // If cropper fails (plugin/runtime issue), continue with original image.
     }
 
     final User? user = _client.auth.currentUser;
@@ -54,16 +60,14 @@ class CommunityImageService {
       throw Exception('User not logged in');
     }
 
-    final String fileExt = _safeExtension(croppedFile.path);
+    final String fileExt = _safeExtension(uploadSourcePath);
     final String fileName =
         '${DateTime.now().millisecondsSinceEpoch}_${user.id}.$fileExt';
     final String filePath = 'community/${user.id}/$fileName';
 
-    final List<int> bytes = await File(croppedFile.path).readAsBytes();
-
     await _client.storage.from('community-images').uploadBinary(
           filePath,
-          Uint8List.fromList(bytes),
+          bytes,
           fileOptions: FileOptions(
             upsert: false,
             contentType: _contentTypeFromExtension(fileExt),

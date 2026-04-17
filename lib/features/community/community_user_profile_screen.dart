@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
+import '../social/direct_message_screen.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_details_screen.dart';
@@ -35,8 +36,10 @@ class _CommunityPublicProfileScreenState
   Map<String, dynamic>? _profile;
   List<CommunityPostModel> _recentPosts = <CommunityPostModel>[];
   List<CommunityPostModel> _timelinePosts = <CommunityPostModel>[];
+  List<CommunityCommentModel> _recentComments = <CommunityCommentModel>[];
   List<EventModel> _attendingEvents = <EventModel>[];
   EventAttendanceStats _eventStats = const EventAttendanceStats();
+  int _receivedLikesCount = 0;
 
   bool _isLoading = true;
   bool _isSendingFriendRequest = false;
@@ -49,7 +52,7 @@ class _CommunityPublicProfileScreenState
   bool _canMessage = false;
 
   late final TabController _tabController =
-      TabController(length: 3, vsync: this);
+      TabController(length: 4, vsync: this);
 
   @override
   void initState() {
@@ -63,18 +66,29 @@ class _CommunityPublicProfileScreenState
     });
 
     try {
-      final Map<String, dynamic>? profile =
-          await _repository.fetchProfileByUserId(widget.userId);
+      final List<dynamic> results = await Future.wait<dynamic>([
+      _repository.fetchProfileByUserId(widget.userId),
+      _repository.fetchPostsByAuthor(widget.userId, limit: 5),
+      _repository.fetchProfileTimelinePosts(widget.userId),
+      _repository.fetchCommentsByAuthor(widget.userId, limit: 20),
+      _repository.fetchUserReceivedLikesCount(widget.userId),
+      _repository.fetchFriendshipState(widget.userId),
+      _eventRepository.getUserAttendingEvents(widget.userId),
+      _eventRepository.getUserEventStats(widget.userId),
+      ]);
+
+      final Map<String, dynamic>? profile = results[0] as Map<String, dynamic>?;
       final List<CommunityPostModel> recentPosts =
-          await _repository.fetchPostsByAuthor(widget.userId, limit: 5);
+        results[1] as List<CommunityPostModel>;
       final List<CommunityPostModel> timelinePosts =
-          await _repository.fetchProfileTimelinePosts(widget.userId);
+        results[2] as List<CommunityPostModel>;
+      final List<CommunityCommentModel> recentComments =
+        results[3] as List<CommunityCommentModel>;
+      final int receivedLikesCount = results[4] as int;
       final Map<String, dynamic> friendshipState =
-          await _repository.fetchFriendshipState(widget.userId);
-      final List<EventModel> attendingEvents =
-          await _eventRepository.getUserAttendingEvents(widget.userId);
-      final EventAttendanceStats eventStats =
-          await _eventRepository.getUserEventStats(widget.userId);
+        results[5] as Map<String, dynamic>;
+      final List<EventModel> attendingEvents = results[6] as List<EventModel>;
+      final EventAttendanceStats eventStats = results[7] as EventAttendanceStats;
 
       if (!mounted) {
         return;
@@ -84,8 +98,10 @@ class _CommunityPublicProfileScreenState
         _profile = profile;
         _recentPosts = recentPosts;
         _timelinePosts = timelinePosts;
+        _recentComments = recentComments;
         _attendingEvents = attendingEvents;
         _eventStats = eventStats;
+        _receivedLikesCount = receivedLikesCount;
         _isSelf = friendshipState['isSelf'] == true;
         _isLoggedIn = friendshipState['isLoggedIn'] == true;
         _areFriends = friendshipState['areFriends'] == true;
@@ -235,7 +251,7 @@ class _CommunityPublicProfileScreenState
     }
   }
 
-  void _onMessagePressed() {
+  Future<void> _onMessagePressed() async {
     if (!_canMessage) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Messaging is available for friends only')),
@@ -243,9 +259,16 @@ class _CommunityPublicProfileScreenState
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Open chat with $_displayName')),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => DirectMessageScreen(
+          otherUserId: widget.userId,
+          otherDisplayName: _displayName,
+        ),
+      ),
     );
+
+    await _load();
   }
 
   Widget _buildRelationshipActions(ThemeData theme) {
@@ -291,7 +314,7 @@ class _CommunityPublicProfileScreenState
         const SizedBox(width: 10),
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: _canMessage ? _onMessagePressed : null,
+            onPressed: _canMessage ? () => _onMessagePressed() : null,
             icon: const Icon(Icons.chat_bubble_outline),
             label: const Text('Message'),
             style: OutlinedButton.styleFrom(
@@ -583,6 +606,13 @@ class _CommunityPublicProfileScreenState
 
   Widget _buildEventsSection(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final int finalizedAttendanceCount = _eventStats.attended + _eventStats.noShow;
+    final int attendanceRatePercent = finalizedAttendanceCount == 0
+        ? 0
+        : ((_eventStats.attended / finalizedAttendanceCount) * 100).round();
+    final int noShowRatePercent = finalizedAttendanceCount == 0
+        ? 0
+        : ((_eventStats.noShow / finalizedAttendanceCount) * 100).round();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -608,6 +638,8 @@ class _CommunityPublicProfileScreenState
               Chip(label: Text('Attended ${_eventStats.attended}')),
               Chip(label: Text('Cancelled ${_eventStats.cancelled}')),
               Chip(label: Text('No Show ${_eventStats.noShow}')),
+              Chip(label: Text('Attendance Rate $attendanceRatePercent%')),
+              Chip(label: Text('No-Show Rate $noShowRatePercent%')),
             ],
           ),
           const SizedBox(height: 12),
@@ -617,6 +649,132 @@ class _CommunityPublicProfileScreenState
             ..._attendingEvents.map(
               (EventModel event) => _buildEventCard(context, event),
             ),
+        ],
+      ),
+    );
+  }
+
+  List<_PublicProfileActivityItem> get _activityItems {
+    final List<_PublicProfileActivityItem> items = <_PublicProfileActivityItem>[
+      ..._recentPosts.map(
+        (CommunityPostModel post) => _PublicProfileActivityItem(
+          timestamp: post.createdAt,
+          title: post.title,
+          subtitle: post.excerpt.isEmpty
+              ? 'Posted in community'
+              : post.excerpt,
+          icon: Icons.article_outlined,
+          onTap: () => _openPost(post),
+        ),
+      ),
+      ..._timelinePosts.map(
+        (CommunityPostModel post) => _PublicProfileActivityItem(
+          timestamp: post.createdAt,
+          title: post.title,
+          subtitle: post.excerpt.isEmpty
+              ? 'Posted on profile timeline'
+              : post.excerpt,
+          icon: Icons.timeline,
+          onTap: () => _openPost(post),
+        ),
+      ),
+      ..._recentComments.map(
+        (CommunityCommentModel comment) => _PublicProfileActivityItem(
+          timestamp: comment.createdAt,
+          title: 'Comment',
+          subtitle: comment.message,
+          icon: Icons.comment_outlined,
+          onTap: () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => CommunityPostDetailsScreen(postId: comment.postId),
+              ),
+            );
+            await _load();
+          },
+        ),
+      ),
+    ];
+
+    items.sort(
+      (_PublicProfileActivityItem a, _PublicProfileActivityItem b) =>
+          b.timestamp.compareTo(a.timestamp),
+    );
+
+    if (items.length <= 30) {
+      return items;
+    }
+
+    return items.take(30).toList();
+  }
+
+  Widget _buildActivitySection(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final List<_PublicProfileActivityItem> items = _activityItems;
+    final int totalPosts = _recentPosts.length + _timelinePosts.length;
+    final int totalComments = _recentComments.length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Activity',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              Chip(label: Text('Received Likes $_receivedLikesCount')),
+              Chip(label: Text('Posts $totalPosts')),
+              Chip(label: Text('Comments $totalComments')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            const Text('No recent activity yet.')
+          else
+            ...items.map((item) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  onTap: item.onTap,
+                  leading: CircleAvatar(
+                    child: Icon(item.icon),
+                  ),
+                  title: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _formatDate(item.timestamp),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -640,6 +798,7 @@ class _CommunityPublicProfileScreenState
           tabs: const <Tab>[
             Tab(text: 'Posts'),
             Tab(text: 'Timeline'),
+            Tab(text: 'Activity'),
             Tab(text: 'Events'),
           ],
         ),
@@ -700,6 +859,7 @@ class _CommunityPublicProfileScreenState
                                     Chip(
                                       label: Text('Timeline ${_timelinePosts.length}'),
                                     ),
+                                    Chip(label: Text('Likes $_receivedLikesCount')),
                                     Chip(
                                       label: Text('Events ${_attendingEvents.length}'),
                                     ),
@@ -727,6 +887,10 @@ class _CommunityPublicProfileScreenState
                                 ),
                                 SingleChildScrollView(
                                   physics: const NeverScrollableScrollPhysics(),
+                                  child: _buildActivitySection(context),
+                                ),
+                                SingleChildScrollView(
+                                  physics: const NeverScrollableScrollPhysics(),
                                   child: _buildEventsSection(context),
                                 ),
                               ],
@@ -741,4 +905,20 @@ class _CommunityPublicProfileScreenState
       ),
     );
   }
+}
+
+class _PublicProfileActivityItem {
+  const _PublicProfileActivityItem({
+    required this.timestamp,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final DateTime timestamp;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
 }

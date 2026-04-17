@@ -527,7 +527,7 @@ class _HomePostCard extends StatelessWidget {
                   height: 84,
                   child: hasImage
                       ? ExtendedImage.network(
-                          imageUrl!,
+                        imageUrl,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {

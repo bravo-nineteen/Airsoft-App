@@ -50,7 +50,12 @@ class _AirsoftAppState extends State<AirsoftApp> {
         DefaultMaterialLocalizations.delegate,
         DefaultCupertinoLocalizations.delegate,
       ],
-      home: const AuthGate(),
+      home: AuthGate(
+        currentLocale: _locale,
+        onLocaleChanged: updateLocale,
+        currentThemeMode: _themeMode,
+        onThemeModeChanged: updateThemeMode,
+      ),
     );
   }
 }

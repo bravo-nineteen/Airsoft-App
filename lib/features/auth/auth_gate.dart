@@ -5,7 +5,18 @@ import '../shell/airsoft_home_shell.dart';
 import 'login_screen.dart';
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+  const AuthGate({
+    super.key,
+    this.currentLocale,
+    this.onLocaleChanged,
+    this.currentThemeMode,
+    this.onThemeModeChanged,
+  });
+
+  final Locale? currentLocale;
+  final ValueChanged<Locale?>? onLocaleChanged;
+  final ThemeMode? currentThemeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +33,12 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        return const AirsoftHomeShell();
+        return AirsoftHomeShell(
+          currentLocale: currentLocale,
+          onLocaleChanged: onLocaleChanged,
+          currentThemeMode: currentThemeMode,
+          onThemeModeChanged: onThemeModeChanged,
+        );
       },
     );
   }

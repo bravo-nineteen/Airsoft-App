@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import 'contacts_screen.dart';
 import 'direct_message_screen.dart';
 import 'direct_message_thread_model.dart';
 import 'direct_message_thread_repository.dart';
@@ -32,6 +33,13 @@ class _DirectMessageThreadsScreenState
       _future = _repo.getThreads();
     });
     await _future;
+  }
+
+  Future<void> _openCompose() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ContactsScreen()),
+    );
+    await _refresh();
   }
 
   Future<String> _resolveName(String userId) async {
@@ -173,6 +181,11 @@ class _DirectMessageThreadsScreenState
             );
           },
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCompose,
+        icon: const Icon(Icons.edit_outlined),
+        label: const Text('Compose'),
       ),
     );
   }

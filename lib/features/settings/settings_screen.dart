@@ -3,11 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'account_settings_screen.dart';
-import 'display_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     this.currentLocale,
@@ -20,6 +19,21 @@ class SettingsScreen extends StatelessWidget {
   final ValueChanged<Locale?>? onLocaleChanged;
   final ThemeMode? currentThemeMode;
   final ValueChanged<ThemeMode>? onThemeModeChanged;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late ThemeMode _selectedThemeMode;
+  String? _selectedLanguageCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedThemeMode = widget.currentThemeMode ?? ThemeMode.system;
+    _selectedLanguageCode = widget.currentLocale?.languageCode;
+  }
 
   void _navigate(BuildContext context, Widget screen) {
     Navigator.of(context).push(
@@ -62,6 +76,22 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  void _updateThemeMode(ThemeMode value) {
+    setState(() {
+      _selectedThemeMode = value;
+    });
+    widget.onThemeModeChanged?.call(value);
+  }
+
+  void _updateLanguageCode(String? languageCode) {
+    setState(() {
+      _selectedLanguageCode = languageCode;
+    });
+    widget.onLocaleChanged?.call(
+      languageCode == null ? null : Locale(languageCode),
+    );
+  }
+
   Widget _sectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -102,18 +132,61 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         children: [
           _sectionTitle(l10n.t('display')),
-          _tile(
-            context: context,
-            icon: Icons.palette_outlined,
-            title: l10n.t('displayThemeSubtitle'),
-            onTap: () => _navigate(
-              context,
-              DisplaySettingsScreen(
-                currentThemeMode: currentThemeMode,
-                onThemeModeChanged: onThemeModeChanged,
-                currentLocale: currentLocale,
-                onLocaleChanged: onLocaleChanged,
-              ),
+          ListTile(
+            leading: const Icon(Icons.light_mode_outlined),
+            title: Text(l10n.t('theme')),
+            subtitle: Text(l10n.t('lightDarkControls')),
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('lightMode')),
+            value: ThemeMode.light,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('darkMode')),
+            value: ThemeMode.dark,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('system')),
+            value: ThemeMode.system,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.language_outlined),
+            title: Text(l10n.t('language')),
+            trailing: DropdownButton<String?>(
+              value: _selectedLanguageCode,
+              onChanged: _updateLanguageCode,
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.t('system')),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'en',
+                  child: Text(l10n.t('english')),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'ja',
+                  child: Text(l10n.t('japanese')),
+                ),
+              ],
             ),
           ),
 
