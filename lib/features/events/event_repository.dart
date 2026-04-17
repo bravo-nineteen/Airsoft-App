@@ -107,8 +107,6 @@ class EventRepository {
       'event_id': eventId,
       'user_id': user.id,
       'status': 'attending',
-      'confirmed_by_host': false,
-      'confirmed_at': null,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
 
@@ -117,7 +115,7 @@ class EventRepository {
     } else {
       await _client
           .from('event_attendees')
-          .update(payload)
+          .update({'status': 'attending', 'updated_at': DateTime.now().toUtc().toIso8601String()})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
@@ -136,21 +134,17 @@ class EventRepository {
         .eq('user_id', user.id)
         .maybeSingle();
 
-    final Map<String, dynamic> payload = <String, dynamic>{
-      'event_id': eventId,
-      'user_id': user.id,
-      'status': 'cancelled',
-      'confirmed_by_host': false,
-      'confirmed_at': null,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    };
-
     if (existing == null) {
-      await _client.from('event_attendees').insert(payload);
+      await _client.from('event_attendees').insert({
+        'event_id': eventId,
+        'user_id': user.id,
+        'status': 'cancelled',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
     } else {
       await _client
           .from('event_attendees')
-          .update(payload)
+          .update({'status': 'cancelled', 'updated_at': DateTime.now().toUtc().toIso8601String()})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }

@@ -1,5 +1,8 @@
--- 005_admin_moderation.sql
+-- 005_admin_moderation_fixed.sql
 -- Admin roles, moderation, bans, and official content support.
+-- Hardened for reruns and aligned with 004_social_community_events_final.sql.
+
+create extension if not exists pgcrypto;
 
 create table if not exists public.admin_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -22,8 +25,11 @@ create table if not exists public.user_bans (
   check (is_permanent or banned_until is not null)
 );
 
-create index if not exists idx_user_bans_user_id on public.user_bans (user_id, created_at desc);
-create index if not exists idx_user_bans_active on public.user_bans (user_id, revoked_at, banned_until);
+create index if not exists idx_user_bans_user_id
+  on public.user_bans (user_id, created_at desc);
+
+create index if not exists idx_user_bans_active
+  on public.user_bans (user_id, revoked_at, banned_until);
 
 alter table public.events add column if not exists is_official boolean not null default false;
 alter table public.fields add column if not exists is_official boolean not null default false;
@@ -45,6 +51,7 @@ $$;
 
 -- Profiles: app needs authenticated users to browse public profiles.
 drop policy if exists "Users can read own profile" on public.profiles;
+drop policy if exists "Authenticated users can read profiles" on public.profiles;
 create policy "Authenticated users can read profiles"
 on public.profiles
 for select
@@ -56,6 +63,31 @@ drop policy if exists admin_roles_select_admin on public.admin_roles;
 create policy admin_roles_select_admin
 on public.admin_roles
 for select
+to authenticated
+using (public.is_admin(auth.uid()));
+
+drop policy if exists admin_roles_insert_admin on public.admin_roles;
+create policy admin_roles_insert_admin
+on public.admin_roles
+for insert
+to authenticated
+with check (
+  public.is_admin(auth.uid())
+  and created_by = auth.uid()
+);
+
+drop policy if exists admin_roles_update_admin on public.admin_roles;
+create policy admin_roles_update_admin
+on public.admin_roles
+for update
+to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
+drop policy if exists admin_roles_delete_admin on public.admin_roles;
+create policy admin_roles_delete_admin
+on public.admin_roles
+for delete
 to authenticated
 using (public.is_admin(auth.uid()));
 
@@ -81,6 +113,13 @@ for update
 to authenticated
 using (public.is_admin(auth.uid()))
 with check (public.is_admin(auth.uid()));
+
+drop policy if exists user_bans_delete_admin on public.user_bans;
+create policy user_bans_delete_admin
+on public.user_bans
+for delete
+to authenticated
+using (public.is_admin(auth.uid()));
 
 -- Community moderation
 drop policy if exists community_posts_delete_admin on public.community_posts;

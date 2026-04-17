@@ -1,11 +1,3 @@
--- 004_social_community_events.sql
--- Foundation schema for community, social messaging, notifications, and events.
-
-create extension if not exists pgcrypto;
-
--- ------------------------------------------------------------
--- Community
--- ------------------------------------------------------------
 create table if not exists public.community_posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid references auth.users(id) on delete set null,
@@ -139,7 +131,9 @@ create index if not exists idx_direct_messages_unread
   on public.direct_messages (recipient_id, read_at)
   where read_at is null;
 
-create or replace view public.direct_message_threads as
+drop view if exists public.direct_message_threads;
+
+create view public.direct_message_threads as
 with base as (
   select
     dm.sender_id,
@@ -276,11 +270,12 @@ create policy community_posts_insert_owner
   with check (auth.uid() is not null and (author_id = auth.uid() or user_id = auth.uid()));
 
 drop policy if exists community_posts_update_authenticated on public.community_posts;
-create policy community_posts_update_authenticated
+drop policy if exists community_posts_update_own on public.community_posts;
+create policy community_posts_update_own
   on public.community_posts
   for update
-  using (auth.uid() is not null)
-  with check (auth.uid() is not null);
+  using (auth.uid() = author_id or auth.uid() = user_id)
+  with check (auth.uid() = author_id or auth.uid() = user_id);
 
 -- community_comments
 drop policy if exists community_comments_select_public on public.community_comments;
@@ -296,11 +291,12 @@ create policy community_comments_insert_owner
   with check (auth.uid() is not null and (author_id = auth.uid() or user_id = auth.uid()));
 
 drop policy if exists community_comments_update_authenticated on public.community_comments;
-create policy community_comments_update_authenticated
+drop policy if exists community_comments_update_own on public.community_comments;
+create policy community_comments_update_own
   on public.community_comments
   for update
-  using (auth.uid() is not null)
-  with check (auth.uid() is not null);
+  using (auth.uid() = author_id or auth.uid() = user_id)
+  with check (auth.uid() = author_id or auth.uid() = user_id);
 
 -- community_post_likes
 drop policy if exists community_post_likes_select_public on public.community_post_likes;
