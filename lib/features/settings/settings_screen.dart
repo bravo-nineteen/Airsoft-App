@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'account_settings_screen.dart';
 import 'display_settings_screen.dart';
 import 'notification_settings_screen.dart';
@@ -31,6 +32,32 @@ class SettingsScreen extends StatelessWidget {
 
     if (context.mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  Future<void> _confirmAndLogout(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          content: Text(l10n.t('logoutConfirmMessage')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.t('cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.t('logout')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true && context.mounted) {
+      await _logout(context);
     }
   }
 
@@ -65,17 +92,19 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(l10n.settings),
       ),
       body: ListView(
         children: [
-          _sectionTitle('Display'),
+          _sectionTitle(l10n.t('display')),
           _tile(
             context: context,
             icon: Icons.palette_outlined,
-            title: 'Display Settings',
+            title: l10n.t('displayThemeSubtitle'),
             onTap: () => _navigate(
               context,
               DisplaySettingsScreen(
@@ -87,13 +116,38 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
 
-          _sectionTitle('Notifications'),
+          _sectionTitle(l10n.t('notifications')),
           _tile(
             context: context,
             icon: Icons.notifications_outlined,
-            title: 'Notification Settings',
+            title: l10n.t('manageAlerts'),
             onTap: () =>
                 _navigate(context, const NotificationSettingsScreen()),
           ),
+          _sectionTitle(l10n.t('privacy')),
+          _tile(
+            context: context,
+            icon: Icons.privacy_tip_outlined,
+            title: l10n.t('privacyControls'),
+            onTap: () => _navigate(context, const PrivacySettingsScreen()),
+          ),
 
-    [... ELLIPSIZATION ...]
+          _sectionTitle(l10n.t('account')),
+          _tile(
+            context: context,
+            icon: Icons.manage_accounts_outlined,
+            title: l10n.t('viewSignedInEmail'),
+            onTap: () => _navigate(context, const AccountSettingsScreen()),
+          ),
+          _tile(
+            context: context,
+            icon: Icons.logout,
+            title: l10n.t('logout'),
+            onTap: () => _confirmAndLogout(context),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
