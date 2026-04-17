@@ -9,30 +9,44 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  final _passwordController = TextEditingController();
-  final _confirmController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
-  bool _loading = false;
-  String? _error;
-  String? _success;
+  bool _isSaving = false;
+  bool _isSuccess = false;
+  String? _errorMessage;
 
   Future<void> _updatePassword() async {
-    final password = _passwordController.text.trim();
-    final confirm = _confirmController.text.trim();
+    FocusScope.of(context).unfocus();
 
-    if (password.isEmpty || confirm.isEmpty) {
-      setState(() => _error = 'Enter both fields');
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (password.isEmpty || confirmPassword.isEmpty) {
+      setState(() {
+        _errorMessage = 'Enter your new password in both fields.';
+      });
       return;
     }
 
-    if (password != confirm) {
-      setState(() => _error = 'Passwords do not match');
+    if (password.length < 6) {
+      setState(() {
+        _errorMessage = 'Password must be at least 6 characters.';
+      });
+      return;
+    }
+
+    if (password != confirmPassword) {
+      setState(() {
+        _errorMessage = 'Passwords do not match.';
+      });
       return;
     }
 
     setState(() {
-      _loading = true;
-      _error = null;
+      _isSaving = true;
+      _errorMessage = null;
     });
 
     try {
@@ -40,16 +54,36 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         UserAttributes(password: password),
       );
 
+      if (!mounted) return;
+
       setState(() {
-        _success = 'Password updated';
+        _isSaving = false;
+        _isSuccess = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password updated successfully.'),
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isSaving = false;
+        _errorMessage = e.message;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        _error = e.toString();
-      });
-    } finally {
-      setState(() {
-        _loading = false;
+        _isSaving = false;
+        _errorMessage = 'Failed to update password: $e';
       });
     }
   }
@@ -57,49 +91,94 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   void dispose() {
     _passwordController.dispose();
-    _confirmController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'New Password'),
+      appBar: AppBar(
+        title: const Text('Reset Password'),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const SizedBox(height: 8),
+                Text(
+                  'Set a new password for your account.',
+                  style: theme.textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'New Password',
+                    hintText: 'Enter new password',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _confirmPasswordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_isSaving) {
+                      _updatePassword();
+                    }
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm Password',
+                    hintText: 'Re-enter new password',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (_isSuccess)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Password updated. Returning to app...',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _updatePassword,
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Update Password'),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _confirmController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm Password'),
-            ),
-            const SizedBox(height: 20),
-
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-
-            if (_success != null)
-              Text(_success!, style: const TextStyle(color: Colors.green)),
-
-            const SizedBox(height: 10),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _updatePassword,
-                child: _loading
-                    ? const CircularProgressIndicator()
-                    : const Text('Update Password'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
