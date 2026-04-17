@@ -13,10 +13,14 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     this.currentLocale,
     this.onLocaleChanged,
+    this.currentThemeMode,
+    this.onThemeModeChanged,
   });
 
   final Locale? currentLocale;
-  final ValueChanged<Locale>? onLocaleChanged;
+  final ValueChanged<Locale?>? onLocaleChanged;
+  final ThemeMode? currentThemeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -57,6 +61,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (_) => SettingsScreen(
           currentLocale: widget.currentLocale,
           onLocaleChanged: widget.onLocaleChanged,
+          currentThemeMode: widget.currentThemeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
         ),
       ),
     );
@@ -66,11 +72,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+
     return FutureBuilder<ProfileModel?>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
         }
 
         if (snapshot.hasError) {
@@ -88,7 +97,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = snapshot.data;
 
         if (profile == null) {
-          return Center(child: Text(l10n.t('noProfileAvailable')));
+          return Center(
+            child: Text(l10n.t('noProfileAvailable')),
+          );
         }
 
         return ListView(
@@ -103,22 +114,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       initialAvatarUrl: profile.avatarUrl,
                       onAvatarUpdated: (_) => _refresh(),
                     ),
-
                     const SizedBox(height: 12),
-
                     Text(
                       profile.displayName,
                       style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
                     ),
-
                     const SizedBox(height: 4),
-
                     Text(profile.userCode),
-
                     const SizedBox(height: 12),
-
                     Wrap(
                       spacing: 8,
+                      runSpacing: 8,
                       children: [
                         OutlinedButton.icon(
                           onPressed: () => _edit(profile),
@@ -136,18 +143,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             _InfoCard(title: l10n.area, value: profile.area),
             _InfoCard(title: l10n.teamName, value: profile.teamName),
             _InfoCard(title: l10n.loadout, value: profile.loadout),
             _InfoCard(title: l10n.instagram, value: profile.instagram),
             _InfoCard(title: l10n.facebook, value: profile.facebook),
             _InfoCard(title: l10n.youtube, value: profile.youtube),
-
             const SizedBox(height: 12),
-
             Card(
               child: ListTile(
                 leading: const Icon(Icons.mail),
