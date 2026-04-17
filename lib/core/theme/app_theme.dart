@@ -7,8 +7,6 @@ class AppTheme {
   static const Color darkSurface = Color(0xFF17201C);
   static const Color olive = Color(0xFF657153);
   static const Color sand = Color(0xFFD2C29A);
-
-  // NEW: stronger accent for buttons
   static const Color oliveLight = Color(0xFF8A9A6B);
 
   static const Color lightBackground = Color(0xFFF3F1EA);
@@ -27,60 +25,58 @@ class AppTheme {
         secondary: sand,
         surface: darkSurface,
       ),
-
-      // ===== BUTTON FIX START =====
-
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: sand,
           foregroundColor: Colors.black,
           elevation: 4,
           shadowColor: Colors.black54,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       ),
-
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: oliveLight,
           foregroundColor: Colors.black,
           elevation: 5,
           shadowColor: Colors.black87,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       ),
-
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: sand,
           side: BorderSide(color: sand.withOpacity(0.6)),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       ),
-
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: sand,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          minimumSize: const Size(0, 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
-
-      // ===== BUTTON FIX END =====
-
       appBarTheme: const AppBarTheme(
         backgroundColor: darkBackground,
         elevation: 0,
         centerTitle: false,
       ),
-
       cardTheme: CardThemeData(
         color: darkSurface,
         elevation: 0,
@@ -89,7 +85,6 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: darkSurface,
@@ -106,7 +101,6 @@ class AppTheme {
           borderSide: const BorderSide(color: sand),
         ),
       ),
-
       chipTheme: ChipThemeData(
         backgroundColor: darkSurface,
         selectedColor: olive,
@@ -115,9 +109,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
         ),
       ),
-
       textTheme: textTheme,
-
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: darkSurface,
         selectedItemColor: sand,
@@ -140,34 +132,54 @@ class AppTheme {
         secondary: sand,
         surface: lightSurface,
       ),
-
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: olive,
           foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
-
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: olive,
           foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
-
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: olive,
           side: const BorderSide(color: olive),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
-
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: olive,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          minimumSize: const Size(0, 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: lightBackground,
         elevation: 0,
         centerTitle: false,
       ),
-
       cardTheme: CardThemeData(
         color: lightSurface,
         elevation: 0,
@@ -176,7 +188,6 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: lightSurface,
@@ -193,7 +204,6 @@ class AppTheme {
           borderSide: const BorderSide(color: olive),
         ),
       ),
-
       chipTheme: ChipThemeData(
         backgroundColor: lightSurface,
         selectedColor: sand,
@@ -202,9 +212,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
         ),
       ),
-
       textTheme: textTheme,
-
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: lightSurface,
         selectedItemColor: olive,
