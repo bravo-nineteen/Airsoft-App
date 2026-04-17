@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../events/event_details_screen.dart';
+import '../events/event_model.dart';
+import '../events/event_repository.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_details_screen.dart';
@@ -27,10 +30,13 @@ class _CommunityPublicProfileScreenState
     extends State<CommunityPublicProfileScreen>
     with SingleTickerProviderStateMixin {
   final CommunityRepository _repository = CommunityRepository();
+  final EventRepository _eventRepository = EventRepository();
 
   Map<String, dynamic>? _profile;
   List<CommunityPostModel> _recentPosts = <CommunityPostModel>[];
   List<CommunityPostModel> _timelinePosts = <CommunityPostModel>[];
+  List<EventModel> _attendingEvents = <EventModel>[];
+  EventAttendanceStats _eventStats = const EventAttendanceStats();
 
   bool _isLoading = true;
   bool _isSendingFriendRequest = false;
@@ -42,7 +48,8 @@ class _CommunityPublicProfileScreenState
   bool _incomingPending = false;
   bool _canMessage = false;
 
-  late final TabController _tabController = TabController(length: 2, vsync: this);
+  late final TabController _tabController =
+      TabController(length: 3, vsync: this);
 
   @override
   void initState() {
@@ -56,13 +63,18 @@ class _CommunityPublicProfileScreenState
     });
 
     try {
-      final profile = await _repository.fetchProfileByUserId(widget.userId);
-      final recentPosts =
+      final Map<String, dynamic>? profile =
+          await _repository.fetchProfileByUserId(widget.userId);
+      final List<CommunityPostModel> recentPosts =
           await _repository.fetchPostsByAuthor(widget.userId, limit: 5);
-      final timelinePosts =
+      final List<CommunityPostModel> timelinePosts =
           await _repository.fetchProfileTimelinePosts(widget.userId);
-      final friendshipState =
+      final Map<String, dynamic> friendshipState =
           await _repository.fetchFriendshipState(widget.userId);
+      final List<EventModel> attendingEvents =
+          await _eventRepository.getUserAttendingEvents(widget.userId);
+      final EventAttendanceStats eventStats =
+          await _eventRepository.getUserEventStats(widget.userId);
 
       if (!mounted) {
         return;
@@ -72,6 +84,8 @@ class _CommunityPublicProfileScreenState
         _profile = profile;
         _recentPosts = recentPosts;
         _timelinePosts = timelinePosts;
+        _attendingEvents = attendingEvents;
+        _eventStats = eventStats;
         _isSelf = friendshipState['isSelf'] == true;
         _isLoggedIn = friendshipState['isLoggedIn'] == true;
         _areFriends = friendshipState['areFriends'] == true;
@@ -96,7 +110,7 @@ class _CommunityPublicProfileScreenState
   }
 
   String get _displayName {
-    final profileName = (_profile?['call_sign'] ?? '').toString().trim();
+    final String profileName = (_profile?['call_sign'] ?? '').toString().trim();
     if (profileName.isNotEmpty) {
       return profileName;
     }
@@ -104,7 +118,7 @@ class _CommunityPublicProfileScreenState
   }
 
   String? get _avatarUrl {
-    final value = (_profile?['avatar_url'] ?? '').toString().trim();
+    final String value = (_profile?['avatar_url'] ?? '').toString().trim();
     if (value.isEmpty) {
       return null;
     }
@@ -112,7 +126,7 @@ class _CommunityPublicProfileScreenState
   }
 
   String? get _bio {
-    final value = (_profile?['bio'] ?? '').toString().trim();
+    final String value = (_profile?['bio'] ?? '').toString().trim();
     if (value.isEmpty) {
       return null;
     }
@@ -120,12 +134,12 @@ class _CommunityPublicProfileScreenState
   }
 
   bool get _canCreateTimelinePost {
-    final currentUser = Supabase.instance.client.auth.currentUser;
+    final User? currentUser = Supabase.instance.client.auth.currentUser;
     return currentUser != null && currentUser.id == widget.userId;
   }
 
   Widget _buildAvatar(double size) {
-    final avatarUrl = _avatarUrl;
+    final String? avatarUrl = _avatarUrl;
     if (avatarUrl != null) {
       return CircleAvatar(
         radius: size / 2,
@@ -133,7 +147,7 @@ class _CommunityPublicProfileScreenState
       );
     }
 
-    final initial =
+    final String initial =
         _displayName.trim().isEmpty ? '?' : _displayName.trim()[0].toUpperCase();
 
     return CircleAvatar(
@@ -153,6 +167,16 @@ class _CommunityPublicProfileScreenState
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => CommunityPostDetailsScreen(postId: post.id),
+      ),
+    );
+
+    await _load();
+  }
+
+  Future<void> _openEvent(EventModel event) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => EventDetailsScreen(event: event),
       ),
     );
 
@@ -284,7 +308,7 @@ class _CommunityPublicProfileScreenState
     CommunityPostModel post, {
     bool showContextChip = false,
   }) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -389,8 +413,96 @@ class _CommunityPublicProfileScreenState
     );
   }
 
+  Widget _buildEventCard(BuildContext context, EventModel event) {
+    final ThemeData theme = Theme.of(context);
+    final String venue = <String>[
+      if ((event.prefecture ?? '').isNotEmpty) event.prefecture!,
+      if ((event.location ?? '').isNotEmpty) event.location!,
+    ].join(' • ');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openEvent(event),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.event_outlined),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if ((event.eventType ?? '').isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Chip(
+                          label: Text(event.eventType!),
+                        ),
+                      ),
+                    Text(
+                      event.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatDate(event.startsAt),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    if (venue.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        venue,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 6,
+                      children: <Widget>[
+                        Text(
+                          'Going ${event.attendingCount}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Text(
+                          'Attended ${event.attendedCount}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRecentPostsSection(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -420,7 +532,7 @@ class _CommunityPublicProfileScreenState
   }
 
   Widget _buildTimelineSection(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -469,6 +581,47 @@ class _CommunityPublicProfileScreenState
     );
   }
 
+  Widget _buildEventsSection(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Events',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              Chip(label: Text('Attending ${_eventStats.attending}')),
+              Chip(label: Text('Attended ${_eventStats.attended}')),
+              Chip(label: Text('Cancelled ${_eventStats.cancelled}')),
+              Chip(label: Text('No Show ${_eventStats.noShow}')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_attendingEvents.isEmpty)
+            const Text('No upcoming attending events.')
+          else
+            ..._attendingEvents.map(
+              (EventModel event) => _buildEventCard(context, event),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -477,7 +630,7 @@ class _CommunityPublicProfileScreenState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -487,6 +640,7 @@ class _CommunityPublicProfileScreenState
           tabs: const <Tab>[
             Tab(text: 'Posts'),
             Tab(text: 'Timeline'),
+            Tab(text: 'Events'),
           ],
         ),
       ),
@@ -518,7 +672,7 @@ class _CommunityPublicProfileScreenState
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
-                                if (_bio != null) ...[
+                                if (_bio != null) ...<Widget>[
                                   const SizedBox(height: 10),
                                   Text(
                                     _bio!,
@@ -528,7 +682,7 @@ class _CommunityPublicProfileScreenState
                                 ],
                                 const SizedBox(height: 14),
                                 _buildRelationshipActions(theme),
-                                if (!_canMessage && !_isSelf) ...[
+                                if (!_canMessage && !_isSelf) ...<Widget>[
                                   const SizedBox(height: 10),
                                   Text(
                                     'Messaging unlocks once you are friends.',
@@ -543,7 +697,12 @@ class _CommunityPublicProfileScreenState
                                   alignment: WrapAlignment.center,
                                   children: <Widget>[
                                     Chip(label: Text('Posts ${_recentPosts.length}')),
-                                    Chip(label: Text('Timeline ${_timelinePosts.length}')),
+                                    Chip(
+                                      label: Text('Timeline ${_timelinePosts.length}'),
+                                    ),
+                                    Chip(
+                                      label: Text('Events ${_attendingEvents.length}'),
+                                    ),
                                     if (_areFriends) const Chip(label: Text('Friends')),
                                     if (_outgoingPending)
                                       const Chip(label: Text('Request Pending')),
@@ -554,7 +713,7 @@ class _CommunityPublicProfileScreenState
                           ),
                           const SizedBox(height: 16),
                           SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.75,
+                            height: MediaQuery.of(context).size.height * 0.82,
                             child: TabBarView(
                               controller: _tabController,
                               children: <Widget>[
@@ -565,6 +724,10 @@ class _CommunityPublicProfileScreenState
                                 SingleChildScrollView(
                                   physics: const NeverScrollableScrollPhysics(),
                                   child: _buildTimelineSection(context),
+                                ),
+                                SingleChildScrollView(
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  child: _buildEventsSection(context),
                                 ),
                               ],
                             ),
