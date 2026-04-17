@@ -12,6 +12,7 @@ class FieldModel {
     this.imageUrl,
     this.rating,
     this.reviewCount,
+    this.isOfficial = false,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class FieldModel {
   final String? imageUrl;
   final double? rating;
   final int? reviewCount;
+  final bool isOfficial;
 
   factory FieldModel.fromJson(Map<String, dynamic> json) {
     return FieldModel(
@@ -41,6 +43,7 @@ class FieldModel {
       imageUrl: _readNullableString(json['image_url']),
       rating: _readNullableDouble(json['rating']),
       reviewCount: _readNullableInt(json['review_count']),
+      isOfficial: (json['is_official'] as bool?) ?? false,
     );
   }
 

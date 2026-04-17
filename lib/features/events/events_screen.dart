@@ -138,6 +138,12 @@ class _EventsScreenState extends State<EventsScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: <Widget>[
+                              if (event.isOfficial)
+                                _MiniInfoChip(
+                                  icon: Icons.verified,
+                                  label: 'Official',
+                                  color: Colors.blue,
+                                ),
                               _MiniInfoChip(
                                 icon: Icons.event_available,
                                 label: 'Going ${event.attendingCount}',
@@ -191,25 +197,31 @@ class _MiniInfoChip extends StatelessWidget {
   const _MiniInfoChip({
     required this.icon,
     required this.label,
+    this.color,
   });
 
   final IconData icon;
   final String label;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final Color bg = color != null
+        ? color!.withAlpha(30)
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    final Color fg = color ?? Theme.of(context).colorScheme.onSurface;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: bg,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 14),
+          Icon(icon, size: 14, color: fg),
           const SizedBox(width: 4),
-          Text(label),
+          Text(label, style: TextStyle(color: fg)),
         ],
       ),
     );

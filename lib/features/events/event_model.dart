@@ -22,6 +22,7 @@ class EventModel {
     this.attendedCount = 0,
     this.cancelledCount = 0,
     this.noShowCount = 0,
+    this.isOfficial = false,
   });
 
   final String id;
@@ -46,6 +47,7 @@ class EventModel {
   final int attendedCount;
   final int cancelledCount;
   final int noShowCount;
+  final bool isOfficial;
 
   bool get isUserAttending => currentUserAttendanceStatus == 'attending';
   bool get isUserCancelled => currentUserAttendanceStatus == 'cancelled';
@@ -75,6 +77,7 @@ class EventModel {
     int? attendedCount,
     int? cancelledCount,
     int? noShowCount,
+    bool? isOfficial,
   }) {
     return EventModel(
       id: id ?? this.id,
@@ -100,6 +103,7 @@ class EventModel {
       attendedCount: attendedCount ?? this.attendedCount,
       cancelledCount: cancelledCount ?? this.cancelledCount,
       noShowCount: noShowCount ?? this.noShowCount,
+      isOfficial: isOfficial ?? this.isOfficial,
     );
   }
 
@@ -136,6 +140,7 @@ class EventModel {
       attendedCount: _readNullableInt(json['attended_count']) ?? 0,
       cancelledCount: _readNullableInt(json['cancelled_count']) ?? 0,
       noShowCount: _readNullableInt(json['no_show_count']) ?? 0,
+      isOfficial: (json['is_official'] as bool?) ?? false,
     );
   }
 

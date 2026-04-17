@@ -206,7 +206,19 @@ class _FieldsScreenState extends State<FieldsScreen> {
                                       ),
                               ),
                             ),
-                            title: Text(field.name),
+                            title: Row(
+                              children: [
+                                Flexible(child: Text(field.name)),
+                                if (field.isOfficial) ...[
+                                  const SizedBox(width: 6),
+                                  const Tooltip(
+                                    message: 'Official listing',
+                                    child: Icon(Icons.verified,
+                                        size: 16, color: Colors.blue),
+                                  ),
+                                ],
+                              ],
+                            ),
                             subtitle: Text(
                               '${field.locationName}${(field.fieldType ?? '').isNotEmpty ? ' • ${field.fieldType}' : ''}',
                             ),
