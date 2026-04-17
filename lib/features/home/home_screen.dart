@@ -1,200 +1,37 @@
+import 'dart:convert';
+
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
 import '../community/community_repository.dart';
-import '../community/community_user_profile_screen.dart';
-import '../events/event_list_screen.dart';
 
 enum HomeInterestFilter {
   all,
   posts,
   events,
-  fields,
   blog,
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    this.themeMode,
-    this.onThemeChanged,
-    this.locale,
-    this.onLocaleChanged,
-  });
-
-  final ThemeMode? themeMode;
-  final ValueChanged<ThemeMode>? onThemeChanged;
-  final Locale? locale;
-  final ValueChanged<Locale?>? onLocaleChanged;
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
-  String? _currentUserId;
-  String _currentUserFallbackName = 'Profile';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentUser();
-  }
-
-  Future<void> _loadCurrentUser() async {
-    final User? user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      return;
-    }
-
-    String fallbackName = user.email ?? 'Profile';
-
-    try {
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select('call_sign')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      final String? callSign = response?['call_sign']?.toString().trim();
-      if (callSign != null && callSign.isNotEmpty) {
-        fallbackName = callSign;
-      }
-    } catch (_) {}
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _currentUserId = user.id;
-      _currentUserFallbackName = fallbackName;
-    });
-  }
-
-  Widget _buildCurrentTab() {
-    switch (_currentIndex) {
-      case 0:
-        return const _HomeDashboardTab();
-      case 1:
-        return const CommunityListScreen();
-      case 2:
-        return const EventListScreen();
-      case 3:
-        if (_currentUserId == null) {
-          return const _ProfileUnavailableTab();
-        }
-        return CommunityPublicProfileScreen(
-          userId: _currentUserId!,
-          fallbackName: _currentUserFallbackName,
-        );
-      default:
-        return const _HomeDashboardTab();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _buildCurrentTab(),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        destinations: const <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            selectedIcon: Icon(Icons.forum),
-            label: 'Boards',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.event_outlined),
-            selectedIcon: Icon(Icons.event),
-            label: 'Events',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HomeDashboardTab extends StatefulWidget {
-  const _HomeDashboardTab();
-
-  @override
-  State<_HomeDashboardTab> createState() => _HomeDashboardTabState();
-}
-
-class _HomeDashboardTabState extends State<_HomeDashboardTab> {
   final CommunityRepository _communityRepository = CommunityRepository();
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
+  List<AojBlogPost> _blogPosts = <AojBlogPost>[];
+
   bool _isLoading = true;
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
-
-  static const List<_HomeEventItem> _eventItems = <_HomeEventItem>[
-    _HomeEventItem(
-      title: 'Upcoming Skirmish Event',
-      subtitle: 'Weekend game day and meet-up planning',
-      meta: 'Events',
-      icon: Icons.event_available,
-    ),
-    _HomeEventItem(
-      title: 'Training Session',
-      subtitle: 'Loadout prep, movement and team practice',
-      meta: 'Training',
-      icon: Icons.fitness_center,
-    ),
-  ];
-
-  static const List<_HomeFieldUpdateItem> _fieldUpdateItems =
-      <_HomeFieldUpdateItem>[
-    _HomeFieldUpdateItem(
-      title: 'Field Conditions Update',
-      subtitle: 'Recent weather and playable area notes',
-      meta: 'Field update',
-      icon: Icons.terrain,
-    ),
-    _HomeFieldUpdateItem(
-      title: 'Shop and Field Notices',
-      subtitle: 'Check opening hours, stock and maintenance alerts',
-      meta: 'Operations',
-      icon: Icons.storefront,
-    ),
-  ];
-
-  static const List<_HomeBlogItem> _blogItems = <_HomeBlogItem>[
-    _HomeBlogItem(
-      title: 'Airsoft Blog',
-      subtitle: 'Guides, opinion pieces and longer-form reads',
-      meta: 'Blog',
-      icon: Icons.menu_book_outlined,
-    ),
-    _HomeBlogItem(
-      title: 'Featured Articles',
-      subtitle: 'Recommended reading for members and newcomers',
-      meta: 'Featured',
-      icon: Icons.article_outlined,
-    ),
-  ];
 
   @override
   void initState() {
@@ -208,14 +45,21 @@ class _HomeDashboardTabState extends State<_HomeDashboardTab> {
     });
 
     try {
-      final List<CommunityPostModel> posts = await _communityRepository.fetchPosts();
+      final results = await Future.wait<dynamic>([
+        _communityRepository.fetchPosts(),
+        _fetchBlogPosts(),
+      ]);
 
       if (!mounted) {
         return;
       }
 
+      final posts = (results[0] as List<CommunityPostModel>).take(6).toList();
+      final blogPosts = results[1] as List<AojBlogPost>;
+
       setState(() {
-        _latestPosts = posts.take(6).toList();
+        _latestPosts = posts;
+        _blogPosts = blogPosts;
         _isLoading = false;
       });
     } catch (_) {
@@ -227,6 +71,23 @@ class _HomeDashboardTabState extends State<_HomeDashboardTab> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<List<AojBlogPost>> _fetchBlogPosts() async {
+    const endpoint =
+        'https://airsoftonlinejapan.com/wp-json/wp/v2/posts?per_page=5&_embed';
+
+    final response = await http.get(Uri.parse(endpoint));
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load blog posts');
+    }
+
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+
+    return data
+        .map((dynamic item) => AojBlogPost.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   void _openPost(CommunityPostModel post) {
@@ -245,12 +106,45 @@ class _HomeDashboardTabState extends State<_HomeDashboardTab> {
     );
   }
 
-  void _openEvents() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const EventListScreen(),
-      ),
+  void _openEventsPage() {
+    Navigator.of(context).pushNamed('/events');
+  }
+
+  Future<void> _openBlogPost(AojBlogPost post) async {
+    final uri = Uri.tryParse(post.link);
+    if (uri == null) {
+      return;
+    }
+
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
     );
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open blog post'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openBlogIndex() async {
+    final uri = Uri.parse('https://airsoftonlinejapan.com/blog/');
+
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open blog'),
+        ),
+      );
+    }
   }
 
   void _setFilter(HomeInterestFilter filter) {
@@ -267,8 +161,6 @@ class _HomeDashboardTabState extends State<_HomeDashboardTab> {
         return 'Latest Posts';
       case HomeInterestFilter.events:
         return 'Events';
-      case HomeInterestFilter.fields:
-        return 'Field Updates';
       case HomeInterestFilter.blog:
         return 'Airsoft Blog';
     }
@@ -277,184 +169,133 @@ class _HomeDashboardTabState extends State<_HomeDashboardTab> {
   String _filterSubtitle() {
     switch (_selectedFilter) {
       case HomeInterestFilter.all:
-        return 'A live overview of community activity, events and updates.';
+        return 'Community activity, events and blog updates.';
       case HomeInterestFilter.posts:
         return 'Recent discussion and community posts.';
       case HomeInterestFilter.events:
-        return 'Upcoming activity and event-related updates.';
-      case HomeInterestFilter.fields:
-        return 'Field conditions, notices and operational updates.';
+        return 'Go straight to posted events.';
       case HomeInterestFilter.blog:
-        return 'Longer-form articles, guides and featured reads.';
+        return 'Latest articles from Airsoft Online Japan.';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('FieldOps'),
-      ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: _loadHomeData,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                  children: <Widget>[
-                    _HomeHeroCard(
-                      title: _filterTitle(),
-                      subtitle: _filterSubtitle(),
-                      onPrimaryTap: _openBoards,
+    return SafeArea(
+      bottom: false,
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadHomeData,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
+                children: <Widget>[
+                  const _HomeTopBar(),
+                  const SizedBox(height: 16),
+                  _HomeHeroCard(
+                    title: _filterTitle(),
+                    subtitle: _filterSubtitle(),
+                    onPrimaryTap: _openBoards,
+                  ),
+                  const SizedBox(height: 16),
+                  _InterestSelector(
+                    selectedFilter: _selectedFilter,
+                    onSelected: _setFilter,
+                  ),
+                  const SizedBox(height: 18),
+                  if (_selectedFilter == HomeInterestFilter.all ||
+                      _selectedFilter == HomeInterestFilter.posts) ...[
+                    _SectionHeader(
+                      title: 'Recent Posts',
+                      subtitle: 'What members are talking about now',
+                      onViewAll: _openBoards,
                     ),
-                    const SizedBox(height: 16),
-                    _InterestSelector(
-                      selectedFilter: _selectedFilter,
-                      onSelected: _setFilter,
-                    ),
-                    const SizedBox(height: 18),
-                    if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.posts) ...<Widget>[
-                      _SectionHeader(
-                        title: 'Recent Posts',
-                        subtitle: 'What members are talking about now',
-                        onViewAll: _openBoards,
-                      ),
-                      const SizedBox(height: 12),
-                      if (_latestPosts.isEmpty)
-                        const _EmptyBlock(
-                          icon: Icons.forum_outlined,
-                          text: 'No posts yet',
-                        )
-                      else
-                        ..._latestPosts.map((CommunityPostModel post) {
-                          return _HomePostCard(
-                            post: post,
-                            onTap: () => _openPost(post),
-                          );
-                        }),
-                      const SizedBox(height: 20),
-                    ],
-                    if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.events) ...<Widget>[
-                      _SectionHeader(
-                        title: 'Events',
-                        subtitle: 'Upcoming activities and group plans',
-                        onViewAll: _openEvents,
-                      ),
-                      const SizedBox(height: 12),
-                      ..._eventItems.map(
-                        (_HomeEventItem item) => _InfoFeedCard(
-                          title: item.title,
-                          subtitle: item.subtitle,
-                          meta: item.meta,
-                          icon: item.icon,
-                          onTap: _openEvents,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.fields) ...<Widget>[
-                      _SectionHeader(
-                        title: 'Field Updates',
-                        subtitle: 'Conditions, notices and operational info',
-                        onViewAll: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Field updates screen not connected yet'),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      ..._fieldUpdateItems.map(
-                        (_HomeFieldUpdateItem item) => _InfoFeedCard(
-                          title: item.title,
-                          subtitle: item.subtitle,
-                          meta: item.meta,
-                          icon: item.icon,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(item.title)),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (_selectedFilter == HomeInterestFilter.all ||
-                        _selectedFilter == HomeInterestFilter.blog) ...<Widget>[
-                      _SectionHeader(
-                        title: 'Airsoft Blog',
-                        subtitle: 'Guides, opinion and longer reads',
-                        onViewAll: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Blog screen not connected yet'),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      ..._blogItems.map(
-                        (_HomeBlogItem item) => _InfoFeedCard(
-                          title: item.title,
-                          subtitle: item.subtitle,
-                          meta: item.meta,
-                          icon: item.icon,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(item.title)),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    _QuickAccessStrip(
-                      theme: theme,
-                      onBoardsTap: _openBoards,
-                      onEventsTap: _openEvents,
-                      onFieldsTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Field finder screen not connected yet'),
-                          ),
+                    const SizedBox(height: 12),
+                    if (_latestPosts.isEmpty)
+                      const _EmptyBlock(
+                        icon: Icons.forum_outlined,
+                        text: 'No posts yet',
+                      )
+                    else
+                      ..._latestPosts.map((CommunityPostModel post) {
+                        return _HomePostCard(
+                          post: post,
+                          onTap: () => _openPost(post),
                         );
-                      },
-                      onBlogTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Blog screen not connected yet'),
-                          ),
-                        );
-                      },
-                    ),
+                      }),
+                    const SizedBox(height: 20),
                   ],
-                ),
+                  if (_selectedFilter == HomeInterestFilter.all ||
+                      _selectedFilter == HomeInterestFilter.events) ...[
+                    _SectionHeader(
+                      title: 'Events',
+                      subtitle: 'Open your posted events page',
+                      onViewAll: _openEventsPage,
+                    ),
+                    const SizedBox(height: 12),
+                    _InfoFeedCard(
+                      title: 'See Posted Events',
+                      subtitle:
+                          'Open the in-app events page to view current event listings.',
+                      meta: 'Events',
+                      icon: Icons.event_available,
+                      onTap: _openEventsPage,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  if (_selectedFilter == HomeInterestFilter.all ||
+                      _selectedFilter == HomeInterestFilter.blog) ...[
+                    _SectionHeader(
+                      title: 'Airsoft Blog',
+                      subtitle: 'Latest posts from airsoftonlinejapan.com/blog',
+                      onViewAll: _openBlogIndex,
+                    ),
+                    const SizedBox(height: 12),
+                    if (_blogPosts.isEmpty)
+                      const _EmptyBlock(
+                        icon: Icons.menu_book_outlined,
+                        text: 'No blog posts found',
+                      )
+                    else
+                      ..._blogPosts.map(
+                        (AojBlogPost post) => _BlogPostCard(
+                          post: post,
+                          onTap: () => _openBlogPost(post),
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 8),
+                  _QuickAccessStrip(
+                    onBoardsTap: _openBoards,
+                    onEventsTap: _openEventsPage,
+                    onBlogTap: _openBlogIndex,
+                  ),
+                ],
               ),
-      ),
+            ),
     );
   }
 }
 
-class _ProfileUnavailableTab extends StatelessWidget {
-  const _ProfileUnavailableTab();
+class _HomeTopBar extends StatelessWidget {
+  const _HomeTopBar();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-      ),
-      body: const Center(
-        child: Text('Please log in to view your profile.'),
-      ),
+    final theme = Theme.of(context);
+
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            'FieldOps',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -472,7 +313,7 @@ class _HomeHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -547,11 +388,6 @@ class _InterestSelector extends StatelessWidget {
             onTap: () => onSelected(HomeInterestFilter.events),
           ),
           _InterestChip(
-            label: 'Fields',
-            selected: selectedFilter == HomeInterestFilter.fields,
-            onTap: () => onSelected(HomeInterestFilter.fields),
-          ),
-          _InterestChip(
             label: 'Blog',
             selected: selectedFilter == HomeInterestFilter.blog,
             onTap: () => onSelected(HomeInterestFilter.blog),
@@ -599,7 +435,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final theme = Theme.of(context);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,9 +478,9 @@ class _HomePostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final String? imageUrl = post.primaryImageUrl;
-    final bool hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+    final theme = Theme.of(context);
+    final imageUrl = post.primaryImageUrl;
+    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -784,6 +620,131 @@ class _HomePostCard extends StatelessWidget {
   }
 }
 
+class _BlogPostCard extends StatelessWidget {
+  const _BlogPostCard({
+    required this.post,
+    required this.onTap,
+  });
+
+  final AojBlogPost post;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasImage = post.imageUrl != null && post.imageUrl!.trim().isNotEmpty;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: theme.dividerColor.withOpacity(0.14),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 84,
+                  height: 84,
+                  child: hasImage
+                      ? ExtendedImage.network(
+                          post.imageUrl!,
+                          fit: BoxFit.cover,
+                          cache: true,
+                          loadStateChanged: (state) {
+                            if (state.extendedImageLoadState ==
+                                LoadState.completed) {
+                              return ExtendedRawImage(
+                                image: state.extendedImageInfo?.image,
+                                fit: BoxFit.cover,
+                              );
+                            }
+
+                            if (state.extendedImageLoadState ==
+                                LoadState.failed) {
+                              return Container(
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.menu_book_outlined),
+                              );
+                            }
+
+                            return Container(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.menu_book_outlined,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _MiniBadge(
+                      text: 'Blog',
+                      color: theme.colorScheme.tertiaryContainer,
+                      textColor: theme.colorScheme.onTertiaryContainer,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      post.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      post.excerpt,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    _MetaText(
+                      icon: Icons.open_in_new,
+                      text: 'Open article',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _InfoFeedCard extends StatelessWidget {
   const _InfoFeedCard({
     required this.title,
@@ -801,7 +762,7 @@ class _InfoFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final theme = Theme.of(context);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -865,21 +826,19 @@ class _InfoFeedCard extends StatelessWidget {
 
 class _QuickAccessStrip extends StatelessWidget {
   const _QuickAccessStrip({
-    required this.theme,
     required this.onBoardsTap,
     required this.onEventsTap,
-    required this.onFieldsTap,
     required this.onBlogTap,
   });
 
-  final ThemeData theme;
   final VoidCallback onBoardsTap;
   final VoidCallback onEventsTap;
-  final VoidCallback onFieldsTap;
   final VoidCallback onBlogTap;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -901,14 +860,6 @@ class _QuickAccessStrip extends StatelessWidget {
               icon: Icons.event_outlined,
               label: 'Events',
               onTap: onEventsTap,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _QuickActionButton(
-              icon: Icons.map_outlined,
-              label: 'Fields',
-              onTap: onFieldsTap,
             ),
           ),
           const SizedBox(width: 8),
@@ -938,7 +889,7 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final theme = Theme.of(context);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -1013,7 +964,12 @@ class _MetaText extends StatelessWidget {
       children: <Widget>[
         Icon(icon, size: 14),
         const SizedBox(width: 4),
-        Text(text),
+        Expanded(
+          child: Text(
+            text,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -1030,7 +986,7 @@ class _EmptyBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final theme = Theme.of(context);
 
     return Container(
       height: 112,
@@ -1051,44 +1007,53 @@ class _EmptyBlock extends StatelessWidget {
   }
 }
 
-class _HomeEventItem {
-  const _HomeEventItem({
+class AojBlogPost {
+  AojBlogPost({
     required this.title,
-    required this.subtitle,
-    required this.meta,
-    required this.icon,
+    required this.excerpt,
+    required this.link,
+    required this.imageUrl,
   });
 
   final String title;
-  final String subtitle;
-  final String meta;
-  final IconData icon;
-}
+  final String excerpt;
+  final String link;
+  final String? imageUrl;
 
-class _HomeFieldUpdateItem {
-  const _HomeFieldUpdateItem({
-    required this.title,
-    required this.subtitle,
-    required this.meta,
-    required this.icon,
-  });
+  factory AojBlogPost.fromJson(Map<String, dynamic> json) {
+    final embedded = json['_embedded'] as Map<String, dynamic>?;
+    String? imageUrl;
 
-  final String title;
-  final String subtitle;
-  final String meta;
-  final IconData icon;
-}
+    if (embedded != null && embedded['wp:featuredmedia'] is List) {
+      final media = embedded['wp:featuredmedia'] as List<dynamic>;
+      if (media.isNotEmpty && media.first is Map<String, dynamic>) {
+        final mediaItem = media.first as Map<String, dynamic>;
+        imageUrl = mediaItem['source_url'] as String?;
+      }
+    }
 
-class _HomeBlogItem {
-  const _HomeBlogItem({
-    required this.title,
-    required this.subtitle,
-    required this.meta,
-    required this.icon,
-  });
+    return AojBlogPost(
+      title: _stripHtml(
+        ((json['title'] as Map<String, dynamic>?)?['rendered'] as String?) ?? '',
+      ),
+      excerpt: _stripHtml(
+        ((json['excerpt'] as Map<String, dynamic>?)?['rendered'] as String?) ?? '',
+      ).trim(),
+      link: (json['link'] as String?) ?? '',
+      imageUrl: imageUrl,
+    );
+  }
 
-  final String title;
-  final String subtitle;
-  final String meta;
-  final IconData icon;
+  static String _stripHtml(String value) {
+    return value
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&#8217;', '\'')
+        .replaceAll('&#8211;', '-')
+        .replaceAll('&#038;', '&')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
 }
