@@ -34,30 +34,48 @@ class DisplaySettingsScreen extends StatelessWidget {
             title: Text(l10n.t('system')),
             value: ThemeMode.system,
             groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged,
+            onChanged: onThemeModeChanged == null
+                ? null
+                : (value) {
+                    if (value != null) {
+                      onThemeModeChanged!(value);
+                    }
+                  },
           ),
           RadioListTile<ThemeMode>(
             title: Text(l10n.t('lightMode')),
             value: ThemeMode.light,
             groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged,
+            onChanged: onThemeModeChanged == null
+                ? null
+                : (value) {
+                    if (value != null) {
+                      onThemeModeChanged!(value);
+                    }
+                  },
           ),
           RadioListTile<ThemeMode>(
             title: Text(l10n.t('darkMode')),
             value: ThemeMode.dark,
             groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged,
+            onChanged: onThemeModeChanged == null
+                ? null
+                : (value) {
+                    if (value != null) {
+                      onThemeModeChanged!(value);
+                    }
+                  },
           ),
           const Divider(height: 1),
           ListTile(
             title: Text(l10n.t('language')),
             trailing: DropdownButton<String?>(
               value: selectedLanguageCode,
-              onChanged: (languageCode) {
-                onLocaleChanged?.call(
-                  languageCode == null ? null : Locale(languageCode),
-                );
-              },
+              onChanged: onLocaleChanged == null
+                  ? null
+                  : (languageCode) => onLocaleChanged!(
+                        languageCode == null ? null : Locale(languageCode),
+                      ),
               items: [
                 DropdownMenuItem<String?>(
                   value: null,
