@@ -3,9 +3,15 @@ import 'package:flutter/material.dart';
 import 'app/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
+import 'features/home/home_screen.dart';
 
 class AirsoftApp extends StatefulWidget {
-  const AirsoftApp({super.key});
+  const AirsoftApp({
+    super.key,
+    required this.navigatorKey,
+  });
+
+  final GlobalKey<NavigatorState> navigatorKey;
 
   @override
   State<AirsoftApp> createState() => _AirsoftAppState();
@@ -13,34 +19,39 @@ class AirsoftApp extends StatefulWidget {
 
 class _AirsoftAppState extends State<AirsoftApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  Locale? _locale;
 
-  void _setThemeMode(ThemeMode mode) {
+  void updateThemeMode(ThemeMode themeMode) {
     setState(() {
-      _themeMode = mode;
+      _themeMode = themeMode;
+    });
+  }
+
+  void updateLocale(Locale? locale) {
+    setState(() {
+      _locale = locale;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: widget.navigatorKey,
+      debugShowCheckedModeBanner: false,
       title: 'FieldOps',
-
-      // FIX 1: Call theme functions properly
       theme: AppTheme.lightTheme(),
       darkTheme: AppTheme.darkTheme(),
-
-      // FIX 2: themeMode belongs here (MaterialApp, not HomeScreen)
       themeMode: _themeMode,
-
-      // FIX 3: Localization fix (no static delegates in your file)
-      localizationsDelegates: AppLocalizations.delegates,
+      locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
-
-      debugShowCheckedModeBanner: false,
-
-      // FIX 4: HomeScreen no longer takes themeMode
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        DefaultWidgetsLocalizations.delegate,
+        DefaultMaterialLocalizations.delegate,
+        DefaultCupertinoLocalizations.delegate,
+      ],
       home: AuthGate(
-        onThemeChanged: _setThemeMode,
+        homeBuilder: () => const HomeScreen(),
       ),
     );
   }
