@@ -393,7 +393,8 @@ drop policy if exists notifications_insert_own on public.notifications;
 create policy notifications_insert_own
   on public.notifications
   for insert
-  with check (auth.uid() = user_id);
+  to authenticated
+  with check (auth.uid() is not null);
 
 drop policy if exists notifications_update_own on public.notifications;
 create policy notifications_update_own

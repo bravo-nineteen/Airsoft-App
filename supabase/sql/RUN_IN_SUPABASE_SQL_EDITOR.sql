@@ -281,7 +281,7 @@ create policy direct_messages_update_recipient on public.direct_messages for upd
 drop policy if exists notifications_select_own on public.notifications;
 create policy notifications_select_own on public.notifications for select using (auth.uid() = user_id);
 drop policy if exists notifications_insert_own on public.notifications;
-create policy notifications_insert_own on public.notifications for insert with check (auth.uid() = user_id);
+create policy notifications_insert_own on public.notifications for insert to authenticated with check (auth.uid() is not null);
 drop policy if exists notifications_update_own on public.notifications;
 create policy notifications_update_own on public.notifications for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
