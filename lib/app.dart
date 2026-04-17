@@ -3,15 +3,9 @@ import 'package:flutter/material.dart';
 import 'app/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
-import 'features/home/home_screen.dart';
 
 class AirsoftApp extends StatefulWidget {
-  const AirsoftApp({
-    super.key,
-    required this.navigatorKey,
-  });
-
-  final GlobalKey<NavigatorState> navigatorKey;
+  const AirsoftApp({super.key});
 
   @override
   State<AirsoftApp> createState() => _AirsoftAppState();
@@ -19,39 +13,34 @@ class AirsoftApp extends StatefulWidget {
 
 class _AirsoftAppState extends State<AirsoftApp> {
   ThemeMode _themeMode = ThemeMode.system;
-  Locale? _locale;
 
-  void updateThemeMode(ThemeMode themeMode) {
+  void _setThemeMode(ThemeMode mode) {
     setState(() {
-      _themeMode = themeMode;
-    });
-  }
-
-  void updateLocale(Locale? locale) {
-    setState(() {
-      _locale = locale;
+      _themeMode = mode;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: widget.navigatorKey,
-      debugShowCheckedModeBanner: false,
       title: 'FieldOps',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+
+      // FIX 1: Call theme functions properly
+      theme: AppTheme.lightTheme(),
+      darkTheme: AppTheme.darkTheme(),
+
+      // FIX 2: themeMode belongs here (MaterialApp, not HomeScreen)
       themeMode: _themeMode,
-      locale: _locale,
+
+      // FIX 3: Localization fix (no static delegates in your file)
+      localizationsDelegates: AppLocalizations.delegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+
+      debugShowCheckedModeBanner: false,
+
+      // FIX 4: HomeScreen no longer takes themeMode
       home: AuthGate(
-        homeBuilder: () => HomeScreen(
-          themeMode: _themeMode,
-          onThemeChanged: updateThemeMode,
-          locale: _locale,
-          onLocaleChanged: updateLocale,
-        ),
+        onThemeChanged: _setThemeMode,
       ),
     );
   }
