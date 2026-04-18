@@ -1,16 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
 
 import 'field_model.dart';
 
 class FieldDetailsScreen extends StatelessWidget {
-  const FieldDetailsScreen({
-    super.key,
-    required this.field,
-  });
+  const FieldDetailsScreen({super.key, required this.field});
 
   final FieldModel field;
+
+  Future<void> _openInMaps(BuildContext context) async {
+    final String label = field.name.trim().isEmpty ? 'Field' : field.name;
+    final String locationQuery = field.fullLocation.trim().isNotEmpty
+        ? '${field.fullLocation} ($label)'
+        : label;
+
+    final Uri primaryGeo = Uri.parse(
+      'geo:${field.latitude},${field.longitude}?q=${Uri.encodeComponent(locationQuery)}',
+    );
+    final Uri fallbackGoogle = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${field.latitude},${field.longitude}',
+    );
+    final Uri fallbackApple = Uri.parse(
+      'https://maps.apple.com/?ll=${field.latitude},${field.longitude}&q=${Uri.encodeComponent(locationQuery)}',
+    );
+
+    final bool openedGeo = await launchUrl(
+      primaryGeo,
+      mode: LaunchMode.externalApplication,
+    );
+    if (openedGeo) {
+      return;
+    }
+
+    final bool openedGoogle = await launchUrl(
+      fallbackGoogle,
+      mode: LaunchMode.externalApplication,
+    );
+    if (openedGoogle) {
+      return;
+    }
+
+    final bool openedApple = await launchUrl(
+      fallbackApple,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!openedApple && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open map app.')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +77,8 @@ class FieldDetailsScreen extends StatelessWidget {
                   ? Image.network(
                       field.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _FieldImagePlaceholder(
-                        name: field.name,
-                      ),
+                      errorBuilder: (_, _, _) =>
+                          _FieldImagePlaceholder(name: field.name),
                     )
                   : _FieldImagePlaceholder(name: field.name),
             ),
@@ -54,6 +95,12 @@ class FieldDetailsScreen extends StatelessWidget {
               Text(
                 field.fullLocation,
                 style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: () => _openInMaps(context),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Open in Maps'),
               ),
               if (secondaryLine.isNotEmpty) ...[
                 const SizedBox(height: 4),
@@ -93,6 +140,8 @@ class FieldDetailsScreen extends StatelessWidget {
                   leading: const Icon(Icons.place),
                   title: Text(field.locationName),
                   subtitle: Text(field.fullLocation),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => _openInMaps(context),
                 ),
               ),
               Card(
@@ -100,6 +149,8 @@ class FieldDetailsScreen extends StatelessWidget {
                   leading: const Icon(Icons.pin_drop),
                   title: Text(l10n.t('coordinates')),
                   subtitle: Text('${field.latitude}, ${field.longitude}'),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => _openInMaps(context),
                 ),
               ),
             ],
@@ -132,9 +183,7 @@ class FieldDetailsScreen extends StatelessWidget {
 }
 
 class _FieldImagePlaceholder extends StatelessWidget {
-  const _FieldImagePlaceholder({
-    required this.name,
-  });
+  const _FieldImagePlaceholder({required this.name});
 
   final String name;
 
@@ -148,10 +197,7 @@ class _FieldImagePlaceholder extends StatelessWidget {
         children: [
           const Icon(Icons.terrain, size: 56),
           const SizedBox(height: 8),
-          Text(
-            name,
-            textAlign: TextAlign.center,
-          ),
+          Text(name, textAlign: TextAlign.center),
         ],
       ),
     );
@@ -159,9 +205,7 @@ class _FieldImagePlaceholder extends StatelessWidget {
 }
 
 class _RatingStars extends StatelessWidget {
-  const _RatingStars({
-    required this.rating,
-  });
+  const _RatingStars({required this.rating});
 
   final double rating;
 
@@ -173,14 +217,10 @@ class _RatingStars extends StatelessWidget {
         final icon = rating >= starValue
             ? Icons.star
             : rating >= starValue - 0.5
-                ? Icons.star_half
-                : Icons.star_border;
+            ? Icons.star_half
+            : Icons.star_border;
 
-        return Icon(
-          icon,
-          size: 18,
-          color: Colors.amber,
-        );
+        return Icon(icon, size: 18, color: Colors.amber);
       }),
     );
   }
