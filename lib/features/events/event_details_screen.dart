@@ -38,11 +38,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     try {
       final EventModel event = await _repository.getEventById(widget.event.id);
-      List<EventAttendanceRecord> attendees = <EventAttendanceRecord>[];
-
-      if (_isCurrentUserHost(event)) {
-        attendees = await _repository.getEventAttendeesForHost(event.id);
-      }
+      final List<EventAttendanceRecord> attendees = await _repository
+          .getEventAttendeesForHost(event.id);
 
       if (!mounted) {
         return;
@@ -465,6 +462,61 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  Widget _buildAttendeesSection() {
+    final List<EventAttendanceRecord> attending = _attendees
+        .where((EventAttendanceRecord attendee) => attendee.status == 'attending')
+        .toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Attendees',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'People going: ${attending.length}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            if (attending.isEmpty)
+              const Text('No attendees yet.')
+            else
+              ...attending.map((EventAttendanceRecord attendee) {
+                final String displayName =
+                    attendee.displayName?.trim().isNotEmpty == true
+                    ? attendee.displayName!
+                    : attendee.userId;
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundImage:
+                        attendee.avatarUrl != null &&
+                            attendee.avatarUrl!.trim().isNotEmpty
+                        ? NetworkImage(attendee.avatarUrl!)
+                        : null,
+                    child:
+                        attendee.avatarUrl == null ||
+                            attendee.avatarUrl!.trim().isEmpty
+                        ? Text(displayName.substring(0, 1).toUpperCase())
+                        : null,
+                  ),
+                  title: Text(displayName),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _readableStatus(String status) {
     switch (status) {
       case 'attending':
@@ -543,6 +595,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildAttendanceActions(),
+                    const SizedBox(height: 12),
+                    _buildAttendeesSection(),
                     const SizedBox(height: 12),
                     _DetailTile(
                       icon: Icons.schedule,
