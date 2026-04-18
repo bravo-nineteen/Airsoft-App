@@ -73,7 +73,7 @@ class EventRepository {
       throw Exception('Description is required.');
     }
 
-    await _client.from('events').insert({
+    final Map<String, dynamic> payload = <String, dynamic>{
       'title': trimmedTitle,
       'description': trimmedDescription,
       'starts_at': startsAt.toUtc().toIso8601String(),
@@ -90,7 +90,17 @@ class EventRepository {
       'max_players': maxPlayers,
       'host_user_id': user.id,
       'is_official': isOfficial,
-    });
+    };
+
+    try {
+      await _client.from('events').insert(payload);
+    } on PostgrestException catch (error) {
+      if (!_isMissingColumnError(error, 'is_official')) {
+        rethrow;
+      }
+      payload.remove('is_official');
+      await _client.from('events').insert(payload);
+    }
   }
 
   Future<void> updateEvent({
@@ -122,26 +132,33 @@ class EventRepository {
       throw Exception('Description is required.');
     }
 
-    await _client
-        .from('events')
-        .update({
-          'title': trimmedTitle,
-          'description': trimmedDescription,
-          'starts_at': startsAt.toUtc().toIso8601String(),
-          'ends_at': endsAt.toUtc().toIso8601String(),
-          'location': _nullIfEmpty(location),
-          'prefecture': _nullIfEmpty(prefecture),
-          'event_type': _nullIfEmpty(eventType),
-          'language': _nullIfEmpty(language),
-          'skill_level': _nullIfEmpty(skillLevel),
-          'organizer_name': _nullIfEmpty(organizerName),
-          'contact_info': _nullIfEmpty(contactInfo),
-          'notes': _nullIfEmpty(notes),
-          'price_yen': priceYen,
-          'max_players': maxPlayers,
-          'is_official': isOfficial,
-        })
-        .eq('id', eventId);
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'title': trimmedTitle,
+      'description': trimmedDescription,
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'ends_at': endsAt.toUtc().toIso8601String(),
+      'location': _nullIfEmpty(location),
+      'prefecture': _nullIfEmpty(prefecture),
+      'event_type': _nullIfEmpty(eventType),
+      'language': _nullIfEmpty(language),
+      'skill_level': _nullIfEmpty(skillLevel),
+      'organizer_name': _nullIfEmpty(organizerName),
+      'contact_info': _nullIfEmpty(contactInfo),
+      'notes': _nullIfEmpty(notes),
+      'price_yen': priceYen,
+      'max_players': maxPlayers,
+      'is_official': isOfficial,
+    };
+
+    try {
+      await _client.from('events').update(payload).eq('id', eventId);
+    } on PostgrestException catch (error) {
+      if (!_isMissingColumnError(error, 'is_official')) {
+        rethrow;
+      }
+      payload.remove('is_official');
+      await _client.from('events').update(payload).eq('id', eventId);
+    }
   }
 
   Future<void> deleteEvent(String eventId) async {
@@ -170,7 +187,6 @@ class EventRepository {
       'event_id': eventId,
       'user_id': user.id,
       'status': 'attending',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
 
     if (existing == null) {
@@ -178,10 +194,7 @@ class EventRepository {
     } else {
       await _client
           .from('event_attendees')
-          .update({
-            'status': 'attending',
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update({'status': 'attending'})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
@@ -205,15 +218,11 @@ class EventRepository {
         'event_id': eventId,
         'user_id': user.id,
         'status': 'cancelled',
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
     } else {
       await _client
           .from('event_attendees')
-          .update({
-            'status': 'cancelled',
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update({'status': 'cancelled'})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
@@ -277,6 +286,21 @@ class EventRepository {
             .toLowerCase();
     return summary.contains('confirmed_at') &&
         summary.contains('event_attendees');
+  }
+
+  bool _isMissingColumnError(PostgrestException error, String columnName) {
+    // PGRST204/PostgREST and 42703/PostgreSQL are the missing-column cases.
+    if (error.code != 'PGRST204' && error.code != '42703') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    final String needle = columnName.toLowerCase();
+    return summary.contains("column '$needle'") ||
+        summary.contains('"$needle"') ||
+        summary.contains('column $needle');
   }
 
   Future<List<EventAttendanceRecord>> getEventAttendeesForHost(

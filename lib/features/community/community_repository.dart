@@ -215,7 +215,7 @@ class CommunityRepository {
     final response = await _client
         .from('community_comments')
         .select(
-          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count',
+          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count, parent_comment_id',
         )
         .eq('post_id', postId)
         .eq('is_deleted', false)
@@ -365,6 +365,7 @@ class CommunityRepository {
   Future<void> addComment({
     required String postId,
     required String message,
+    String? parentCommentId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -389,6 +390,7 @@ class CommunityRepository {
       'is_deleted': false,
       'is_locked': false,
       'updated_at': now,
+      'parent_comment_id': _nullIfEmpty(parentCommentId),
     };
 
     await _client.from('community_comments').insert(payload);
@@ -398,6 +400,14 @@ class CommunityRepository {
         .from('community_posts')
         .update({'comment_count': post.commentCount + 1, 'updated_at': now})
         .eq('id', postId);
+  }
+
+  String? _nullIfEmpty(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final String trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   Future<void> updatePost({

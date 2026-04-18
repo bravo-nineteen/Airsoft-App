@@ -29,6 +29,8 @@ class _CommunityPostDetailsScreenState
   bool _isSendingComment = false;
   bool _isTogglingPostLike = false;
   final Set<String> _togglingCommentLikes = <String>{};
+  String? _replyToCommentId;
+  String? _replyToCommentAuthor;
 
   String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -46,6 +48,25 @@ class _CommunityPostDetailsScreenState
       return false;
     }
     return comment.authorId == currentUserId;
+  }
+
+  List<CommunityCommentModel> get _topLevelComments {
+    return _comments
+        .where(
+          (CommunityCommentModel comment) =>
+              comment.parentCommentId == null ||
+              comment.parentCommentId!.trim().isEmpty,
+        )
+        .toList();
+  }
+
+  List<CommunityCommentModel> _childRepliesFor(String parentCommentId) {
+    return _comments
+        .where((CommunityCommentModel comment) {
+          final String? parentId = comment.parentCommentId?.trim();
+          return parentId != null && parentId == parentCommentId;
+        })
+        .toList();
   }
 
   @override
@@ -110,10 +131,24 @@ class _CommunityPostDetailsScreenState
     });
 
     try {
-      await _repository.addComment(postId: _post!.id, message: message);
+      await _repository.addComment(
+        postId: _post!.id,
+        message: message,
+        parentCommentId: _replyToCommentId,
+      );
+      final List<CommunityCommentModel> comments = await _repository
+          .fetchComments(widget.postId);
 
       _commentController.clear();
-      await _load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _comments = comments;
+        _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
+        _replyToCommentId = null;
+        _replyToCommentAuthor = null;
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -137,17 +172,26 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final bool nextLiked = !post.isLikedByMe;
+    final int nextCount = post.likeCount + (nextLiked ? 1 : -1);
+
     setState(() {
       _isTogglingPostLike = true;
+      _post = post.copyWith(
+        isLikedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
     });
 
     try {
       await _repository.toggleLikePost(post.id);
-      await _load();
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _post = post;
+      });
 
       ScaffoldMessenger.of(
         context,
@@ -166,17 +210,33 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final int index = _comments.indexWhere(
+      (CommunityCommentModel comment) => comment.id == commentId,
+    );
+    if (index == -1) {
+      return;
+    }
+    final CommunityCommentModel original = _comments[index];
+    final bool nextLiked = !original.likedByMe;
+    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+
     setState(() {
       _togglingCommentLikes.add(commentId);
+      _comments[index] = original.copyWith(
+        likedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
     });
 
     try {
       await _repository.toggleLikeComment(commentId);
-      await _load();
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _comments[index] = original;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update comment like: $error')),
@@ -400,6 +460,20 @@ class _CommunityPostDetailsScreenState
     ).showSnackBar(SnackBar(content: Text(successMessage)));
   }
 
+  void _setReplyTarget(CommunityCommentModel comment) {
+    setState(() {
+      _replyToCommentId = comment.id;
+      _replyToCommentAuthor = comment.authorName;
+    });
+  }
+
+  void _clearReplyTarget() {
+    setState(() {
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
+    });
+  }
+
   void _openProfile(String? userId, String fallbackName) {
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(
@@ -472,6 +546,107 @@ class _CommunityPostDetailsScreenState
 
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
     return CircleAvatar(radius: radius, child: Text(initial));
+  }
+
+  Widget _buildCommentCard(
+    BuildContext context,
+    ThemeData theme,
+    CommunityCommentModel comment, {
+    bool isReply = false,
+  }) {
+    final bool isBusy = _togglingCommentLikes.contains(comment.id);
+    final bool isOwner = _isCommentOwner(comment);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            onTap: () => _openProfile(comment.authorId, comment.authorName),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Row(
+                children: <Widget>[
+                  _buildAvatar(
+                    name: comment.authorName,
+                    avatarUrl: comment.authorAvatarUrl,
+                    radius: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          comment.authorName,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          _formatTime(comment.createdAt),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isOwner)
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _editComment(comment);
+                        } else if (value == 'delete') {
+                          _deleteComment(comment);
+                        }
+                      },
+                      itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  IconButton(
+                    tooltip: 'Copy comment',
+                    onPressed: () =>
+                        _copyToClipboard(comment.message, 'Comment copied'),
+                    icon: const Icon(Icons.copy_outlined),
+                  ),
+                  IconButton(
+                    onPressed: isBusy ? null : () => _toggleCommentLike(comment.id),
+                    icon: Icon(
+                      comment.likedByMe ? Icons.favorite : Icons.favorite_border,
+                    ),
+                  ),
+                  Text('${comment.likeCount}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SelectableText(comment.message, style: theme.textTheme.bodyMedium),
+          if (!isReply) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _setReplyTarget(comment),
+                icon: const Icon(Icons.reply_outlined),
+                label: const Text('Reply'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -678,13 +853,43 @@ class _CommunityPostDetailsScreenState
                       ),
                       child: Column(
                         children: <Widget>[
+                          if (_replyToCommentId != null)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      'Replying to ${_replyToCommentAuthor ?? 'comment'}',
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _clearReplyTarget,
+                                    icon: const Icon(Icons.close, size: 18),
+                                    tooltip: 'Cancel reply',
+                                  ),
+                                ],
+                              ),
+                            ),
                           TextField(
                             controller: _commentController,
                             enableInteractiveSelection: true,
                             minLines: 3,
                             maxLines: 6,
                             decoration: InputDecoration(
-                              hintText: 'Write a comment',
+                              hintText: _replyToCommentId == null
+                                  ? 'Write a comment'
+                                  : 'Write a reply',
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -723,110 +928,31 @@ class _CommunityPostDetailsScreenState
                         child: const Text('No comments yet.'),
                       )
                     else
-                      ..._comments.map((CommunityCommentModel comment) {
-                        final isBusy = _togglingCommentLikes.contains(
-                          comment.id,
-                        );
-                        final bool isOwner = _isCommentOwner(comment);
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              InkWell(
-                                onTap: () => _openProfile(
-                                  comment.authorId,
-                                  comment.authorName,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(2),
-                                  child: Row(
-                                    children: <Widget>[
-                                      _buildAvatar(
-                                        name: comment.authorName,
-                                        avatarUrl: comment.authorAvatarUrl,
-                                        radius: 18,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: <Widget>[
-                                            Text(
-                                              comment.authorName,
-                                              style: theme.textTheme.titleSmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
+                      ..._topLevelComments.map((CommunityCommentModel comment) {
+                        final List<CommunityCommentModel> replies =
+                            _childRepliesFor(comment.id);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            _buildCommentCard(context, theme, comment),
+                            if (replies.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 22),
+                                child: Column(
+                                  children: replies
+                                      .map(
+                                        (CommunityCommentModel reply) =>
+                                            _buildCommentCard(
+                                              context,
+                                              theme,
+                                              reply,
+                                              isReply: true,
                                             ),
-                                            Text(
-                                              _formatTime(comment.createdAt),
-                                              style: theme.textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (isOwner)
-                                        PopupMenuButton<String>(
-                                          onSelected: (value) {
-                                            if (value == 'edit') {
-                                              _editComment(comment);
-                                            } else if (value == 'delete') {
-                                              _deleteComment(comment);
-                                            }
-                                          },
-                                          itemBuilder: (context) =>
-                                              const <PopupMenuEntry<String>>[
-                                                PopupMenuItem<String>(
-                                                  value: 'edit',
-                                                  child: Text('Edit'),
-                                                ),
-                                                PopupMenuItem<String>(
-                                                  value: 'delete',
-                                                  child: Text('Delete'),
-                                                ),
-                                              ],
-                                        ),
-                                      IconButton(
-                                        tooltip: 'Copy comment',
-                                        onPressed: () => _copyToClipboard(
-                                          comment.message,
-                                          'Comment copied',
-                                        ),
-                                        icon: const Icon(Icons.copy_outlined),
-                                      ),
-                                      IconButton(
-                                        onPressed: isBusy
-                                            ? null
-                                            : () => _toggleCommentLike(
-                                                comment.id,
-                                              ),
-                                        icon: Icon(
-                                          comment.likedByMe
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                        ),
-                                      ),
-                                      Text('${comment.likeCount}'),
-                                    ],
-                                  ),
+                                      )
+                                      .toList(),
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              SelectableText(
-                                comment.message,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
+                          ],
                         );
                       }),
                   ],

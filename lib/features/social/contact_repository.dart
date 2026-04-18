@@ -9,17 +9,39 @@ class ContactRepository {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not logged in.');
 
-    final response = await _client
+    final List<dynamic> response = await _client
         .from('user_contacts')
-        .select(
-          'id, requester_id, addressee_id, status, '
-          'requester_profile:profiles!user_contacts_requester_id_fkey(call_sign, user_code), '
-          'addressee_profile:profiles!user_contacts_addressee_id_fkey(call_sign, user_code)',
-        )
+        .select('id, requester_id, addressee_id, status')
         .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
         .order('created_at', ascending: false);
 
-    return response.map<ContactModel>((e) => ContactModel.fromJson(e)).toList();
+    final Set<String> profileIds = <String>{};
+    for (final dynamic row in response) {
+      profileIds.add(row['requester_id'].toString());
+      profileIds.add(row['addressee_id'].toString());
+    }
+
+    final Map<String, Map<String, dynamic>> profilesById =
+        <String, Map<String, dynamic>>{};
+    if (profileIds.isNotEmpty) {
+      final List<dynamic> profilesResponse = await _client
+          .from('profiles')
+          .select('id, call_sign, user_code')
+          .inFilter('id', profileIds.toList());
+
+      for (final dynamic row in profilesResponse) {
+        profilesById[row['id'].toString()] = Map<String, dynamic>.from(
+          row,
+        );
+      }
+    }
+
+    return response.map<ContactModel>((dynamic row) {
+      final Map<String, dynamic> mapped = Map<String, dynamic>.from(row);
+      mapped['requester_profile'] = profilesById[mapped['requester_id'].toString()];
+      mapped['addressee_profile'] = profilesById[mapped['addressee_id'].toString()];
+      return ContactModel.fromJson(mapped);
+    }).toList();
   }
 
   Future<void> sendRequest(String userId) async {
