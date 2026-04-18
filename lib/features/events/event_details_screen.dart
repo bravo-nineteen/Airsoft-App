@@ -395,7 +395,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 attendee.avatarUrl == null ||
                                     attendee.avatarUrl!.trim().isEmpty
                                 ? Text(
-                                    displayName.substring(0, 1).toUpperCase(),
+                                    _avatarInitial(displayName),
                                   )
                                 : null,
                           ),
@@ -505,7 +505,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child:
                         attendee.avatarUrl == null ||
                             attendee.avatarUrl!.trim().isEmpty
-                        ? Text(displayName.substring(0, 1).toUpperCase())
+                        ? Text(_avatarInitial(displayName))
                         : null,
                   ),
                   title: Text(displayName),
@@ -530,6 +530,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       default:
         return status;
     }
+  }
+
+  String _avatarInitial(String value) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '?';
+    }
+    return trimmed.substring(0, 1).toUpperCase();
   }
 
   @override

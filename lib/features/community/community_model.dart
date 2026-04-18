@@ -194,7 +194,7 @@ class CommunityCommentModel {
     int? likeCount,
     bool? likedByMe,
     DateTime? createdAt,
-    String? parentCommentId,
+    Object? parentCommentId = _communityCommentNoChange,
   }) {
     return CommunityCommentModel(
       id: id ?? this.id,
@@ -206,7 +206,9 @@ class CommunityCommentModel {
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
       createdAt: createdAt ?? this.createdAt,
-      parentCommentId: parentCommentId ?? this.parentCommentId,
+      parentCommentId: parentCommentId == _communityCommentNoChange
+          ? this.parentCommentId
+          : parentCommentId as String?,
     );
   }
 
@@ -232,6 +234,8 @@ class CommunityCommentModel {
     );
   }
 }
+
+const Object _communityCommentNoChange = Object();
 
 String? _readNullableString(dynamic value) {
   if (value == null) {

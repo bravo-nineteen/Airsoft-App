@@ -223,7 +223,6 @@ create table if not exists public.event_attendees (
 
 alter table public.event_attendees add column if not exists confirmed_by_host boolean not null default false;
 alter table public.event_attendees add column if not exists confirmed_at timestamptz;
-alter table public.community_comments add column if not exists parent_comment_id uuid references public.community_comments(id) on delete cascade;
 alter table public.community_posts add column if not exists updated_at timestamptz not null default now();
 alter table public.community_comments add column if not exists updated_at timestamptz not null default now();
 alter table public.user_contacts add column if not exists updated_at timestamptz not null default now();

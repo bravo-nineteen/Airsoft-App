@@ -145,7 +145,7 @@ class _CommunityPostDetailsScreenState
       }
       setState(() {
         _comments = comments;
-        _post = _post?.copyWith(commentCount: comments.length);
+        _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
         _replyToCommentId = null;
         _replyToCommentAuthor = null;
       });

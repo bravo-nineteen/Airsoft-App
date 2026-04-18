@@ -289,11 +289,18 @@ class EventRepository {
   }
 
   bool _isMissingColumnError(PostgrestException error, String columnName) {
+    // PGRST204/PostgREST and 42703/PostgreSQL are the missing-column cases.
+    if (error.code != 'PGRST204' && error.code != '42703') {
+      return false;
+    }
+
     final String summary =
         '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
             .toLowerCase();
-    return summary.contains(columnName.toLowerCase()) &&
-        (error.code == 'PGRST204' || error.code == '42703');
+    final String needle = columnName.toLowerCase();
+    return summary.contains("column '$needle'") ||
+        summary.contains('"$needle"') ||
+        summary.contains('column $needle');
   }
 
   Future<List<EventAttendanceRecord>> getEventAttendeesForHost(

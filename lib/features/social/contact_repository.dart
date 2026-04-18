@@ -31,13 +31,13 @@ class ContactRepository {
 
       for (final dynamic row in profilesResponse) {
         profilesById[row['id'].toString()] = Map<String, dynamic>.from(
-          row as Map,
+          row,
         );
       }
     }
 
     return response.map<ContactModel>((dynamic row) {
-      final Map<String, dynamic> mapped = Map<String, dynamic>.from(row as Map);
+      final Map<String, dynamic> mapped = Map<String, dynamic>.from(row);
       mapped['requester_profile'] = profilesById[mapped['requester_id'].toString()];
       mapped['addressee_profile'] = profilesById[mapped['addressee_id'].toString()];
       return ContactModel.fromJson(mapped);

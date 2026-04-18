@@ -257,9 +257,6 @@ alter table public.events
 alter table public.event_attendees
   add column if not exists updated_at timestamptz not null default now();
 
-alter table public.community_comments
-  add column if not exists parent_comment_id uuid references public.community_comments(id) on delete cascade;
-
 create index if not exists idx_event_attendees_event_id
   on public.event_attendees (event_id);
 create index if not exists idx_event_attendees_user_id
