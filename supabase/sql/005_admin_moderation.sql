@@ -199,3 +199,13 @@ on public.fields
 for delete
 to authenticated
 using (public.is_admin(auth.uid()));
+
+-- ---------------------------------------------------------------
+-- OPTIONAL SEED: First admin user
+-- Replace the email below with your own login email before running.
+-- ---------------------------------------------------------------
+insert into public.admin_roles (user_id, role, created_by)
+select u.id, 'admin', u.id
+from auth.users u
+where lower(u.email) = lower('your-login-email@example.com')
+on conflict (user_id) do nothing;

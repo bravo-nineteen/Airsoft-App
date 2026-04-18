@@ -442,8 +442,10 @@ create policy fields_admin_delete on public.fields for delete to authenticated u
 
 -- ---------------------------------------------------------------
 -- OPTIONAL SEED: First admin user
--- Replace with your own auth user id before running if needed.
+-- Replace the email below with your own login email before running.
 -- ---------------------------------------------------------------
 insert into public.admin_roles (user_id, role, created_by)
-values ('caa0b120-7499-4e7a-83c8-474096e5b4d3', 'admin', 'caa0b120-7499-4e7a-83c8-474096e5b4d3')
+select u.id, 'admin', u.id
+from auth.users u
+where lower(u.email) = lower('my.computer.83@gmail.com')
 on conflict (user_id) do nothing;
