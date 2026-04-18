@@ -646,9 +646,9 @@ class _AdminScreenState extends State<AdminScreen>
       future: _isAdminFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            appBar: AppBar(title: Text('Admin Area')),
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            appBar: AppBar(title: const Text('Admin Area')),
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
