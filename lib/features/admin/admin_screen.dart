@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_model.dart';
 import '../events/event_create_screen.dart';
@@ -19,7 +20,11 @@ class _AdminScreenState extends State<AdminScreen>
     with SingleTickerProviderStateMixin {
   final AdminRepository _repository = AdminRepository();
   final TextEditingController _userSearchController = TextEditingController();
-  late final TabController _tabController = TabController(length: 3, vsync: this);
+  late final TabController _tabController = TabController(
+    length: 3,
+    vsync: this,
+  );
+  late Future<bool> _isAdminFuture;
   late Future<_AdminDashboardData> _dashboardFuture;
   late Future<List<ProfileModel>> _profilesFuture;
   bool _isBusy = false;
@@ -27,8 +32,50 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
+    _isAdminFuture = _repository.isCurrentUserAdmin();
     _dashboardFuture = _loadDashboard();
     _profilesFuture = _repository.searchProfiles('');
+  }
+
+  Widget _buildAccessDenied({Object? error}) {
+    final currentUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? 'Not logged in';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.lock_outline, size: 42),
+            const SizedBox(height: 12),
+            const Text(
+              'Admin access is not enabled for this account.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Current user id: $currentUserId',
+              textAlign: TextAlign.center,
+            ),
+            if (error != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text('Error: $error', textAlign: TextAlign.center),
+            ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                setState(() {
+                  _isAdminFuture = _repository.isCurrentUserAdmin();
+                });
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry check'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<_AdminDashboardData> _loadDashboard() async {
@@ -74,8 +121,14 @@ class _AdminScreenState extends State<AdminScreen>
         title: const Text('Confirm Delete'),
         content: Text('Delete $title?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -91,7 +144,9 @@ class _AdminScreenState extends State<AdminScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Delete failed: $error')));
     }
   }
 
@@ -131,22 +186,36 @@ class _AdminScreenState extends State<AdminScreen>
                       DropdownButtonFormField<String>(
                         initialValue: duration,
                         items: const [
-                          DropdownMenuItem(value: '1 day', child: Text('1 day')),
-                          DropdownMenuItem(value: '7 days', child: Text('7 days')),
-                          DropdownMenuItem(value: '30 days', child: Text('30 days')),
+                          DropdownMenuItem(
+                            value: '1 day',
+                            child: Text('1 day'),
+                          ),
+                          DropdownMenuItem(
+                            value: '7 days',
+                            child: Text('7 days'),
+                          ),
+                          DropdownMenuItem(
+                            value: '30 days',
+                            child: Text('30 days'),
+                          ),
                         ],
                         onChanged: (value) {
                           setLocalState(() {
                             duration = value ?? '7 days';
                           });
                         },
-                        decoration: const InputDecoration(labelText: 'Duration'),
+                        decoration: const InputDecoration(
+                          labelText: 'Duration',
+                        ),
                       ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop({
                     'reason': reasonController.text,
@@ -191,12 +260,16 @@ class _AdminScreenState extends State<AdminScreen>
         userId: profile.id,
         reason: (result['reason'] as String?) ?? '',
         isPermanent: result['isPermanent'] == true,
-        bannedUntil: result['isPermanent'] == true ? null : DateTime.now().add(durationValue),
+        bannedUntil: result['isPermanent'] == true
+            ? null
+            : DateTime.now().add(durationValue),
       );
       await _refresh();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ban failed: $error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ban failed: $error')));
       }
     } finally {
       if (mounted) {
@@ -215,13 +288,17 @@ class _AdminScreenState extends State<AdminScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Revoke failed: $error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Revoke failed: $error')));
     }
   }
 
   Future<void> _openOfficialEvent() async {
     final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const EventCreateScreen(isOfficial: true)),
+      MaterialPageRoute(
+        builder: (_) => const EventCreateScreen(isOfficial: true),
+      ),
     );
     if (created == true) {
       await _refresh();
@@ -270,7 +347,15 @@ class _AdminScreenState extends State<AdminScreen>
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Failed to load moderation data: ${snapshot.error}', textAlign: TextAlign.center)));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Failed to load moderation data: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
         final data = snapshot.data!;
         return ListView(
@@ -278,51 +363,71 @@ class _AdminScreenState extends State<AdminScreen>
           children: [
             Text('Recent Posts', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            ...data.posts.map((post) => Card(
-              child: ListTile(
-                title: Text(post.title),
-                subtitle: Text(post.authorName),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _confirmDelete(
-                    title: 'post "${post.title}"',
-                    onDelete: () => _repository.deletePost(post.id),
+            ...data.posts.map(
+              (post) => Card(
+                child: ListTile(
+                  title: Text(post.title),
+                  subtitle: Text(post.authorName),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _confirmDelete(
+                      title: 'post "${post.title}"',
+                      onDelete: () => _repository.deletePost(post.id),
+                    ),
                   ),
                 ),
               ),
-            )),
+            ),
             const SizedBox(height: 16),
-            Text('Recent Comments', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Recent Comments',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            ...data.comments.map((comment) => Card(
-              child: ListTile(
-                title: Text(comment.authorName),
-                subtitle: Text(comment.message, maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _confirmDelete(
-                    title: 'this comment',
-                    onDelete: () => _repository.deleteComment(comment.id),
+            ...data.comments.map(
+              (comment) => Card(
+                child: ListTile(
+                  title: Text(comment.authorName),
+                  subtitle: Text(
+                    comment.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _confirmDelete(
+                      title: 'this comment',
+                      onDelete: () => _repository.deleteComment(comment.id),
+                    ),
                   ),
                 ),
               ),
-            )),
+            ),
             const SizedBox(height: 16),
-            Text('Recent Events', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Recent Events',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            ...data.events.map((event) => Card(
-              child: ListTile(
-                title: Text(event.title),
-                subtitle: Text(event.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _confirmDelete(
-                    title: 'event "${event.title}"',
-                    onDelete: () => _repository.deleteEvent(event.id),
+            ...data.events.map(
+              (event) => Card(
+                child: ListTile(
+                  title: Text(event.title),
+                  subtitle: Text(
+                    event.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _confirmDelete(
+                      title: 'event "${event.title}"',
+                      onDelete: () => _repository.deleteEvent(event.id),
+                    ),
                   ),
                 ),
               ),
-            )),
+            ),
           ],
         );
       },
@@ -341,7 +446,10 @@ class _AdminScreenState extends State<AdminScreen>
             decoration: InputDecoration(
               hintText: 'Search users',
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(onPressed: _searchUsers, icon: const Icon(Icons.refresh)),
+              suffixIcon: IconButton(
+                onPressed: _searchUsers,
+                icon: const Icon(Icons.refresh),
+              ),
             ),
           ),
         ),
@@ -353,22 +461,34 @@ class _AdminScreenState extends State<AdminScreen>
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Failed to load users: ${snapshot.error}', textAlign: TextAlign.center)));
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'Failed to load users: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
               }
               final profiles = snapshot.data ?? <ProfileModel>[];
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  ...profiles.map((profile) => Card(
-                    child: ListTile(
-                      title: Text(profile.displayName),
-                      subtitle: Text(profile.userCode),
-                      trailing: FilledButton(
-                        onPressed: _isBusy ? null : () => _openIssueBan(profile),
-                        child: const Text('Ban'),
+                  ...profiles.map(
+                    (profile) => Card(
+                      child: ListTile(
+                        title: Text(profile.displayName),
+                        subtitle: Text(profile.userCode),
+                        trailing: FilledButton(
+                          onPressed: _isBusy
+                              ? null
+                              : () => _openIssueBan(profile),
+                          child: const Text('Ban'),
+                        ),
                       ),
                     ),
-                  )),
+                  ),
                   const SizedBox(height: 16),
                   FutureBuilder<_AdminDashboardData>(
                     future: _dashboardFuture,
@@ -379,17 +499,29 @@ class _AdminScreenState extends State<AdminScreen>
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Recent Bans', style: Theme.of(context).textTheme.titleLarge),
+                          Text(
+                            'Recent Bans',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                           const SizedBox(height: 8),
-                          ...snapshot.data!.bans.map((ban) => Card(
-                            child: ListTile(
-                              title: Text(ban.userId),
-                              subtitle: Text(ban.isPermanent ? 'Permanent' : 'Until ${ban.bannedUntil?.toLocal()}'),
-                              trailing: ban.isRevoked
-                                  ? const Text('Revoked')
-                                  : TextButton(onPressed: () => _revokeBan(ban), child: const Text('Revoke')),
+                          ...snapshot.data!.bans.map(
+                            (ban) => Card(
+                              child: ListTile(
+                                title: Text(ban.userId),
+                                subtitle: Text(
+                                  ban.isPermanent
+                                      ? 'Permanent'
+                                      : 'Until ${ban.bannedUntil?.toLocal()}',
+                                ),
+                                trailing: ban.isRevoked
+                                    ? const Text('Revoked')
+                                    : TextButton(
+                                        onPressed: () => _revokeBan(ban),
+                                        child: const Text('Revoke'),
+                                      ),
+                              ),
                             ),
-                          )),
+                          ),
                         ],
                       );
                     },
@@ -411,7 +543,15 @@ class _AdminScreenState extends State<AdminScreen>
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Failed to load official content: ${snapshot.error}', textAlign: TextAlign.center)));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Failed to load official content: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
         final data = snapshot.data!;
         return ListView(
@@ -430,39 +570,63 @@ class _AdminScreenState extends State<AdminScreen>
               child: ListTile(
                 leading: const Icon(Icons.terrain),
                 title: const Text('Create Official Field Listing'),
-                subtitle: const Text('Add an official field entry to the directory.'),
+                subtitle: const Text(
+                  'Add an official field entry to the directory.',
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _openOfficialField,
               ),
             ),
             const SizedBox(height: 16),
-            Text('Recent Events', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Recent Events',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            ...data.events.map((event) => Card(
-              child: ListTile(
-                leading: event.isOfficial ? const Icon(Icons.verified, color: Colors.blue) : const Icon(Icons.event),
-                title: Text(event.title),
-                subtitle: Text(event.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => _editEvent(event),
+            ...data.events.map(
+              (event) => Card(
+                child: ListTile(
+                  leading: event.isOfficial
+                      ? const Icon(Icons.verified, color: Colors.blue)
+                      : const Icon(Icons.event),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    event.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _editEvent(event),
+                  ),
                 ),
               ),
-            )),
+            ),
             const SizedBox(height: 16),
-            Text('Recent Fields', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Recent Fields',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            ...data.fields.map((field) => Card(
-              child: ListTile(
-                leading: field.isOfficial ? const Icon(Icons.verified, color: Colors.blue) : const Icon(Icons.terrain),
-                title: Text(field.name),
-                subtitle: Text(field.fullLocation, maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => _editField(field),
+            ...data.fields.map(
+              (field) => Card(
+                child: ListTile(
+                  leading: field.isOfficial
+                      ? const Icon(Icons.verified, color: Colors.blue)
+                      : const Icon(Icons.terrain),
+                  title: Text(field.name),
+                  subtitle: Text(
+                    field.fullLocation,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _editField(field),
+                  ),
                 ),
               ),
-            )),
+            ),
           ],
         );
       },
@@ -478,26 +642,45 @@ class _AdminScreenState extends State<AdminScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Area'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Moderation'),
-            Tab(text: 'Users'),
-            Tab(text: 'Official'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildModerationTab(),
-          _buildUsersTab(),
-          _buildOfficialTab(),
-        ],
-      ),
+    return FutureBuilder<bool>(
+      future: _isAdminFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            appBar: AppBar(title: Text('Admin Area')),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data != true) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Admin Area')),
+            body: _buildAccessDenied(error: snapshot.error),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Admin Area'),
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Moderation'),
+                Tab(text: 'Users'),
+                Tab(text: 'Official'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildModerationTab(),
+              _buildUsersTab(),
+              _buildOfficialTab(),
+            ],
+          ),
+        );
+      },
     );
   }
 }

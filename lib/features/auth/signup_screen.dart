@@ -14,6 +14,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   DateTime? _dateOfBirth;
 
   bool _isLoading = false;
@@ -51,6 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final String name = _nameController.text.trim();
     final String email = _emailController.text.trim();
     final String password = _passwordController.text;
+    final String confirmPassword = _confirmPasswordController.text;
 
     if (name.isEmpty) {
       _showMessage('Name is required');
@@ -62,6 +64,14 @@ class _SignupScreenState extends State<SignupScreen> {
     }
     if (password.isEmpty) {
       _showMessage(l10n.t('password'));
+      return;
+    }
+    if (confirmPassword.isEmpty) {
+      _showMessage('Please confirm your password');
+      return;
+    }
+    if (password != confirmPassword) {
+      _showMessage('Passwords do not match');
       return;
     }
     if (_dateOfBirth == null) {
@@ -84,9 +94,13 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.t('signupSuccess'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Registration successful. Please check your email for an activation link.',
+          ),
+        ),
+      );
       Navigator.of(context).pop();
     } on AuthException catch (e) {
       _showMessage(e.message);
@@ -111,6 +125,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -133,6 +148,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   children: [
                     TextField(
                       controller: _nameController,
+                      enableInteractiveSelection: true,
                       decoration: InputDecoration(
                         labelText: 'Name',
                         hintText: 'Name shown on your profile',
@@ -157,15 +173,26 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _emailController,
+                      enableInteractiveSelection: true,
                       keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(labelText: l10n.t('email')),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _passwordController,
+                      enableInteractiveSelection: true,
                       obscureText: true,
                       decoration: InputDecoration(
                         labelText: l10n.t('password'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      enableInteractiveSelection: true,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm password',
                       ),
                     ),
                     const SizedBox(height: 20),

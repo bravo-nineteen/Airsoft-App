@@ -7,7 +7,7 @@ import '../profile/profile_model.dart';
 
 class AdminRepository {
   AdminRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -25,13 +25,34 @@ class AdminRepository {
       return false;
     }
 
-    final response = await _client
-        .from('admin_roles')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    try {
+      final response = await _client.rpc(
+        'is_admin',
+        params: <String, dynamic>{'admin_user_id': user.id},
+      );
+      if (response is bool) {
+        return response;
+      }
+      if (response is num) {
+        return response != 0;
+      }
+      if (response is String) {
+        return response.toLowerCase() == 'true';
+      }
+    } catch (_) {
+      // Fall through to direct table lookup.
+    }
 
-    return response != null;
+    try {
+      final response = await _client
+          .from('admin_roles')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      return response != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<AdminBanRecord?> getActiveBanForCurrentUser() async {
@@ -48,7 +69,10 @@ class AdminRepository {
         .order('created_at', ascending: false);
 
     final bans = (response as List<dynamic>)
-        .map((dynamic row) => AdminBanRecord.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) =>
+              AdminBanRecord.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
 
     final now = DateTime.now().toUtc();
@@ -73,20 +97,32 @@ class AdminRepository {
         .limit(limit);
 
     return (response as List<dynamic>)
-        .map((dynamic row) => CommunityPostModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) => CommunityPostModel.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
         .toList();
   }
 
-  Future<List<CommunityCommentModel>> getRecentComments({int limit = 25}) async {
+  Future<List<CommunityCommentModel>> getRecentComments({
+    int limit = 25,
+  }) async {
     final response = await _client
         .from('community_comments')
-        .select('id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count')
+        .select(
+          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count',
+        )
         .eq('is_deleted', false)
         .order('created_at', ascending: false)
         .limit(limit);
 
     return (response as List<dynamic>)
-        .map((dynamic row) => CommunityCommentModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) => CommunityCommentModel.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
         .toList();
   }
 
@@ -98,7 +134,10 @@ class AdminRepository {
         .limit(limit);
 
     return (response as List<dynamic>)
-        .map((dynamic row) => EventModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) =>
+              EventModel.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
   }
 
@@ -110,7 +149,10 @@ class AdminRepository {
         .limit(limit);
 
     return (response as List<dynamic>)
-        .map((dynamic row) => FieldModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) =>
+              FieldModel.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
   }
 
@@ -123,7 +165,10 @@ class AdminRepository {
         .limit(trimmed.isEmpty ? 25 : 100);
 
     final profiles = (response as List<dynamic>)
-        .map((dynamic row) => ProfileModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) =>
+              ProfileModel.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
 
     if (trimmed.isEmpty) {
@@ -149,7 +194,10 @@ class AdminRepository {
         .limit(limit);
 
     return (response as List<dynamic>)
-        .map((dynamic row) => AdminBanRecord.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+          (dynamic row) =>
+              AdminBanRecord.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
   }
 
@@ -176,15 +224,20 @@ class AdminRepository {
       'issued_by': _currentUserId,
       'reason': reason.trim().isEmpty ? null : reason.trim(),
       'is_permanent': isPermanent,
-      'banned_until': isPermanent ? null : bannedUntil?.toUtc().toIso8601String(),
+      'banned_until': isPermanent
+          ? null
+          : bannedUntil?.toUtc().toIso8601String(),
     });
   }
 
   Future<void> revokeBan(String banId) async {
-    await _client.from('user_bans').update({
-      'revoked_at': DateTime.now().toUtc().toIso8601String(),
-      'revoked_by': _currentUserId,
-    }).eq('id', banId);
+    await _client
+        .from('user_bans')
+        .update({
+          'revoked_at': DateTime.now().toUtc().toIso8601String(),
+          'revoked_by': _currentUserId,
+        })
+        .eq('id', banId);
   }
 
   Future<void> createOfficialField({
@@ -225,18 +278,21 @@ class AdminRepository {
     String? imageUrl,
     bool isOfficial = true,
   }) async {
-    await _client.from('fields').update({
-      'name': name.trim(),
-      'location_name': locationName.trim(),
-      'description': description.trim(),
-      'latitude': latitude,
-      'longitude': longitude,
-      'prefecture': _nullIfEmpty(prefecture),
-      'city': _nullIfEmpty(city),
-      'field_type': _nullIfEmpty(fieldType),
-      'image_url': _nullIfEmpty(imageUrl),
-      'is_official': isOfficial,
-    }).eq('id', fieldId);
+    await _client
+        .from('fields')
+        .update({
+          'name': name.trim(),
+          'location_name': locationName.trim(),
+          'description': description.trim(),
+          'latitude': latitude,
+          'longitude': longitude,
+          'prefecture': _nullIfEmpty(prefecture),
+          'city': _nullIfEmpty(city),
+          'field_type': _nullIfEmpty(fieldType),
+          'image_url': _nullIfEmpty(imageUrl),
+          'is_official': isOfficial,
+        })
+        .eq('id', fieldId);
   }
 
   String? _nullIfEmpty(String? value) {
@@ -280,9 +336,15 @@ class AdminBanRecord {
       issuedBy: json['issued_by']?.toString(),
       reason: json['reason']?.toString(),
       isPermanent: json['is_permanent'] == true,
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ?? DateTime.now().toUtc(),
-      bannedUntil: json['banned_until'] == null ? null : DateTime.tryParse(json['banned_until'].toString())?.toUtc(),
-      revokedAt: json['revoked_at'] == null ? null : DateTime.tryParse(json['revoked_at'].toString())?.toUtc(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
+      bannedUntil: json['banned_until'] == null
+          ? null
+          : DateTime.tryParse(json['banned_until'].toString())?.toUtc(),
+      revokedAt: json['revoked_at'] == null
+          ? null
+          : DateTime.tryParse(json['revoked_at'].toString())?.toUtc(),
       revokedBy: json['revoked_by']?.toString(),
     );
   }

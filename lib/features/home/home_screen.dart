@@ -9,20 +9,12 @@ import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
 import '../community/community_repository.dart';
+import '../events/events_screen.dart';
 
-enum HomeInterestFilter {
-  all,
-  posts,
-  events,
-  blog,
-}
+enum HomeInterestFilter { all, posts, events, blog }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    this.onOpenEventsTab,
-    this.onOpenBoardsTab,
-  });
+  const HomeScreen({super.key, this.onOpenEventsTab, this.onOpenBoardsTab});
 
   final VoidCallback? onOpenEventsTab;
   final VoidCallback? onOpenBoardsTab;
@@ -62,8 +54,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       setState(() {
-        _latestPosts =
-            (results[0] as List<CommunityPostModel>).take(6).toList();
+        _latestPosts = (results[0] as List<CommunityPostModel>)
+            .take(6)
+            .toList();
         _blogPosts = results[1] as List<AojBlogPost>;
         _isLoading = false;
       });
@@ -91,7 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
 
     return data
-        .map((dynamic item) => AojBlogPost.fromJson(item as Map<String, dynamic>))
+        .map(
+          (dynamic item) => AojBlogPost.fromJson(item as Map<String, dynamic>),
+        )
         .toList();
   }
 
@@ -110,9 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CommunityListScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const CommunityListScreen()),
     );
   }
 
@@ -122,11 +115,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Events tab is not connected'),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const EventsScreen()));
   }
 
   Future<void> _openBlogPost(AojBlogPost post) async {
@@ -135,34 +126,24 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open blog post'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open blog post')));
     }
   }
 
   Future<void> _openBlogIndex() async {
     final uri = Uri.parse('https://airsoftonlinejapan.com/blog/');
 
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open blog'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open blog')));
     }
   }
 
@@ -177,9 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return SafeArea(
       bottom: false,
       child: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadHomeData,
               child: ListView(
@@ -384,27 +363,18 @@ class _SectionHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall,
-              ),
+              Text(subtitle, style: theme.textTheme.bodySmall),
             ],
           ),
         ),
-        TextButton(
-          onPressed: onViewAll,
-          child: const Text('View all'),
-        ),
+        TextButton(onPressed: onViewAll, child: const Text('View all')),
       ],
     );
   }
 }
 
 class _HomePostCard extends StatelessWidget {
-  const _HomePostCard({
-    required this.post,
-    required this.onTap,
-  });
+  const _HomePostCard({required this.post, required this.onTap});
 
   final CommunityPostModel post;
   final VoidCallback onTap;
@@ -420,9 +390,7 @@ class _HomePostCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: theme.dividerColor.withOpacity(0.14),
-        ),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -439,7 +407,7 @@ class _HomePostCard extends StatelessWidget {
                   height: 84,
                   child: hasImage
                       ? ExtendedImage.network(
-                        imageUrl,
+                          imageUrl,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {
@@ -454,7 +422,8 @@ class _HomePostCard extends StatelessWidget {
                             if (state.extendedImageLoadState ==
                                 LoadState.failed) {
                               return Container(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 alignment: Alignment.center,
                                 child: const Icon(Icons.broken_image_outlined),
                               );
@@ -554,10 +523,7 @@ class _HomePostCard extends StatelessWidget {
 }
 
 class _BlogPostCard extends StatelessWidget {
-  const _BlogPostCard({
-    required this.post,
-    required this.onTap,
-  });
+  const _BlogPostCard({required this.post, required this.onTap});
 
   final AojBlogPost post;
   final VoidCallback onTap;
@@ -572,9 +538,7 @@ class _BlogPostCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: theme.dividerColor.withOpacity(0.14),
-        ),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -606,7 +570,8 @@ class _BlogPostCard extends StatelessWidget {
                             if (state.extendedImageLoadState ==
                                 LoadState.failed) {
                               return Container(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 alignment: Alignment.center,
                                 child: const Icon(Icons.menu_book_outlined),
                               );
@@ -702,9 +667,7 @@ class _InfoFeedCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: theme.dividerColor.withOpacity(0.14),
-        ),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -740,10 +703,7 @@ class _InfoFeedCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodyMedium,
-                    ),
+                    Text(subtitle, style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),
@@ -873,19 +833,16 @@ class _MiniBadge extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: textColor,
-              fontWeight: FontWeight.w700,
-            ),
+          color: textColor,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 }
 
 class _MetaItem extends StatelessWidget {
-  const _MetaItem({
-    required this.icon,
-    required this.text,
-  });
+  const _MetaItem({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -904,10 +861,7 @@ class _MetaItem extends StatelessWidget {
 }
 
 class _EmptyBlock extends StatelessWidget {
-  const _EmptyBlock({
-    required this.icon,
-    required this.text,
-  });
+  const _EmptyBlock({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -925,11 +879,7 @@ class _EmptyBlock extends StatelessWidget {
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Icon(icon),
-          const SizedBox(height: 10),
-          Text(text),
-        ],
+        children: <Widget>[Icon(icon), const SizedBox(height: 10), Text(text)],
       ),
     );
   }
@@ -962,10 +912,12 @@ class AojBlogPost {
 
     return AojBlogPost(
       title: _stripHtml(
-        ((json['title'] as Map<String, dynamic>?)?['rendered'] as String?) ?? '',
+        ((json['title'] as Map<String, dynamic>?)?['rendered'] as String?) ??
+            '',
       ),
       excerpt: _stripHtml(
-        ((json['excerpt'] as Map<String, dynamic>?)?['rendered'] as String?) ?? '',
+        ((json['excerpt'] as Map<String, dynamic>?)?['rendered'] as String?) ??
+            '',
       ).trim(),
       link: (json['link'] as String?) ?? '',
       imageUrl: imageUrl,

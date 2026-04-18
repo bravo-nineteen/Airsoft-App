@@ -123,6 +123,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _showAdminSetupHelp(Object? error) async {
+    final String currentUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? 'Not logged in';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Admin setup help'),
+          content: SingleChildScrollView(
+            child: Text(
+              'Admin access is based on public.admin_roles.\n\n'
+              'Current user id:\n$currentUserId\n\n'
+              'If Admin Area does not open, ensure:\n'
+              '1) Admin migrations were run in Supabase SQL editor.\n'
+              '2) Your user id exists in public.admin_roles.\n'
+              '3) public.is_admin(uuid) returns true for your user id.\n\n'
+              'Error details:\n${error ?? 'No error details'}',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -221,6 +251,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           FutureBuilder<bool>(
             future: _adminRepository.isCurrentUserAdmin(),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return ListTile(
+                  leading: const Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: Colors.amber,
+                  ),
+                  title: const Text('Admin Area (setup issue)'),
+                  subtitle: const Text('Tap to view admin setup diagnostics.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showAdminSetupHelp(snapshot.error),
+                );
+              }
+
               if (snapshot.data != true) {
                 return const SizedBox.shrink();
               }

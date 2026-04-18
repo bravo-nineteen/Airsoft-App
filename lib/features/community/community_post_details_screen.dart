@@ -1,5 +1,6 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,10 +9,7 @@ import 'community_repository.dart';
 import 'community_user_profile_screen.dart';
 
 class CommunityPostDetailsScreen extends StatefulWidget {
-  const CommunityPostDetailsScreen({
-    super.key,
-    required this.postId,
-  });
+  const CommunityPostDetailsScreen({super.key, required this.postId});
 
   final String postId;
 
@@ -20,7 +18,8 @@ class CommunityPostDetailsScreen extends StatefulWidget {
       _CommunityPostDetailsScreenState();
 }
 
-class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen> {
+class _CommunityPostDetailsScreenState
+    extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _commentController = TextEditingController();
 
@@ -86,9 +85,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load post: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load post: $error')));
     }
   }
 
@@ -111,10 +110,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
     });
 
     try {
-      await _repository.addComment(
-        postId: _post!.id,
-        message: message,
-      );
+      await _repository.addComment(postId: _post!.id, message: message);
 
       _commentController.clear();
       await _load();
@@ -123,9 +119,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post comment: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to post comment: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -153,9 +149,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update like: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update like: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -253,9 +249,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update post: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update post: $error')));
     } finally {
       titleController.dispose();
       bodyController.dispose();
@@ -297,9 +293,9 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete post: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete post: $error')));
     }
   }
 
@@ -394,11 +390,21 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
     }
   }
 
+  Future<void> _copyToClipboard(String value, String successMessage) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(successMessage)));
+  }
+
   void _openProfile(String? userId, String fallbackName) {
     if (userId == null || userId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile not available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile not available')));
       return;
     }
 
@@ -465,10 +471,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
     }
 
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return CircleAvatar(
-      radius: radius,
-      child: Text(initial),
-    );
+    return CircleAvatar(radius: radius, child: Text(initial));
   }
 
   @override
@@ -513,265 +516,275 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : post == null
-                ? const Center(child: Text('Post not found'))
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                      children: <Widget>[
-                        Material(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                InkWell(
-                                  onTap: () =>
-                                      _openProfile(post.authorId, post.authorName),
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Row(
-                                      children: <Widget>[
-                                        _buildAvatar(
-                                          name: post.authorName,
-                                          avatarUrl: post.authorAvatarUrl,
-                                          radius: 24,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Text(
-                                                post.authorName,
-                                                style: theme.textTheme.titleMedium
-                                                    ?.copyWith(
+            ? const Center(child: Text('Post not found'))
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                  children: <Widget>[
+                    Material(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            InkWell(
+                              onTap: () =>
+                                  _openProfile(post.authorId, post.authorName),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Row(
+                                  children: <Widget>[
+                                    _buildAvatar(
+                                      name: post.authorName,
+                                      avatarUrl: post.authorAvatarUrl,
+                                      radius: 24,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            post.authorName,
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
                                                   fontWeight: FontWeight.w800,
                                                 ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                _formatTime(post.createdAt),
-                                                style: theme.textTheme.bodySmall,
-                                              ),
-                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _formatTime(post.createdAt),
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if ((post.category ?? '').trim().isNotEmpty)
+                                      Chip(label: Text(post.category!)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              post.title,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SelectableText(
+                              post.bodyText.isNotEmpty
+                                  ? post.bodyText
+                                  : post.plainText,
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                            if (post.imageUrls.isNotEmpty ||
+                                (post.primaryImageUrl?.isNotEmpty ??
+                                    false)) ...[
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 220,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: post.imageUrls.isNotEmpty
+                                      ? post.imageUrls.length
+                                      : 1,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 10),
+                                  itemBuilder: (context, index) {
+                                    final imageUrl = post.imageUrls.isNotEmpty
+                                        ? post.imageUrls[index]
+                                        : post.primaryImageUrl!;
+                                    return GestureDetector(
+                                      onTap: () => _openImageLightbox(imageUrl),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(18),
+                                        child: SizedBox(
+                                          width: 280,
+                                          child: ExtendedImage.network(
+                                            imageUrl,
+                                            fit: BoxFit.cover,
+                                            cache: true,
                                           ),
                                         ),
-                                        if ((post.category ?? '').trim().isNotEmpty)
-                                          Chip(label: Text(post.category!)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  post.title,
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  post.bodyText.isNotEmpty
-                                      ? post.bodyText
-                                      : post.plainText,
-                                  style: theme.textTheme.bodyLarge,
-                                ),
-                                if (post.imageUrls.isNotEmpty ||
-                                    (post.primaryImageUrl?.isNotEmpty ?? false)) ...[
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    height: 220,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: post.imageUrls.isNotEmpty
-                                          ? post.imageUrls.length
-                                          : 1,
-                                      separatorBuilder: (_, _) =>
-                                          const SizedBox(width: 10),
-                                      itemBuilder: (context, index) {
-                                        final imageUrl = post.imageUrls.isNotEmpty
-                                            ? post.imageUrls[index]
-                                            : post.primaryImageUrl!;
-                                        return GestureDetector(
-                                          onTap: () =>
-                                              _openImageLightbox(imageUrl),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(18),
-                                            child: SizedBox(
-                                              width: 280,
-                                              child: ExtendedImage.network(
-                                                imageUrl,
-                                                fit: BoxFit.cover,
-                                                cache: true,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: <Widget>[
-                                    FilledButton.icon(
-                                      onPressed: _isTogglingPostLike
-                                          ? null
-                                          : _togglePostLike,
-                                      icon: Icon(
-                                        post.isLikedByMe
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
                                       ),
-                                      label: Text('${post.likeCount}'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: null,
-                                      icon:
-                                          const Icon(Icons.mode_comment_outlined),
-                                      label: Text('${post.commentCount}'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: null,
-                                      icon: const Icon(Icons.visibility_outlined),
-                                      label: Text('${post.viewCount}'),
-                                    ),
-                                  ],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            Row(
+                              children: <Widget>[
+                                FilledButton.icon(
+                                  onPressed: _isTogglingPostLike
+                                      ? null
+                                      : _togglePostLike,
+                                  icon: Icon(
+                                    post.isLikedByMe
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                  ),
+                                  label: Text('${post.likeCount}'),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: null,
+                                  icon: const Icon(Icons.mode_comment_outlined),
+                                  label: Text('${post.commentCount}'),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: null,
+                                  icon: const Icon(Icons.visibility_outlined),
+                                  label: Text('${post.viewCount}'),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () => _copyToClipboard(
+                                    post.bodyText.isNotEmpty
+                                        ? post.bodyText
+                                        : post.plainText,
+                                    'Post copied',
+                                  ),
+                                  icon: const Icon(Icons.copy_outlined),
+                                  label: const Text('Copy'),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Comments',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Comments',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          TextField(
+                            controller: _commentController,
+                            enableInteractiveSelection: true,
+                            minLines: 3,
+                            maxLines: 6,
+                            decoration: InputDecoration(
+                              hintText: 'Write a comment',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.icon(
+                              onPressed: _isSendingComment
+                                  ? null
+                                  : _submitComment,
+                              icon: _isSendingComment
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send),
+                              label: const Text('Post comment'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    if (_comments.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
                         ),
-                        const SizedBox(height: 10),
-                        Container(
+                        child: const Text('No comments yet.'),
+                      )
+                    else
+                      ..._comments.map((CommunityCommentModel comment) {
+                        final isBusy = _togglingCommentLikes.contains(
+                          comment.id,
+                        );
+                        final bool isOwner = _isCommentOwner(comment);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surface,
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              TextField(
-                                controller: _commentController,
-                                minLines: 3,
-                                maxLines: 6,
-                                decoration: InputDecoration(
-                                  hintText: 'Write a comment',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
+                              InkWell(
+                                onTap: () => _openProfile(
+                                  comment.authorId,
+                                  comment.authorName,
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: FilledButton.icon(
-                                  onPressed:
-                                      _isSendingComment ? null : _submitComment,
-                                  icon: _isSendingComment
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.send),
-                                  label: const Text('Post comment'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        if (_comments.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: const Text('No comments yet.'),
-                          )
-                        else
-                          ..._comments.map((CommunityCommentModel comment) {
-                            final isBusy =
-                                _togglingCommentLikes.contains(comment.id);
-                            final bool isOwner = _isCommentOwner(comment);
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  InkWell(
-                                    onTap: () => _openProfile(
-                                      comment.authorId,
-                                      comment.authorName,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(2),
-                                      child: Row(
-                                        children: <Widget>[
-                                          _buildAvatar(
-                                            name: comment.authorName,
-                                            avatarUrl: comment.authorAvatarUrl,
-                                            radius: 18,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: <Widget>[
-                                                Text(
-                                                  comment.authorName,
-                                                  style: theme.textTheme.titleSmall
-                                                      ?.copyWith(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Row(
+                                    children: <Widget>[
+                                      _buildAvatar(
+                                        name: comment.authorName,
+                                        avatarUrl: comment.authorAvatarUrl,
+                                        radius: 18,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              comment.authorName,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
                                                     fontWeight: FontWeight.w800,
                                                   ),
-                                                ),
-                                                Text(
-                                                  _formatTime(comment.createdAt),
-                                                  style:
-                                                      theme.textTheme.bodySmall,
-                                                ),
-                                              ],
                                             ),
-                                          ),
-                                          IconButton(
-                                          if (isOwner)
-                                            PopupMenuButton<String>(
-                                              onSelected: (value) {
-                                                if (value == 'edit') {
-                                                  _editComment(comment);
-                                                } else if (value == 'delete') {
-                                                  _deleteComment(comment);
-                                                }
-                                              },
-                                              itemBuilder: (context) =>
-                                                  const <PopupMenuEntry<String>>[
+                                            Text(
+                                              _formatTime(comment.createdAt),
+                                              style: theme.textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isOwner)
+                                        PopupMenuButton<String>(
+                                          onSelected: (value) {
+                                            if (value == 'edit') {
+                                              _editComment(comment);
+                                            } else if (value == 'delete') {
+                                              _deleteComment(comment);
+                                            }
+                                          },
+                                          itemBuilder: (context) =>
+                                              const <PopupMenuEntry<String>>[
                                                 PopupMenuItem<String>(
                                                   value: 'edit',
                                                   child: Text('Edit'),
@@ -781,35 +794,44 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                                   child: Text('Delete'),
                                                 ),
                                               ],
-                                            ),
-                                            onPressed: isBusy
-                                                ? null
-                                                : () => _toggleCommentLike(
-                                                      comment.id,
-                                                    ),
-                                            icon: Icon(
-                                              comment.likedByMe
-                                                  ? Icons.favorite
-                                                  : Icons.favorite_border,
-                                            ),
-                                          ),
-                                          Text('${comment.likeCount}'),
-                                        ],
+                                        ),
+                                      IconButton(
+                                        tooltip: 'Copy comment',
+                                        onPressed: () => _copyToClipboard(
+                                          comment.message,
+                                          'Comment copied',
+                                        ),
+                                        icon: const Icon(Icons.copy_outlined),
                                       ),
-                                    ),
+                                      IconButton(
+                                        onPressed: isBusy
+                                            ? null
+                                            : () => _toggleCommentLike(
+                                                comment.id,
+                                              ),
+                                        icon: Icon(
+                                          comment.likedByMe
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
+                                        ),
+                                      ),
+                                      Text('${comment.likeCount}'),
+                                    ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    comment.message,
-                                    style: theme.textTheme.bodyMedium,
-                                  ),
-                                ],
+                                ),
                               ),
-                            );
-                          }),
-                      ],
-                    ),
-                  ),
+                              const SizedBox(height: 10),
+                              SelectableText(
+                                comment.message,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
       ),
     );
   }
