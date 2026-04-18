@@ -35,9 +35,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _openFindUsers() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const FindUsersScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const FindUsersScreen()));
     await _refresh();
   }
 
@@ -47,7 +47,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     });
 
     try {
-      await _repo.acceptRequest(contact.id);
+      await _repo.acceptRequest(contact);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Friend request accepted')),
@@ -75,7 +75,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     });
 
     try {
-      await _repo.rejectRequest(contact.id);
+      await _repo.rejectRequest(contact);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Friend request declined')),
@@ -103,7 +103,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     });
 
     try {
-      await _repo.removeContact(contact.id);
+      await _repo.removeContact(contact);
       await _refresh();
     } catch (error) {
       if (mounted) {
@@ -127,15 +127,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   String _otherDisplayName(ContactModel contact) {
-      final l10n = AppLocalizations.of(context);
     if (contact.requesterId == _currentUserId) {
       return (contact.addresseeCallSign ?? '').trim().isEmpty
-        ? l10n.t('operator')
+          ? 'Unknown user'
           : contact.addresseeCallSign!;
     }
 
     return (contact.requesterCallSign ?? '').trim().isEmpty
-      ? l10n.t('operator')
+        ? 'Unknown user'
         : contact.requesterCallSign!;
   }
 
@@ -274,21 +273,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             },
                           )
                         : incomingPending
-                            ? (isActing
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : null)
-                            : IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: isActing
-                                    ? null
-                                    : () => _removeContact(contact),
-                              ),
+                        ? (isActing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : null)
+                        : IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: isActing
+                                ? null
+                                : () => _removeContact(contact),
+                          ),
                   ),
                 );
               },

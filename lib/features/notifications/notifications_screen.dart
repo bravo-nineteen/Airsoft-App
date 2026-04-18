@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_post_details_screen.dart';
+import '../events/event_details_screen.dart';
+import '../events/event_repository.dart';
 import '../social/contacts_screen.dart';
 import 'notification_model.dart';
 import 'notification_repository.dart';
@@ -15,6 +18,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final NotificationRepository _repository = NotificationRepository();
+  final EventRepository _eventRepository = EventRepository();
 
   late Future<List<AppNotificationModel>> _future;
   RealtimeChannel? _channel;
@@ -74,13 +78,73 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (!mounted) return;
 
-    if (item.type == 'contact_request' || item.type == 'direct_message') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ContactsScreen()),
-      );
+    final String normalizedType = item.type.trim().toLowerCase();
+
+    if (normalizedType == 'contact_request' ||
+        normalizedType == 'friend_request' ||
+        normalizedType == 'direct_message') {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
+    } else if (normalizedType == 'community_post_comment' ||
+        normalizedType == 'community_post_like' ||
+        normalizedType == 'community_comment_reply' ||
+        normalizedType == 'community_comment_like') {
+      final String? postId = await _resolvePostIdForNotification(item);
+      if (postId != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CommunityPostDetailsScreen(postId: postId),
+          ),
+        );
+      }
+    } else if (normalizedType.contains('event')) {
+      final String? eventId = item.entityId?.trim();
+      if (eventId != null && eventId.isNotEmpty && mounted) {
+        try {
+          final event = await _eventRepository.getEventById(eventId);
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
+          );
+        } catch (_) {
+          // Ignore broken event links and just refresh the list.
+        }
+      }
     }
 
     await _refresh();
+  }
+
+  Future<String?> _resolvePostIdForNotification(
+    AppNotificationModel item,
+  ) async {
+    final String? entityId = item.entityId?.trim();
+    if (entityId == null || entityId.isEmpty) {
+      return null;
+    }
+
+    final String normalizedType = item.type.trim().toLowerCase();
+    if (normalizedType == 'community_post_comment' ||
+        normalizedType == 'community_post_like') {
+      return entityId;
+    }
+
+    if (normalizedType == 'community_comment_reply' ||
+        normalizedType == 'community_comment_like') {
+      try {
+        final response = await Supabase.instance.client
+            .from('community_comments')
+            .select('post_id')
+            .eq('id', entityId)
+            .maybeSingle();
+        return response?['post_id']?.toString();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
@@ -89,7 +153,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (difference.inMinutes < 1) return l10n.t('justNow');
     if (difference.inMinutes < 60) {
-      return l10n.t('minutesAgoShort', args: {'value': '${difference.inMinutes}'});
+      return l10n.t(
+        'minutesAgoShort',
+        args: {'value': '${difference.inMinutes}'},
+      );
     }
     if (difference.inHours < 24) {
       return l10n.t('hoursAgoShort', args: {'value': '${difference.inHours}'});
@@ -162,9 +229,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(_iconForType(item.type)),
-                    ),
+                    leading: CircleAvatar(child: Icon(_iconForType(item.type))),
                     title: Text(item.title),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

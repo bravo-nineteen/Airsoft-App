@@ -132,7 +132,7 @@ class _EventListScreenState extends State<EventListScreen> {
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: events.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (BuildContext context, int index) {
                 final EventModel event = events[index];
                 final String? statusLabel = _statusLabel(event);

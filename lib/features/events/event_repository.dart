@@ -17,9 +17,8 @@ class EventRepository {
 
     final List<EventModel> baseEvents = (response as List<dynamic>)
         .map(
-          (dynamic e) => EventModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
+          (dynamic e) =>
+              EventModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
 
@@ -29,11 +28,15 @@ class EventRepository {
   }
 
   Future<EventModel> getEventById(String eventId) async {
-    final response =
-        await _client.from('events').select().eq('id', eventId).single();
+    final response = await _client
+        .from('events')
+        .select()
+        .eq('id', eventId)
+        .single();
 
-    final EventModel event =
-        EventModel.fromJson(Map<String, dynamic>.from(response));
+    final EventModel event = EventModel.fromJson(
+      Map<String, dynamic>.from(response),
+    );
     return _enrichEvent(event);
   }
 
@@ -119,23 +122,35 @@ class EventRepository {
       throw Exception('Description is required.');
     }
 
-    await _client.from('events').update({
-      'title': trimmedTitle,
-      'description': trimmedDescription,
-      'starts_at': startsAt.toUtc().toIso8601String(),
-      'ends_at': endsAt.toUtc().toIso8601String(),
-      'location': _nullIfEmpty(location),
-      'prefecture': _nullIfEmpty(prefecture),
-      'event_type': _nullIfEmpty(eventType),
-      'language': _nullIfEmpty(language),
-      'skill_level': _nullIfEmpty(skillLevel),
-      'organizer_name': _nullIfEmpty(organizerName),
-      'contact_info': _nullIfEmpty(contactInfo),
-      'notes': _nullIfEmpty(notes),
-      'price_yen': priceYen,
-      'max_players': maxPlayers,
-      'is_official': isOfficial,
-    }).eq('id', eventId);
+    await _client
+        .from('events')
+        .update({
+          'title': trimmedTitle,
+          'description': trimmedDescription,
+          'starts_at': startsAt.toUtc().toIso8601String(),
+          'ends_at': endsAt.toUtc().toIso8601String(),
+          'location': _nullIfEmpty(location),
+          'prefecture': _nullIfEmpty(prefecture),
+          'event_type': _nullIfEmpty(eventType),
+          'language': _nullIfEmpty(language),
+          'skill_level': _nullIfEmpty(skillLevel),
+          'organizer_name': _nullIfEmpty(organizerName),
+          'contact_info': _nullIfEmpty(contactInfo),
+          'notes': _nullIfEmpty(notes),
+          'price_yen': priceYen,
+          'max_players': maxPlayers,
+          'is_official': isOfficial,
+        })
+        .eq('id', eventId);
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in.');
+    }
+
+    await _client.from('events').delete().eq('id', eventId);
   }
 
   Future<void> attendEvent(String eventId) async {
@@ -163,7 +178,10 @@ class EventRepository {
     } else {
       await _client
           .from('event_attendees')
-          .update({'status': 'attending', 'updated_at': DateTime.now().toUtc().toIso8601String()})
+          .update({
+            'status': 'attending',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
@@ -192,7 +210,10 @@ class EventRepository {
     } else {
       await _client
           .from('event_attendees')
-          .update({'status': 'cancelled', 'updated_at': DateTime.now().toUtc().toIso8601String()})
+          .update({
+            'status': 'cancelled',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
@@ -330,9 +351,8 @@ class EventRepository {
 
     final List<EventModel> events = (eventsResponse as List<dynamic>)
         .map(
-          (dynamic e) => EventModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
+          (dynamic e) =>
+              EventModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
 
@@ -380,8 +400,9 @@ class EventRepository {
 
   Future<EventModel> _enrichEvent(EventModel event) async {
     final EventAttendanceStats stats = await _getEventAttendanceStats(event.id);
-    final String? currentStatus =
-        await getCurrentUserAttendanceStatus(event.id);
+    final String? currentStatus = await getCurrentUserAttendanceStatus(
+      event.id,
+    );
 
     return event.copyWith(
       currentUserAttendanceStatus: currentStatus,

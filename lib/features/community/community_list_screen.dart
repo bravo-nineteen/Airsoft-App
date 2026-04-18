@@ -241,7 +241,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: _categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (BuildContext context, int index) {
                         final String category = _categories[index];
                         final bool isSelected = category == _selectedCategory;

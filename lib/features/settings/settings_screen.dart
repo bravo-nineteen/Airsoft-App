@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/localization/app_localizations.dart';
 import '../admin/admin_repository.dart';
 import '../admin/admin_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'account_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -39,9 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _navigate(BuildContext context, Widget screen) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -129,9 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.t('settings')),
-      ),
+      appBar: AppBar(title: Text(l10n.t('settings'))),
       body: ListView(
         children: [
           _sectionTitle(l10n.t('display')),
@@ -196,10 +193,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(l10n.t('notifications')),
           _tile(
             context: context,
+            icon: Icons.notifications,
+            title: l10n.t('notifications'),
+            onTap: () => _navigate(context, const NotificationsScreen()),
+          ),
+          _tile(
+            context: context,
             icon: Icons.notifications_outlined,
             title: l10n.t('manageAlerts'),
-            onTap: () =>
-                _navigate(context, const NotificationSettingsScreen()),
+            onTap: () => _navigate(context, const NotificationSettingsScreen()),
           ),
           _sectionTitle(l10n.t('privacy')),
           _tile(

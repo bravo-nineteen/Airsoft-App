@@ -3,9 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'community_model.dart';
 
 class CommunityRepository {
-  CommunityRepository({
-    SupabaseClient? client,
-  }) : _client = client ?? Supabase.instance.client;
+  CommunityRepository({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -43,8 +42,10 @@ class CommunityRepository {
     String foreignId,
   ) async {
     try {
-      final response =
-          await _client.from(tableName).select('id').eq(foreignKey, foreignId);
+      final response = await _client
+          .from(tableName)
+          .select('id')
+          .eq(foreignKey, foreignId);
       return (response as List).length;
     } catch (_) {
       return 0;
@@ -90,9 +91,8 @@ class CommunityRepository {
 
     var posts = (response as List<dynamic>)
         .map(
-          (dynamic e) => CommunityPostModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
+          (dynamic e) =>
+              CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
 
@@ -110,7 +110,8 @@ class CommunityRepository {
     if (category != 'All') {
       posts = posts
           .where(
-            (CommunityPostModel post) => (post.category ?? 'General') == category,
+            (CommunityPostModel post) =>
+                (post.category ?? 'General') == category,
           )
           .toList();
     }
@@ -122,7 +123,8 @@ class CommunityRepository {
         if (normalizedLanguage == 'bilingual') {
           return true;
         }
-        return postLanguage == normalizedLanguage || postLanguage == 'bilingual';
+        return postLanguage == normalizedLanguage ||
+            postLanguage == 'bilingual';
       }).toList();
     }
 
@@ -149,9 +151,8 @@ class CommunityRepository {
 
     return (response as List<dynamic>)
         .map(
-          (dynamic e) => CommunityPostModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
+          (dynamic e) =>
+              CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
   }
@@ -176,9 +177,8 @@ class CommunityRepository {
 
     return (response as List<dynamic>)
         .map(
-          (dynamic e) => CommunityPostModel.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          ),
+          (dynamic e) =>
+              CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
   }
@@ -194,15 +194,18 @@ class CommunityRepository {
 
     final hasLikesTable = await _hasTable('community_post_likes');
     if (hasLikesTable) {
-      final likeCount =
-          await _countRows('community_post_likes', 'post_id', postId);
-      final isLikedByMe =
-          await _isLikedByCurrentUser('community_post_likes', 'post_id', postId);
-
-      post = post.copyWith(
-        likeCount: likeCount,
-        isLikedByMe: isLikedByMe,
+      final likeCount = await _countRows(
+        'community_post_likes',
+        'post_id',
+        postId,
       );
+      final isLikedByMe = await _isLikedByCurrentUser(
+        'community_post_likes',
+        'post_id',
+        postId,
+      );
+
+      post = post.copyWith(likeCount: likeCount, isLikedByMe: isLikedByMe);
     }
 
     return post;
@@ -233,24 +236,24 @@ class CommunityRepository {
 
     final List<CommunityCommentModel> enriched =
         await Future.wait<CommunityCommentModel>(
-      comments.map((CommunityCommentModel comment) async {
-        final likeCount = await _countRows(
-          'community_comment_likes',
-          'comment_id',
-          comment.id,
-        );
-        final isLikedByMe = await _isLikedByCurrentUser(
-          'community_comment_likes',
-          'comment_id',
-          comment.id,
-        );
+          comments.map((CommunityCommentModel comment) async {
+            final likeCount = await _countRows(
+              'community_comment_likes',
+              'comment_id',
+              comment.id,
+            );
+            final isLikedByMe = await _isLikedByCurrentUser(
+              'community_comment_likes',
+              'comment_id',
+              comment.id,
+            );
 
-        return comment.copyWith(
-          likeCount: likeCount,
-          likedByMe: isLikedByMe,
+            return comment.copyWith(
+              likeCount: likeCount,
+              likedByMe: isLikedByMe,
+            );
+          }),
         );
-      }),
-    );
 
     return enriched;
   }
@@ -276,8 +279,8 @@ class CommunityRepository {
     }
 
     final profile = await _fetchCurrentUserProfile();
-    final authorName =
-        (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
+    final authorName = (profile?['call_sign'] ?? user.email ?? 'Unknown')
+        .toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
     final String normalizedLanguage = _normalizePostLanguage(language);
 
@@ -294,7 +297,8 @@ class CommunityRepository {
       'is_deleted': false,
       'visibility': 'public',
       'language_code': _languageCodeFor(normalizedLanguage),
-      'category': category ?? (postContext == 'profile' ? 'Timeline' : 'General'),
+      'category':
+          category ?? (postContext == 'profile' ? 'Timeline' : 'General'),
       'image_url': imageUrls.isNotEmpty ? imageUrls.first : null,
       'image_urls': imageUrls,
       'plain_text': plainText,
@@ -349,10 +353,13 @@ class CommunityRepository {
   Future<void> incrementPostView(String postId) async {
     final post = await fetchPostById(postId);
 
-    await _client.from('community_posts').update({
-      'view_count': post.viewCount + 1,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', postId);
+    await _client
+        .from('community_posts')
+        .update({
+          'view_count': post.viewCount + 1,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', postId);
   }
 
   Future<void> addComment({
@@ -365,8 +372,8 @@ class CommunityRepository {
     }
 
     final profile = await _fetchCurrentUserProfile();
-    final authorName =
-        (profile?['call_sign'] ?? user.email ?? 'Unknown').toString();
+    final authorName = (profile?['call_sign'] ?? user.email ?? 'Unknown')
+        .toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
     final now = DateTime.now().toUtc().toIso8601String();
 
@@ -387,10 +394,61 @@ class CommunityRepository {
     await _client.from('community_comments').insert(payload);
 
     final post = await fetchPostById(postId);
-    await _client.from('community_posts').update({
-      'comment_count': post.commentCount + 1,
-      'updated_at': now,
-    }).eq('id', postId);
+    await _client
+        .from('community_posts')
+        .update({'comment_count': post.commentCount + 1, 'updated_at': now})
+        .eq('id', postId);
+  }
+
+  Future<void> updatePost({
+    required String postId,
+    required String title,
+    required String bodyText,
+    String? language,
+    String? category,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final String trimmedTitle = title.trim();
+    final String trimmedBody = bodyText.trim();
+
+    if (trimmedTitle.isEmpty || trimmedBody.isEmpty) {
+      throw Exception('Title and content are required');
+    }
+
+    final String now = DateTime.now().toUtc().toIso8601String();
+    final String normalizedLanguage = _normalizePostLanguage(language);
+
+    await _client
+        .from('community_posts')
+        .update({
+          'title': trimmedTitle,
+          'body_text': trimmedBody,
+          'plain_text': trimmedBody,
+          'language': normalizedLanguage,
+          'language_code': _languageCodeFor(normalizedLanguage),
+          'category': category,
+          'updated_at': now,
+        })
+        .eq('id', postId);
+  }
+
+  Future<void> softDeletePost(String postId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    await _client
+        .from('community_posts')
+        .update({
+          'is_deleted': true,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', postId);
   }
 
   Future<void> toggleLikePost(String postId) async {
@@ -419,13 +477,19 @@ class CommunityRepository {
           .eq('user_id', user.id);
     }
 
-    final likeCount =
-        await _countRows('community_post_likes', 'post_id', postId);
+    final likeCount = await _countRows(
+      'community_post_likes',
+      'post_id',
+      postId,
+    );
 
-    await _client.from('community_posts').update({
-      'like_count': likeCount,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', postId);
+    await _client
+        .from('community_posts')
+        .update({
+          'like_count': likeCount,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', postId);
   }
 
   Future<void> toggleLikeComment(String commentId) async {
@@ -453,6 +517,60 @@ class CommunityRepository {
           .eq('comment_id', commentId)
           .eq('user_id', user.id);
     }
+  }
+
+  Future<void> updateComment({
+    required String commentId,
+    required String message,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final String trimmedMessage = message.trim();
+    if (trimmedMessage.isEmpty) {
+      throw Exception('Comment cannot be empty');
+    }
+
+    await _client
+        .from('community_comments')
+        .update({
+          'message': trimmedMessage,
+          'body': trimmedMessage,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', commentId);
+  }
+
+  Future<void> softDeleteComment({
+    required String commentId,
+    required String postId,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final String now = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('community_comments')
+        .update({'is_deleted': true, 'updated_at': now})
+        .eq('id', commentId);
+
+    final commentsResponse = await _client
+        .from('community_comments')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('is_deleted', false);
+
+    await _client
+        .from('community_posts')
+        .update({
+          'comment_count': (commentsResponse as List).length,
+          'updated_at': now,
+        })
+        .eq('id', postId);
   }
 
   Future<List<CommunityCommentModel>> fetchCommentsByAuthor(
@@ -485,8 +603,9 @@ class CommunityRepository {
 
   Future<int> fetchUserReceivedLikesCount(String userId) async {
     final bool hasPostLikesTable = await _hasTable('community_post_likes');
-    final bool hasCommentLikesTable =
-        await _hasTable('community_comment_likes');
+    final bool hasCommentLikesTable = await _hasTable(
+      'community_comment_likes',
+    );
 
     if (!hasPostLikesTable && !hasCommentLikesTable) {
       return 0;
@@ -643,7 +762,10 @@ class CommunityRepository {
       } catch (_) {}
     }
 
-    if (!areFriends && !outgoingPending && !incomingPending && hasRequestsTable) {
+    if (!areFriends &&
+        !outgoingPending &&
+        !incomingPending &&
+        hasRequestsTable) {
       try {
         final outgoing = await _client
             .from('friend_requests')

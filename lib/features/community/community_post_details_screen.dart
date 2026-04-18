@@ -31,6 +31,24 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
   bool _isTogglingPostLike = false;
   final Set<String> _togglingCommentLikes = <String>{};
 
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  bool _isPostOwner(CommunityPostModel post) {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      return false;
+    }
+    return post.authorId == currentUserId;
+  }
+
+  bool _isCommentOwner(CommunityCommentModel comment) {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      return false;
+    }
+    return comment.authorId == currentUserId;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -176,6 +194,206 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
     }
   }
 
+  Future<void> _editPost(CommunityPostModel post) async {
+    final titleController = TextEditingController(text: post.title);
+    final bodyController = TextEditingController(text: post.bodyText);
+
+    try {
+      final bool? shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Edit post'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: bodyController,
+                    minLines: 5,
+                    maxLines: 10,
+                    decoration: const InputDecoration(labelText: 'Content'),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+
+      await _repository.updatePost(
+        postId: post.id,
+        title: titleController.text,
+        bodyText: bodyController.text,
+        language: post.language,
+        category: post.category,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update post: $error')),
+      );
+    } finally {
+      titleController.dispose();
+      bodyController.dispose();
+    }
+  }
+
+  Future<void> _deletePost(CommunityPostModel post) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete post?'),
+          content: const Text('This will remove your post from the feed.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.softDeletePost(post.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete post: $error')),
+      );
+    }
+  }
+
+  Future<void> _editComment(CommunityCommentModel comment) async {
+    final controller = TextEditingController(text: comment.message);
+
+    try {
+      final bool? shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Edit comment'),
+            content: TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Comment'),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+
+      await _repository.updateComment(
+        commentId: comment.id,
+        message: controller.text,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update comment: $error')),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _deleteComment(CommunityCommentModel comment) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete comment?'),
+          content: const Text('This will remove your comment.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.softDeleteComment(
+        commentId: comment.id,
+        postId: comment.postId,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete comment: $error')),
+      );
+    }
+  }
+
   void _openProfile(String? userId, String fallbackName) {
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -267,6 +485,29 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Post'),
+        actions: post == null || !_isPostOwner(post)
+            ? null
+            : <Widget>[
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editPost(post);
+                    } else if (value == 'delete') {
+                      _deletePost(post);
+                    }
+                  },
+                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Edit post'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Delete post'),
+                    ),
+                  ],
+                ),
+              ],
       ),
       body: SafeArea(
         child: _isLoading
@@ -350,7 +591,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                       itemCount: post.imageUrls.isNotEmpty
                                           ? post.imageUrls.length
                                           : 1,
-                                      separatorBuilder: (_, __) =>
+                                      separatorBuilder: (_, _) =>
                                           const SizedBox(width: 10),
                                       itemBuilder: (context, index) {
                                         final imageUrl = post.imageUrls.isNotEmpty
@@ -471,6 +712,7 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                           ..._comments.map((CommunityCommentModel comment) {
                             final isBusy =
                                 _togglingCommentLikes.contains(comment.id);
+                            final bool isOwner = _isCommentOwner(comment);
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
@@ -519,6 +761,27 @@ class _CommunityPostDetailsScreenState extends State<CommunityPostDetailsScreen>
                                             ),
                                           ),
                                           IconButton(
+                                          if (isOwner)
+                                            PopupMenuButton<String>(
+                                              onSelected: (value) {
+                                                if (value == 'edit') {
+                                                  _editComment(comment);
+                                                } else if (value == 'delete') {
+                                                  _deleteComment(comment);
+                                                }
+                                              },
+                                              itemBuilder: (context) =>
+                                                  const <PopupMenuEntry<String>>[
+                                                PopupMenuItem<String>(
+                                                  value: 'edit',
+                                                  child: Text('Edit'),
+                                                ),
+                                                PopupMenuItem<String>(
+                                                  value: 'delete',
+                                                  child: Text('Delete'),
+                                                ),
+                                              ],
+                                            ),
                                             onPressed: isBusy
                                                 ? null
                                                 : () => _toggleCommentLike(

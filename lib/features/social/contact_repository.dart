@@ -11,13 +11,15 @@ class ContactRepository {
 
     final response = await _client
         .from('user_contacts')
-        .select()
+        .select(
+          'id, requester_id, addressee_id, status, '
+          'requester_profile:profiles!user_contacts_requester_id_fkey(call_sign, user_code), '
+          'addressee_profile:profiles!user_contacts_addressee_id_fkey(call_sign, user_code)',
+        )
         .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
         .order('created_at', ascending: false);
 
-    return response
-        .map<ContactModel>((e) => ContactModel.fromJson(e))
-        .toList();
+    return response.map<ContactModel>((e) => ContactModel.fromJson(e)).toList();
   }
 
   Future<void> sendRequest(String userId) async {
@@ -29,19 +31,29 @@ class ContactRepository {
     });
   }
 
-  Future<void> acceptRequest(String id) async {
+  Future<void> acceptRequest(ContactModel contact) async {
     await _client
         .from('user_contacts')
         .update({'status': 'accepted'})
-        .eq('id', id);
+        .eq('requester_id', contact.requesterId)
+        .eq('addressee_id', contact.addresseeId)
+        .eq('status', 'pending');
   }
 
-  Future<void> rejectRequest(String id) async {
-    await _client.from('user_contacts').delete().eq('id', id);
+  Future<void> rejectRequest(ContactModel contact) async {
+    await _client
+        .from('user_contacts')
+        .delete()
+        .eq('requester_id', contact.requesterId)
+        .eq('addressee_id', contact.addresseeId);
   }
 
-  Future<void> removeContact(String id) async {
-    await _client.from('user_contacts').delete().eq('id', id);
+  Future<void> removeContact(ContactModel contact) async {
+    await _client
+        .from('user_contacts')
+        .delete()
+        .eq('requester_id', contact.requesterId)
+        .eq('addressee_id', contact.addresseeId);
   }
 
   Future<bool> areAcceptedContacts(String otherUserId) async {

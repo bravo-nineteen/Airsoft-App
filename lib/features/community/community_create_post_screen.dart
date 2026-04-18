@@ -233,7 +233,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                   const SizedBox(height: 14),
                   if (!_isProfilePost)
                     DropdownButtonFormField<String>(
-                      value: _selectedCategory,
+                      initialValue: _selectedCategory,
                       decoration: InputDecoration(
                         labelText: l10n.t('category'),
                       ),

@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import 'event_create_screen.dart';
 import 'event_model.dart';
 import 'event_repository.dart';
 
 class EventDetailsScreen extends StatefulWidget {
-  const EventDetailsScreen({
-    super.key,
-    required this.event,
-  });
+  const EventDetailsScreen({super.key, required this.event});
 
   final EventModel event;
 
@@ -64,9 +62,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load event: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load event: $error')));
     }
   }
 
@@ -176,6 +174,62 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  Future<void> _editEvent() async {
+    final bool? didSave = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EventCreateScreen(
+          existingEvent: _event,
+          isOfficial: _event.isOfficial,
+        ),
+      ),
+    );
+
+    if (didSave == true) {
+      await _load();
+    }
+  }
+
+  Future<void> _deleteEvent() async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete event?'),
+          content: const Text('This will permanently delete this event.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.deleteEvent(_event.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete event: $error')));
+    }
+  }
+
   Widget _buildAttendanceActions() {
     final String? status = _event.currentUserAttendanceStatus;
 
@@ -187,9 +241,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           children: <Widget>[
             Text(
               'Attendance',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             Wrap(
@@ -302,9 +356,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           children: <Widget>[
             Text(
               'Host Controls',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
@@ -317,7 +371,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             else
               ..._attendees.map((EventAttendanceRecord attendee) {
                 final bool isBusy = _busyAttendeeIds.contains(attendee.userId);
-                final String displayName = attendee.displayName?.trim().isNotEmpty == true
+                final String displayName =
+                    attendee.displayName?.trim().isNotEmpty == true
                     ? attendee.displayName!
                     : attendee.userId;
 
@@ -334,11 +389,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         children: <Widget>[
                           CircleAvatar(
                             radius: 18,
-                            backgroundImage: attendee.avatarUrl != null &&
+                            backgroundImage:
+                                attendee.avatarUrl != null &&
                                     attendee.avatarUrl!.trim().isNotEmpty
                                 ? NetworkImage(attendee.avatarUrl!)
                                 : null,
-                            child: attendee.avatarUrl == null ||
+                            child:
+                                attendee.avatarUrl == null ||
                                     attendee.avatarUrl!.trim().isEmpty
                                 ? Text(
                                     displayName.substring(0, 1).toUpperCase(),
@@ -352,13 +409,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               children: <Widget>[
                                 Text(
                                   displayName,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(height: 4),
-                                Text('Status: ${_readableStatus(attendee.status)}'),
+                                Text(
+                                  'Status: ${_readableStatus(attendee.status)}',
+                                ),
                               ],
                             ),
                           ),
@@ -373,27 +430,27 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             onPressed: isBusy
                                 ? null
                                 : () => _hostUpdateStatus(
-                                      attendeeUserId: attendee.userId,
-                                      status: 'attended',
-                                    ),
+                                    attendeeUserId: attendee.userId,
+                                    status: 'attended',
+                                  ),
                             child: const Text('Mark Attended'),
                           ),
                           OutlinedButton(
                             onPressed: isBusy
                                 ? null
                                 : () => _hostUpdateStatus(
-                                      attendeeUserId: attendee.userId,
-                                      status: 'no_show',
-                                    ),
+                                    attendeeUserId: attendee.userId,
+                                    status: 'no_show',
+                                  ),
                             child: const Text('Mark No Show'),
                           ),
                           OutlinedButton(
                             onPressed: isBusy
                                 ? null
                                 : () => _hostUpdateStatus(
-                                      attendeeUserId: attendee.userId,
-                                      status: 'attending',
-                                    ),
+                                    attendeeUserId: attendee.userId,
+                                    status: 'attending',
+                                  ),
                             child: const Text('Reset'),
                           ),
                         ],
@@ -432,7 +489,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(_event.title)),
+      appBar: AppBar(
+        title: Text(_event.title),
+        actions: _isCurrentUserHost(_event)
+            ? <Widget>[
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editEvent();
+                    } else if (value == 'delete') {
+                      _deleteEvent();
+                    }
+                  },
+                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Edit event'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Delete event'),
+                    ),
+                  ],
+                ),
+              ]
+            : null,
+      ),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -568,10 +650,7 @@ class _DetailTile extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.icon,
-    required this.label,
-  });
+  const _StatusChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;

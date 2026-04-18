@@ -17,8 +17,7 @@ class DirectMessageThreadsScreen extends StatefulWidget {
 
 class _DirectMessageThreadsScreenState
     extends State<DirectMessageThreadsScreen> {
-  final DirectMessageThreadRepository _repo =
-      DirectMessageThreadRepository();
+  final DirectMessageThreadRepository _repo = DirectMessageThreadRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
 
@@ -36,26 +35,27 @@ class _DirectMessageThreadsScreenState
   }
 
   Future<void> _openCompose() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ContactsScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
     await _refresh();
   }
 
   Future<String> _resolveName(String userId) async {
-    final l10n = AppLocalizations.of(context);
     final data = await Supabase.instance.client
         .from('profiles')
-        .select('call_sign')
+        .select('call_sign, user_code')
         .eq('id', userId)
         .maybeSingle();
 
     if (data == null) {
-      return l10n.t('operator');
+      return 'Unknown user';
     }
 
-    final value = (data['call_sign'] ?? l10n.t('operator')).toString().trim();
-    return value.isEmpty ? l10n.t('operator') : value;
+    final value = (data['call_sign'] ?? data['user_code'] ?? '')
+        .toString()
+        .trim();
+    return value.isEmpty ? 'Unknown user' : value;
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
