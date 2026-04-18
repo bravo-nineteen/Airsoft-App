@@ -11,7 +11,10 @@ class FieldDetailsScreen extends StatelessWidget {
   final FieldModel field;
 
   Future<void> _openInMaps(BuildContext context) async {
-    final String label = field.name.trim().isEmpty ? 'Field' : field.name;
+    final l10n = AppLocalizations.of(context);
+    final String label = field.name.trim().isEmpty
+        ? l10n.t('fieldFallbackName')
+        : field.name;
     final String locationQuery = field.fullLocation.trim().isNotEmpty
         ? '${field.fullLocation} ($label)'
         : label;
@@ -50,7 +53,7 @@ class FieldDetailsScreen extends StatelessWidget {
     if (!openedApple && context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open map app.')));
+      ).showSnackBar(SnackBar(content: Text(l10n.t('failedOpenMapApp'))));
     }
   }
 
@@ -100,7 +103,7 @@ class FieldDetailsScreen extends StatelessWidget {
               TextButton.icon(
                 onPressed: () => _openInMaps(context),
                 icon: const Icon(Icons.map_outlined),
-                label: const Text('Open in Maps'),
+                label: Text(l10n.t('openInMaps')),
               ),
               if (secondaryLine.isNotEmpty) ...[
                 const SizedBox(height: 4),
