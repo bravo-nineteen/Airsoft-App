@@ -1,6 +1,7 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
@@ -20,6 +21,7 @@ class CommunityListScreen extends StatefulWidget {
 class _CommunityListScreenState extends State<CommunityListScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _searchController = TextEditingController();
+  RealtimeChannel? _postsChannel;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isLoading = true;
@@ -35,6 +37,79 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   void initState() {
     super.initState();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _postsChannel = Supabase.instance.client.channel('community-feed-updates');
+
+    _postsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            _handleRealtimePost(payload.newRecord);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            _handleRealtimePost(payload.newRecord);
+          },
+        )
+        .subscribe();
+  }
+
+  void _handleRealtimePost(Map<String, dynamic> row) {
+    if (!mounted) {
+      return;
+    }
+
+    final CommunityPostModel incoming = CommunityPostModel.fromJson(row);
+    if (incoming.postContext != 'community') {
+      return;
+    }
+    if (row['is_deleted'] == true) {
+      setState(() {
+        _posts = _posts
+            .where((CommunityPostModel post) => post.id != incoming.id)
+            .toList();
+      });
+      return;
+    }
+
+    final int index = _posts.indexWhere(
+      (CommunityPostModel post) => post.id == incoming.id,
+    );
+
+    if (index == -1) {
+      setState(() {
+        _posts = <CommunityPostModel>[
+          incoming.copyWith(
+            category: CommunityPostCategories.normalizeCommunityCategory(
+              incoming.category,
+            ),
+          ),
+          ..._posts,
+        ];
+      });
+      return;
+    }
+
+    final CommunityPostModel existing = _posts[index];
+    final CommunityPostModel merged = incoming.copyWith(
+      isLikedByMe: existing.isLikedByMe,
+      category: CommunityPostCategories.normalizeCommunityCategory(
+        incoming.category,
+      ),
+    );
+
+    setState(() {
+      _posts[index] = merged;
+    });
   }
 
   @override
@@ -190,6 +265,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   void dispose() {
+    if (_postsChannel != null) {
+      Supabase.instance.client.removeChannel(_postsChannel!);
+    }
     _searchController.dispose();
     super.dispose();
   }
