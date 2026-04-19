@@ -24,6 +24,9 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _typeController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _featuresController = TextEditingController();
+  final TextEditingController _prosController = TextEditingController();
+  final TextEditingController _consController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
   final TextEditingController _latitudeController = TextEditingController();
   final TextEditingController _longitudeController = TextEditingController();
@@ -44,6 +47,9 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
     _cityController.text = field.city ?? '';
     _typeController.text = field.fieldType ?? '';
     _descriptionController.text = field.description;
+    _featuresController.text = field.featuresText ?? '';
+    _prosController.text = field.prosText ?? '';
+    _consController.text = field.consText ?? '';
     _imageUrlController.text = field.imageUrl ?? '';
     _latitudeController.text = field.latitude.toString();
     _longitudeController.text = field.longitude.toString();
@@ -81,6 +87,9 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
           city: _cityController.text,
           fieldType: _typeController.text,
           imageUrl: _imageUrlController.text,
+          featuresText: _featuresController.text,
+          prosText: _prosController.text,
+          consText: _consController.text,
           isOfficial: widget.existingField!.isOfficial,
         );
       } else {
@@ -94,6 +103,9 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
           city: _cityController.text,
           fieldType: _typeController.text,
           imageUrl: _imageUrlController.text,
+          featuresText: _featuresController.text,
+          prosText: _prosController.text,
+          consText: _consController.text,
         );
       }
       if (!mounted) {
@@ -131,6 +143,9 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
     _cityController.dispose();
     _typeController.dispose();
     _descriptionController.dispose();
+    _featuresController.dispose();
+    _prosController.dispose();
+    _consController.dispose();
     _imageUrlController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
@@ -166,6 +181,34 @@ class _AdminCreateFieldScreenState extends State<AdminCreateFieldScreen> {
           TextField(controller: _longitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: l10n.t('longitude'))),
           const SizedBox(height: 12),
           TextField(controller: _descriptionController, minLines: 4, maxLines: 8, decoration: InputDecoration(labelText: l10n.t('description'))),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _featuresController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Features (comma separated)',
+              hintText: 'Parking, CQB zones, Night games',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _prosController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Pros (comma separated)',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _consController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Cons (comma separated)',
+            ),
+          ),
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: _isSaving ? null : _save,

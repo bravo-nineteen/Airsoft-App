@@ -26,8 +26,10 @@ class _CommunityPostDetailsScreenState
   CommunityPostModel? _post;
   List<CommunityCommentModel> _comments = <CommunityCommentModel>[];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   bool _isSendingComment = false;
   bool _isTogglingPostLike = false;
+  bool _showAllComments = false;
   final Set<String> _togglingCommentLikes = <String>{};
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
@@ -60,6 +62,16 @@ class _CommunityPostDetailsScreenState
         .toList();
   }
 
+  List<CommunityCommentModel> get _latestComments {
+    final List<CommunityCommentModel> sorted = List<CommunityCommentModel>.from(
+      _comments,
+    )..sort(
+        (CommunityCommentModel a, CommunityCommentModel b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return sorted.take(10).toList();
+  }
+
   List<CommunityCommentModel> _childRepliesFor(String parentCommentId) {
     return _comments
         .where((CommunityCommentModel comment) {
@@ -75,9 +87,13 @@ class _CommunityPostDetailsScreenState
     _load(incrementView: true);
   }
 
-  Future<void> _load({bool incrementView = false}) async {
+  Future<void> _load({bool incrementView = false, bool preserveContent = true}) async {
     setState(() {
-      _isLoading = true;
+      if (_post == null || !preserveContent) {
+        _isLoading = true;
+      } else {
+        _isRefreshing = true;
+      }
     });
 
     try {
@@ -96,6 +112,7 @@ class _CommunityPostDetailsScreenState
         _post = post;
         _comments = comments;
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -104,6 +121,7 @@ class _CommunityPostDetailsScreenState
 
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
       });
 
       ScaffoldMessenger.of(
@@ -126,33 +144,56 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final String tempId = 'temp-${DateTime.now().microsecondsSinceEpoch}';
+    final CommunityCommentModel optimistic = CommunityCommentModel(
+      id: tempId,
+      postId: _post!.id,
+      authorId: user.id,
+      authorName: 'You',
+      authorAvatarUrl: null,
+      message: message,
+      likeCount: 0,
+      likedByMe: false,
+      createdAt: DateTime.now(),
+      parentCommentId: _replyToCommentId,
+    );
+
     setState(() {
       _isSendingComment = true;
+      _comments = <CommunityCommentModel>[..._comments, optimistic];
+      _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
+      _commentController.clear();
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
     });
 
     try {
       await _repository.addComment(
         postId: _post!.id,
         message: message,
-        parentCommentId: _replyToCommentId,
+        parentCommentId: optimistic.parentCommentId,
       );
-      final List<CommunityCommentModel> comments = await _repository
-          .fetchComments(widget.postId);
 
-      _commentController.clear();
       if (!mounted) {
         return;
       }
-      setState(() {
-        _comments = comments;
-        _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
-        _replyToCommentId = null;
-        _replyToCommentAuthor = null;
-      });
+
+      // Background reconcile to pick up canonical author/ids without blocking UI.
+      _load(preserveContent: true);
     } catch (error) {
       if (!mounted) {
         return;
       }
+
+      setState(() {
+        _comments = _comments
+            .where((CommunityCommentModel c) => c.id != tempId)
+            .toList();
+        final int currentCount = _post?.commentCount ?? 1;
+        _post = _post?.copyWith(
+          commentCount: currentCount > 0 ? currentCount - 1 : 0,
+        );
+      });
 
       ScaffoldMessenger.of(
         context,
@@ -688,7 +729,7 @@ class _CommunityPostDetailsScreenState
               ],
       ),
       body: SafeArea(
-        child: _isLoading
+        child: _isLoading && post == null
             ? const Center(child: CircularProgressIndicator())
             : post == null
             ? const Center(child: Text('Post not found'))
@@ -697,6 +738,11 @@ class _CommunityPostDetailsScreenState
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                   children: <Widget>[
+                    if (_isRefreshing)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
                     Material(
                       color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(20),
@@ -927,34 +973,62 @@ class _CommunityPostDetailsScreenState
                         ),
                         child: const Text('No comments yet.'),
                       )
-                    else
-                      ..._topLevelComments.map((CommunityCommentModel comment) {
-                        final List<CommunityCommentModel> replies =
-                            _childRepliesFor(comment.id);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            _buildCommentCard(context, theme, comment),
-                            if (replies.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 22),
-                                child: Column(
-                                  children: replies
-                                      .map(
-                                        (CommunityCommentModel reply) =>
-                                            _buildCommentCard(
-                                              context,
-                                              theme,
-                                              reply,
-                                              isReply: true,
-                                            ),
-                                      )
-                                      .toList(),
+                    else ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _showAllComments = !_showAllComments;
+                            });
+                          },
+                          child: Text(
+                            _showAllComments
+                                ? 'Show latest 10 comments'
+                                : 'Open comments / see all comments',
+                          ),
+                        ),
+                      ),
+                      if (_showAllComments)
+                        ..._topLevelComments.map((CommunityCommentModel comment) {
+                          final List<CommunityCommentModel> replies =
+                              _childRepliesFor(comment.id);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              _buildCommentCard(context, theme, comment),
+                              if (replies.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 22),
+                                  child: Column(
+                                    children: replies
+                                        .map(
+                                          (CommunityCommentModel reply) =>
+                                              _buildCommentCard(
+                                                context,
+                                                theme,
+                                                reply,
+                                                isReply: true,
+                                              ),
+                                        )
+                                        .toList(),
+                                  ),
                                 ),
-                              ),
-                          ],
-                        );
-                      }),
+                            ],
+                          );
+                        })
+                      else
+                        ..._latestComments.map(
+                          (CommunityCommentModel comment) => _buildCommentCard(
+                            context,
+                            theme,
+                            comment,
+                            isReply:
+                                comment.parentCommentId != null &&
+                                comment.parentCommentId!.trim().isNotEmpty,
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),

@@ -87,7 +87,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openNotification(AppNotificationModel item) async {
-    await _repository.markRead(item.id);
+    try {
+      await _repository.markRead(item.id);
+    } catch (_) {
+      // Keep deep-link navigation working even when marking as read fails.
+    }
 
     if (!mounted) return;
 
@@ -152,6 +156,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     }
 
+    await _refresh();
+  }
+
+  Future<void> _deleteNotification(AppNotificationModel item) async {
+    await _repository.deleteNotification(item.id);
     await _refresh();
   }
 
@@ -296,27 +305,63 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               itemBuilder: (context, index) {
                 final item = items[index];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(child: Icon(_iconForType(item.type))),
-                    title: Text(item.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text(item.body),
-                        const SizedBox(height: 6),
-                        Text(
-                          _timeLabel(l10n, item.createdAt),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                return Dismissible(
+                  key: ValueKey<String>(item.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    alignment: Alignment.centerRight,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    trailing: item.isRead
-                        ? null
-                        : const Icon(Icons.fiber_manual_record, size: 12),
-                    onTap: () => _openNotification(item),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
+                  onDismissed: (_) async {
+                    await _deleteNotification(item);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Notification removed')),
+                    );
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(child: Icon(_iconForType(item.type))),
+                      title: Text(item.title),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(item.body),
+                          const SizedBox(height: 6),
+                          Text(
+                            _timeLabel(l10n, item.createdAt),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          if (!item.isRead)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Icon(Icons.fiber_manual_record, size: 12),
+                            ),
+                          IconButton(
+                            tooltip: 'Delete notification',
+                            onPressed: () => _deleteNotification(item),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      onTap: () => _openNotification(item),
+                    ),
                   ),
                 );
               },

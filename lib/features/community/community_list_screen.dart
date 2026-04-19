@@ -23,9 +23,11 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   String _selectedCategory = CommunityPostCategories.all;
   String _selectedLanguagePreference = 'english';
   bool _didInitLanguagePreference = false;
+  final Set<String> _busyLikePostIds = <String>{};
 
   static const List<String> _categories =
       CommunityPostCategories.communityCategoriesWithAll;
@@ -50,8 +52,13 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   }
 
   Future<void> _loadPosts() async {
+    final bool initialLoad = _posts.isEmpty && _isLoading;
     setState(() {
-      _isLoading = true;
+      if (initialLoad) {
+        _isLoading = true;
+      } else {
+        _isRefreshing = true;
+      }
     });
 
     try {
@@ -76,6 +83,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             )
             .toList();
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -84,6 +92,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +125,49 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     );
 
     await _loadPosts();
+  }
+
+  Future<void> _toggleLikeFromFeed(CommunityPostModel post) async {
+    if (_busyLikePostIds.contains(post.id)) {
+      return;
+    }
+
+    final int index = _posts.indexWhere((CommunityPostModel p) => p.id == post.id);
+    if (index == -1) {
+      return;
+    }
+
+    final CommunityPostModel original = _posts[index];
+    final bool nextLiked = !original.isLikedByMe;
+    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+
+    setState(() {
+      _busyLikePostIds.add(post.id);
+      _posts[index] = original.copyWith(
+        isLikedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
+    });
+
+    try {
+      await _repository.toggleLikePost(post.id);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _posts[index] = original;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to like post: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyLikePostIds.remove(post.id);
+        });
+      }
+    }
   }
 
   void _openProfile(String? userId, String fallbackName) {
@@ -190,6 +242,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         onRefresh: _loadPosts,
         child: Column(
           children: <Widget>[
+            if (_isRefreshing) const LinearProgressIndicator(minHeight: 2),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Column(
@@ -277,6 +330,21 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                     ),
                     style: theme.textTheme.bodySmall,
                   ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person_outline),
+                      ),
+                      title: const Text('Share an update with the community'),
+                      subtitle: const Text('Post tips, game plans, and photos'),
+                      trailing: FilledButton.icon(
+                        onPressed: _openCreateScreen,
+                        icon: const Icon(Icons.add_comment_outlined),
+                        label: const Text('Post'),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -307,6 +375,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                                 _ => l10n.t('english'),
                               },
                               onTap: () => _openPostDetails(post),
+                              onLikeTap: () => _toggleLikeFromFeed(post),
+                              isLiking: _busyLikePostIds.contains(post.id),
                               onAuthorTap: () =>
                                   _openProfile(post.authorId, post.authorName),
                             );
@@ -326,6 +396,8 @@ class _CompactPostCard extends StatelessWidget {
     required this.timeAgo,
     required this.languageLabel,
     required this.onTap,
+    required this.onLikeTap,
+    required this.isLiking,
     required this.onAuthorTap,
   });
 
@@ -333,6 +405,8 @@ class _CompactPostCard extends StatelessWidget {
   final String timeAgo;
   final String languageLabel;
   final VoidCallback onTap;
+  final VoidCallback onLikeTap;
+  final bool isLiking;
   final VoidCallback onAuthorTap;
 
   @override
@@ -523,6 +597,50 @@ class _CompactPostCard extends StatelessWidget {
                             label: post.imageUrls.length.toString(),
                           ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: isLiking ? null : onLikeTap,
+                              icon: isLiking
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      post.isLikedByMe
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                    ),
+                              label: Text('Like ${post.likeCount}'),
+                            ),
+                          ),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: onTap,
+                              icon: const Icon(Icons.mode_comment_outlined),
+                              label: Text('Comment ${post.commentCount}'),
+                            ),
+                          ),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: onTap,
+                              icon: const Icon(Icons.open_in_new_outlined),
+                              label: const Text('Open'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

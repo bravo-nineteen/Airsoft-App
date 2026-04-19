@@ -27,6 +27,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _instagramController;
   late final TextEditingController _facebookController;
   late final TextEditingController _youtubeController;
+    final List<TextEditingController> _loadoutTitleControllers =
+      <TextEditingController>[];
+    final List<TextEditingController> _loadoutDescriptionControllers =
+      <TextEditingController>[];
+    final List<TextEditingController> _loadoutImageControllers =
+      <TextEditingController>[];
 
   late ProfileModel _profile;
   bool _isSaving = false;
@@ -42,6 +48,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _instagramController = TextEditingController(text: _profile.instagram ?? '');
     _facebookController = TextEditingController(text: _profile.facebook ?? '');
     _youtubeController = TextEditingController(text: _profile.youtube ?? '');
+
+    final List<ProfileLoadoutCard> cards = _profile.normalizedLoadoutCards;
+    for (final ProfileLoadoutCard card in cards) {
+      _loadoutTitleControllers.add(
+        TextEditingController(text: card.title ?? ''),
+      );
+      _loadoutDescriptionControllers.add(
+        TextEditingController(text: card.description ?? ''),
+      );
+      _loadoutImageControllers.add(
+        TextEditingController(text: card.imageUrl ?? ''),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -56,6 +75,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         instagram: _instagramController.text.trim(),
         facebook: _facebookController.text.trim(),
         youtube: _youtubeController.text.trim(),
+        loadoutCards: List<ProfileLoadoutCard>.generate(3, (int index) {
+          return ProfileLoadoutCard(
+            title: _loadoutTitleControllers[index].text.trim(),
+            description: _loadoutDescriptionControllers[index].text.trim(),
+            imageUrl: _loadoutImageControllers[index].text.trim(),
+          );
+        }),
       );
 
       final saved = await _repository.updateCurrentProfile(updated);
@@ -87,6 +113,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _instagramController.dispose();
     _facebookController.dispose();
     _youtubeController.dispose();
+    for (final TextEditingController controller in _loadoutTitleControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller
+        in _loadoutDescriptionControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller in _loadoutImageControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -128,6 +164,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             controller: _loadoutController,
             decoration: InputDecoration(labelText: l10n.loadout),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'Loadout photo cards',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Add up to 3 loadouts. Each card shows image, title, and details.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          ...List<Widget>.generate(3, (int index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Loadout ${index + 1}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _loadoutImageControllers[index],
+                        decoration: const InputDecoration(
+                          labelText: 'Image URL',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _loadoutTitleControllers[index],
+                        decoration: const InputDecoration(
+                          labelText: 'Loadout title',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _loadoutDescriptionControllers[index],
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Loadout details',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
           const SizedBox(height: 12),
           TextField(
             controller: _instagramController,

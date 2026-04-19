@@ -95,9 +95,6 @@ create index if not exists idx_community_comment_likes_comment_id
 create index if not exists idx_community_comment_likes_user_id
   on public.community_comment_likes (user_id);
 
--- ------------------------------------------------------------
--- Social contacts + direct messages
--- ------------------------------------------------------------
 create table if not exists public.user_contacts (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid not null references auth.users(id) on delete cascade,
@@ -256,6 +253,25 @@ alter table public.events
   add column if not exists updated_at timestamptz not null default now();
 alter table public.event_attendees
   add column if not exists updated_at timestamptz not null default now();
+alter table public.fields
+  add column if not exists feature_list text;
+alter table public.fields
+  add column if not exists pros_list text;
+alter table public.fields
+  add column if not exists cons_list text;
+alter table public.profiles
+  add column if not exists loadout_cards jsonb not null default '[]'::jsonb;
+
+create table if not exists public.field_reviews (
+  id uuid primary key default gen_random_uuid(),
+  field_id uuid not null references public.fields(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  rating integer not null check (rating between 1 and 5),
+  review_text text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (field_id, user_id)
+);
 
 create index if not exists idx_event_attendees_event_id
   on public.event_attendees (event_id);
@@ -276,6 +292,7 @@ alter table public.direct_messages enable row level security;
 alter table public.notifications enable row level security;
 alter table public.events enable row level security;
 alter table public.event_attendees enable row level security;
+alter table public.field_reviews enable row level security;
 
 -- community_posts
 drop policy if exists community_posts_select_public on public.community_posts;
@@ -492,6 +509,20 @@ create policy event_attendees_update_self_or_host
     )
   );
 
+drop policy if exists field_reviews_select_public on public.field_reviews;
+create policy field_reviews_select_public
+  on public.field_reviews
+  for select
+  using (true);
+
+drop policy if exists field_reviews_manage_own on public.field_reviews;
+create policy field_reviews_manage_own
+  on public.field_reviews
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- ------------------------------------------------------------
 -- updated_at helper trigger
 -- ------------------------------------------------------------
@@ -500,7 +531,12 @@ returns trigger
 language plpgsql
 as $$
 begin
-  new.updated_at = now();
+  if to_jsonb(new) ? 'updated_at' then
+    new := jsonb_populate_record(
+      new,
+      jsonb_set(to_jsonb(new), '{updated_at}', to_jsonb(now()))
+    );
+  end if;
   return new;
 end;
 $$;

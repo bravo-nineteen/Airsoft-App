@@ -250,8 +250,11 @@ class AdminRepository {
     String? city,
     String? fieldType,
     String? imageUrl,
+    String? featuresText,
+    String? prosText,
+    String? consText,
   }) async {
-    await _client.from('fields').insert({
+    final Map<String, dynamic> payload = {
       'name': name.trim(),
       'location_name': locationName.trim(),
       'description': description.trim(),
@@ -261,8 +264,23 @@ class AdminRepository {
       'city': _nullIfEmpty(city),
       'field_type': _nullIfEmpty(fieldType),
       'image_url': _nullIfEmpty(imageUrl),
+      'feature_list': _nullIfEmpty(featuresText),
+      'pros_list': _nullIfEmpty(prosText),
+      'cons_list': _nullIfEmpty(consText),
       'is_official': true,
-    });
+    };
+
+    try {
+      await _client.from('fields').insert(payload);
+    } on PostgrestException catch (error) {
+      if (!_isMissingFieldMetaColumnError(error)) {
+        rethrow;
+      }
+      payload.remove('feature_list');
+      payload.remove('pros_list');
+      payload.remove('cons_list');
+      await _client.from('fields').insert(payload);
+    }
   }
 
   Future<void> updateField({
@@ -276,11 +294,12 @@ class AdminRepository {
     String? city,
     String? fieldType,
     String? imageUrl,
+    String? featuresText,
+    String? prosText,
+    String? consText,
     bool isOfficial = true,
   }) async {
-    await _client
-        .from('fields')
-        .update({
+    final Map<String, dynamic> payload = {
           'name': name.trim(),
           'location_name': locationName.trim(),
           'description': description.trim(),
@@ -290,9 +309,23 @@ class AdminRepository {
           'city': _nullIfEmpty(city),
           'field_type': _nullIfEmpty(fieldType),
           'image_url': _nullIfEmpty(imageUrl),
+          'feature_list': _nullIfEmpty(featuresText),
+          'pros_list': _nullIfEmpty(prosText),
+          'cons_list': _nullIfEmpty(consText),
           'is_official': isOfficial,
-        })
-        .eq('id', fieldId);
+        };
+
+    try {
+      await _client.from('fields').update(payload).eq('id', fieldId);
+    } on PostgrestException catch (error) {
+      if (!_isMissingFieldMetaColumnError(error)) {
+        rethrow;
+      }
+      payload.remove('feature_list');
+      payload.remove('pros_list');
+      payload.remove('cons_list');
+      await _client.from('fields').update(payload).eq('id', fieldId);
+    }
   }
 
   String? _nullIfEmpty(String? value) {
@@ -301,6 +334,18 @@ class AdminRepository {
     }
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  bool _isMissingFieldMetaColumnError(PostgrestException error) {
+    if (error.code != 'PGRST204' && error.code != '42703') {
+      return false;
+    }
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains('feature_list') ||
+        summary.contains('pros_list') ||
+        summary.contains('cons_list');
   }
 }
 

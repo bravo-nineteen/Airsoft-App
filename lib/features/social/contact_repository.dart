@@ -69,12 +69,32 @@ class ContactRepository {
   }
 
   Future<void> acceptRequest(ContactModel contact) async {
-    await _client
-        .from('user_contacts')
-        .update({'status': 'accepted'})
-        .eq('requester_id', contact.requesterId)
-        .eq('addressee_id', contact.addresseeId)
-        .eq('status', 'pending');
+    try {
+      await _client
+          .from('user_contacts')
+          .update({'status': 'accepted'})
+          .eq('requester_id', contact.requesterId)
+          .eq('addressee_id', contact.addresseeId)
+          .eq('status', 'pending');
+    } on PostgrestException catch (error) {
+      if (!_isMissingUpdatedAtTriggerError(error)) {
+        rethrow;
+      }
+
+      // Legacy DBs can have `set_updated_at` triggers on tables that do not
+      // yet include the `updated_at` column. Recreate the row to avoid update.
+      await _client
+          .from('user_contacts')
+          .delete()
+          .eq('requester_id', contact.requesterId)
+          .eq('addressee_id', contact.addresseeId);
+
+      await _client.from('user_contacts').insert({
+        'requester_id': contact.requesterId,
+        'addressee_id': contact.addresseeId,
+        'status': 'accepted',
+      });
+    }
 
     final String actorName = await _notificationWriter.getCurrentActorName();
     await _notificationWriter.safeCreateNotification(
@@ -129,5 +149,16 @@ class ContactRepository {
         .eq('status', 'pending');
 
     return response.length;
+  }
+
+  bool _isMissingUpdatedAtTriggerError(PostgrestException error) {
+    if (error.code != '42703' && error.code != 'PGRST204') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains('updated_at') && summary.contains('new');
   }
 }

@@ -66,7 +66,7 @@ void main() {
         home: NotificationsScreen(
           repository: repository,
           subscribeToRealtime: false,
-          onOpenNotification: (_, __) async {},
+          onOpenNotification: (_, _) async {},
         ),
       ),
     );
@@ -107,7 +107,7 @@ void main() {
         home: NotificationsScreen(
           repository: repository,
           subscribeToRealtime: false,
-          onOpenNotification: (_, __) async {
+          onOpenNotification: (_, _) async {
             openCalls += 1;
           },
         ),

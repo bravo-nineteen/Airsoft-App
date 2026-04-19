@@ -204,11 +204,24 @@ class EventRepository {
     if (existing == null) {
       await _resolvedClient.from('event_attendees').insert(payload);
     } else {
+      try {
         await _resolvedClient
           .from('event_attendees')
           .update({'status': 'attending'})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
+      } on PostgrestException catch (error) {
+        if (!_isMissingUpdatedAtTriggerError(error)) {
+          rethrow;
+        }
+
+        await _resolvedClient
+            .from('event_attendees')
+            .delete()
+            .eq('event_id', eventId)
+            .eq('user_id', user.id);
+        await _resolvedClient.from('event_attendees').insert(payload);
+      }
     }
 
     final String actorName = await _notificationWriter.getCurrentActorName();
@@ -247,11 +260,28 @@ class EventRepository {
         'status': 'cancelled',
       });
     } else {
-      await _resolvedClient
-          .from('event_attendees')
-          .update({'status': 'cancelled'})
-          .eq('event_id', eventId)
-          .eq('user_id', user.id);
+      try {
+        await _resolvedClient
+            .from('event_attendees')
+            .update({'status': 'cancelled'})
+            .eq('event_id', eventId)
+            .eq('user_id', user.id);
+      } on PostgrestException catch (error) {
+        if (!_isMissingUpdatedAtTriggerError(error)) {
+          rethrow;
+        }
+
+        await _resolvedClient
+            .from('event_attendees')
+            .delete()
+            .eq('event_id', eventId)
+            .eq('user_id', user.id);
+        await _resolvedClient.from('event_attendees').insert({
+          'event_id': eventId,
+          'user_id': user.id,
+          'status': 'cancelled',
+        });
+      }
     }
 
     final String actorName = await _notificationWriter.getCurrentActorName();
@@ -299,11 +329,14 @@ class EventRepository {
           .eq('event_id', eventId)
           .eq('user_id', attendeeUserId);
     } on PostgrestException catch (error) {
-      if (!_isMissingConfirmedAtColumnError(error)) {
+      if (_isMissingUpdatedAtTriggerError(error)) {
+        payload.remove('updated_at');
+      } else if (!_isMissingConfirmedAtColumnError(error)) {
         rethrow;
+      } else {
+        payload.remove('confirmed_at');
       }
 
-      payload.remove('confirmed_at');
         await _resolvedClient
           .from('event_attendees')
           .update(payload)
@@ -343,6 +376,17 @@ class EventRepository {
             .toLowerCase();
     return summary.contains('confirmed_at') &&
         summary.contains('event_attendees');
+  }
+
+  bool _isMissingUpdatedAtTriggerError(PostgrestException error) {
+    if (error.code != '42703' && error.code != 'PGRST204') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains('updated_at') && summary.contains('new');
   }
 
   bool _isMissingColumnError(PostgrestException error, String columnName) {

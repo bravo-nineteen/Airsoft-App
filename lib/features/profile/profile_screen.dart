@@ -147,6 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _InfoCard(title: l10n.area, value: profile.area),
             _InfoCard(title: l10n.teamName, value: profile.teamName),
             _InfoCard(title: l10n.loadout, value: profile.loadout),
+            _LoadoutGallery(cards: profile.normalizedLoadoutCards),
             _InfoCard(title: l10n.instagram, value: profile.instagram),
             _InfoCard(title: l10n.facebook, value: profile.facebook),
             _InfoCard(title: l10n.youtube, value: profile.youtube),
@@ -190,6 +191,117 @@ class _InfoCard extends StatelessWidget {
           subtitle: Text(value!),
         ),
       ),
+    );
+  }
+}
+
+class _LoadoutGallery extends StatelessWidget {
+  const _LoadoutGallery({required this.cards});
+
+  final List<ProfileLoadoutCard> cards;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<ProfileLoadoutCard> nonEmpty = cards
+        .where((ProfileLoadoutCard card) => !card.isEmpty)
+        .toList();
+    if (nonEmpty.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Loadout Gallery',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final double gap = 10;
+                  final bool narrow = constraints.maxWidth < 720;
+                  final int columns = narrow ? 1 : 3;
+                  final double cardWidth =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: nonEmpty.map((ProfileLoadoutCard card) {
+                      return SizedBox(
+                        width: narrow ? constraints.maxWidth : cardWidth,
+                        child: _LoadoutGalleryCard(card: card),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadoutGalleryCard extends StatelessWidget {
+  const _LoadoutGalleryCard({required this.card});
+
+  final ProfileLoadoutCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: (card.imageUrl ?? '').trim().isNotEmpty
+                    ? Image.network(
+                        card.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _buildFallbackImage(context),
+                      )
+                    : _buildFallbackImage(context),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              (card.title ?? '').trim().isEmpty ? 'Untitled loadout' : card.title!,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text((card.description ?? '').trim()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackImage(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      alignment: Alignment.center,
+      child: const Icon(Icons.inventory_2_outlined, size: 30),
     );
   }
 }

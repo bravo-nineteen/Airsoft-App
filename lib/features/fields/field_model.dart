@@ -12,6 +12,9 @@ class FieldModel {
     this.imageUrl,
     this.rating,
     this.reviewCount,
+    this.featuresText,
+    this.prosText,
+    this.consText,
     this.isOfficial = false,
   });
 
@@ -27,6 +30,9 @@ class FieldModel {
   final String? imageUrl;
   final double? rating;
   final int? reviewCount;
+  final String? featuresText;
+  final String? prosText;
+  final String? consText;
   final bool isOfficial;
 
   factory FieldModel.fromJson(Map<String, dynamic> json) {
@@ -43,6 +49,15 @@ class FieldModel {
       imageUrl: _readNullableString(json['image_url']),
       rating: _readNullableDouble(json['rating']),
       reviewCount: _readNullableInt(json['review_count']),
+      featuresText: _readNullableString(
+        json['feature_list'] ?? json['features'] ?? json['features_text'],
+      ),
+      prosText: _readNullableString(
+        json['pros_list'] ?? json['pros'] ?? json['pros_text'],
+      ),
+      consText: _readNullableString(
+        json['cons_list'] ?? json['cons'] ?? json['cons_text'],
+      ),
       isOfficial: (json['is_official'] as bool?) ?? false,
     );
   }
@@ -58,6 +73,10 @@ class FieldModel {
   }
 
   bool get hasImage => (imageUrl ?? '').trim().isNotEmpty;
+
+  List<String> get features => _parseCsvLines(featuresText);
+  List<String> get pros => _parseCsvLines(prosText);
+  List<String> get cons => _parseCsvLines(consText);
 
   static String? _readNullableString(dynamic value) {
     if (value == null) return null;
@@ -76,5 +95,18 @@ class FieldModel {
     if (value == null) return null;
     if (value is int) return value;
     return int.tryParse(value.toString());
+  }
+
+  static List<String> _parseCsvLines(String? value) {
+    final String input = (value ?? '').trim();
+    if (input.isEmpty) {
+      return const <String>[];
+    }
+
+    return input
+        .split(RegExp(r'[,\n;|]'))
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toList();
   }
 }

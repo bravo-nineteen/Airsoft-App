@@ -41,17 +41,41 @@ class NotificationRepository {
   }
 
   Future<void> markAllRead() async {
-    await _resolvedClient
-        .from('notifications')
-        .update({'is_read': true})
-        .eq('user_id', _currentUserId)
-        .eq('is_read', false);
+    try {
+      await _resolvedClient
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', _currentUserId)
+          .eq('is_read', false);
+    } on PostgrestException catch (error) {
+      if (!_isMissingUpdatedAtTriggerError(error)) {
+        rethrow;
+      }
+
+      // Older schemas can keep a trigger bound to `updated_at` before the
+      // column exists. In that case, keep navigation usable and leave unread
+      // state unchanged instead of hard-failing UI interactions.
+    }
   }
 
   Future<void> markRead(String id) async {
-    await _resolvedClient.from('notifications').update({
-      'is_read': true,
-    }).eq('id', id);
+    try {
+      await _resolvedClient.from('notifications').update({
+        'is_read': true,
+      }).eq('id', id);
+    } on PostgrestException catch (error) {
+      if (!_isMissingUpdatedAtTriggerError(error)) {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> deleteNotification(String id) async {
+    await _resolvedClient
+        .from('notifications')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', _currentUserId);
   }
 
   RealtimeChannel subscribeToNotifications({
@@ -74,5 +98,16 @@ class NotificationRepository {
         .subscribe();
 
     return channel;
+  }
+
+  bool _isMissingUpdatedAtTriggerError(PostgrestException error) {
+    if (error.code != '42703' && error.code != 'PGRST204') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains('updated_at') && summary.contains('new');
   }
 }
