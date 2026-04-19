@@ -1,7 +1,9 @@
 import 'package:extended_image/extended_image.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
@@ -21,11 +23,17 @@ class CommunityListScreen extends StatefulWidget {
 class _CommunityListScreenState extends State<CommunityListScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   RealtimeChannel? _postsChannel;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _offset = 0;
+  static const int _pageSize = 20;
+  final List<CommunityPostModel> _pendingPosts = <CommunityPostModel>[];
   String _selectedCategory = CommunityPostCategories.all;
   String _selectedLanguagePreference = 'english';
   bool _didInitLanguagePreference = false;
@@ -37,7 +45,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+    _restoreCachedPosts();
     _subscribeRealtime();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isLoadingMore || !_hasMore) {
+      return;
+    }
+    final double threshold = _scrollController.position.maxScrollExtent - 500;
+    if (_scrollController.position.pixels >= threshold) {
+      _loadMorePosts();
+    }
   }
 
   void _subscribeRealtime() {
@@ -72,11 +92,17 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     if (incoming.postContext != 'community') {
       return;
     }
+    if (!_matchesCurrentFilters(incoming)) {
+      return;
+    }
     if (row['is_deleted'] == true) {
       setState(() {
         _posts = _posts
             .where((CommunityPostModel post) => post.id != incoming.id)
             .toList();
+        _pendingPosts.removeWhere(
+          (CommunityPostModel post) => post.id == incoming.id,
+        );
       });
       return;
     }
@@ -84,17 +110,33 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     final int index = _posts.indexWhere(
       (CommunityPostModel post) => post.id == incoming.id,
     );
+    final int pendingIndex = _pendingPosts.indexWhere(
+      (CommunityPostModel post) => post.id == incoming.id,
+    );
 
     if (index == -1) {
+      if (pendingIndex != -1) {
+        setState(() {
+          _pendingPosts[pendingIndex] = incoming.copyWith(
+            category: CommunityPostCategories.normalizeCommunityCategory(
+              incoming.category,
+            ),
+          );
+        });
+        return;
+      }
+
+      // Do not jump the user's reading position. Queue new items and let the
+      // user reveal them from a lightweight banner.
       setState(() {
-        _posts = <CommunityPostModel>[
+        _pendingPosts.insert(
+          0,
           incoming.copyWith(
             category: CommunityPostCategories.normalizeCommunityCategory(
               incoming.category,
             ),
           ),
-          ..._posts,
-        ];
+        );
       });
       return;
     }
@@ -110,6 +152,60 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     setState(() {
       _posts[index] = merged;
     });
+    _cachePosts();
+  }
+
+  void _revealPendingPosts() {
+    if (_pendingPosts.isEmpty) {
+      return;
+    }
+    setState(() {
+      _posts = <CommunityPostModel>[..._pendingPosts, ..._posts];
+      _pendingPosts.clear();
+    });
+    _cachePosts();
+
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  bool _matchesCurrentFilters(CommunityPostModel post) {
+    final String normalizedCategory =
+        CommunityPostCategories.normalizeCommunityCategory(post.category);
+    if (_selectedCategory != CommunityPostCategories.all &&
+        normalizedCategory != _selectedCategory) {
+      return false;
+    }
+
+    final String language = (post.language ?? '').trim().toLowerCase();
+    if (_selectedLanguagePreference == 'english' &&
+        language != 'english' &&
+        language != 'bilingual') {
+      return false;
+    }
+    if (_selectedLanguagePreference == 'japanese' &&
+        language != 'japanese' &&
+        language != 'bilingual') {
+      return false;
+    }
+
+    final String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return true;
+    }
+    final String haystack = <String>[
+      post.title,
+      post.bodyText,
+      post.plainText,
+      post.authorName,
+      post.category ?? '',
+    ].join(' ').toLowerCase();
+    return haystack.contains(query);
   }
 
   @override
@@ -126,7 +222,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     _loadPosts();
   }
 
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts({bool reset = false}) async {
     final bool initialLoad = _posts.isEmpty && _isLoading;
     setState(() {
       if (initialLoad) {
@@ -134,13 +230,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       } else {
         _isRefreshing = true;
       }
+      if (reset) {
+        _offset = 0;
+        _hasMore = true;
+      }
     });
 
     try {
-      final posts = await _repository.fetchPosts(
+      final CommunityPostsPage page = await _repository.fetchPostsPage(
         query: _searchController.text,
         category: _selectedCategory,
         preferredLanguage: _selectedLanguagePreference,
+        offset: 0,
+        limit: _pageSize,
       );
 
       if (!mounted) {
@@ -148,7 +250,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       }
 
       setState(() {
-        _posts = posts
+        _posts = page.items
             .map(
               (CommunityPostModel post) => post.copyWith(
                 category: CommunityPostCategories.normalizeCommunityCategory(
@@ -157,9 +259,13 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
               ),
             )
             .toList();
+          _pendingPosts.clear();
+        _offset = page.nextOffset;
+        _hasMore = page.hasMore;
         _isLoading = false;
         _isRefreshing = false;
       });
+      _cachePosts();
     } catch (error) {
       if (!mounted) {
         return;
@@ -180,6 +286,107 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMore || _isLoading) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final CommunityPostsPage page = await _repository.fetchPostsPage(
+        query: _searchController.text,
+        category: _selectedCategory,
+        preferredLanguage: _selectedLanguagePreference,
+        offset: _offset,
+        limit: _pageSize,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final Set<String> existingIds = _posts
+          .map((CommunityPostModel post) => post.id)
+          .toSet();
+      final List<CommunityPostModel> appended = page.items
+          .where((CommunityPostModel post) => !existingIds.contains(post.id))
+          .map(
+            (CommunityPostModel post) => post.copyWith(
+              category: CommunityPostCategories.normalizeCommunityCategory(
+                post.category,
+              ),
+            ),
+          )
+          .toList();
+
+      setState(() {
+        _posts = <CommunityPostModel>[..._posts, ...appended];
+        _offset = page.nextOffset;
+        _hasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+      _cachePosts();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  String get _cacheKey {
+    return 'community-feed-v1-${_selectedCategory.toLowerCase()}-${_selectedLanguagePreference.toLowerCase()}';
+  }
+
+  Future<void> _cachePosts() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> payload = _posts
+          .take(80)
+          .map((CommunityPostModel post) => post.toJson())
+          .toList();
+      await prefs.setString(_cacheKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreCachedPosts() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_cacheKey);
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return;
+      }
+
+      final List<CommunityPostModel> cached = decoded
+          .whereType<Map>()
+          .map(
+            (Map item) => CommunityPostModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+      if (!mounted || cached.isEmpty) {
+        return;
+      }
+
+      setState(() {
+        _posts = cached;
+        _isLoading = false;
+        _offset = cached.length;
+        _pendingPosts.clear();
+      });
+    } catch (_) {}
   }
 
   Future<void> _openCreateScreen() async {
@@ -268,6 +475,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     if (_postsChannel != null) {
       Supabase.instance.client.removeChannel(_postsChannel!);
     }
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -321,6 +530,48 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         child: Column(
           children: <Widget>[
             if (_isRefreshing) const LinearProgressIndicator(minHeight: 2),
+            if (_pendingPosts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Material(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _revealPendingPosts,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.fiber_new,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _pendingPosts.length == 1
+                                  ? '1 new post available - tap to view'
+                                  : '${_pendingPosts.length} new posts available - tap to view',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_upward,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Column(
@@ -334,7 +585,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       hintText: l10n.t('searchPosts'),
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: IconButton(
-                        onPressed: _loadPosts,
+                        onPressed: () => _loadPosts(reset: true),
                         icon: const Icon(Icons.arrow_forward),
                       ),
                       border: OutlineInputBorder(
@@ -363,7 +614,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       setState(() {
                         _selectedLanguagePreference = value;
                       });
-                      _loadPosts();
+                      _loadPosts(reset: true);
                     },
                   ),
                   const SizedBox(height: 10),
@@ -384,7 +635,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                             setState(() {
                               _selectedCategory = category;
                             });
-                            _loadPosts();
+                            _loadPosts(reset: true);
                           },
                         );
                       },
@@ -438,10 +689,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                           ],
                         )
                       : ListView.builder(
+                          controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                          itemCount: _posts.length,
+                          itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
                           itemBuilder: (BuildContext context, int index) {
+                            if (index >= _posts.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
                             final CommunityPostModel post = _posts[index];
 
                             return _CompactPostCard(

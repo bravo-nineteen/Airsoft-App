@@ -114,6 +114,32 @@ class CommunityPostModel {
 
   bool get isProfilePost => postContext == 'profile';
 
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
+      'title': title,
+      'body_text': bodyText,
+      'plain_text': plainText,
+      'image_url': imageUrl,
+      'image_urls': imageUrls,
+      'category': category,
+      'language': language,
+      'language_code': languageCode,
+      'comment_count': commentCount,
+      'like_count': likeCount,
+      'view_count': viewCount,
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt?.toUtc().toIso8601String(),
+      'is_pinned': isPinned,
+      'is_liked_by_me': isLikedByMe,
+      'post_context': postContext,
+      'target_user_id': targetUserId,
+    };
+  }
+
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
     final dynamic rawImageUrls = json['image_urls'];
     final List<String> parsedImageUrls;
@@ -246,4 +272,16 @@ String? _readNullableString(dynamic value) {
     return null;
   }
   return text;
+}
+
+class CommunityPostsPage {
+  const CommunityPostsPage({
+    required this.items,
+    required this.nextOffset,
+    required this.hasMore,
+  });
+
+  final List<CommunityPostModel> items;
+  final int nextOffset;
+  final bool hasMore;
 }

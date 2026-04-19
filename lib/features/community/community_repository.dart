@@ -84,54 +84,67 @@ class CommunityRepository {
     String category = 'All',
     String preferredLanguage = 'english',
   }) async {
-    final response = await _client
+    final CommunityPostsPage page = await fetchPostsPage(
+      query: query,
+      category: category,
+      preferredLanguage: preferredLanguage,
+      offset: 0,
+      limit: 200,
+    );
+    return page.items;
+  }
+
+  Future<CommunityPostsPage> fetchPostsPage({
+    String query = '',
+    String category = 'All',
+    String preferredLanguage = 'english',
+    required int offset,
+    int limit = 20,
+  }) async {
+    dynamic request = _client
         .from('community_posts')
         .select()
         .eq('is_deleted', false)
-        .eq('post_context', 'community')
-        .order('is_pinned', ascending: false)
-        .order('created_at', ascending: false);
+        .eq('post_context', 'community');
 
-    var posts = (response as List<dynamic>)
+    final String trimmedQuery = query.trim();
+    if (trimmedQuery.isNotEmpty) {
+      final String escaped =
+          trimmedQuery.replaceAll(',', ' ').replaceAll('%', '');
+      request = request.or(
+        'title.ilike.%$escaped%,plain_text.ilike.%$escaped%,body_text.ilike.%$escaped%,author_name.ilike.%$escaped%,category.ilike.%$escaped%',
+      );
+    }
+
+    if (category != 'All') {
+      request = request.eq('category', category);
+    }
+
+    final String normalizedLanguage = _normalizePostLanguage(preferredLanguage);
+    if (normalizedLanguage == 'english') {
+      request = request.inFilter('language', <String>['english', 'bilingual']);
+    } else if (normalizedLanguage == 'japanese') {
+      request = request.inFilter('language', <String>['japanese', 'bilingual']);
+    }
+
+    final dynamic response = await request
+        .order('is_pinned', ascending: false)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    final List<CommunityPostModel> posts = (response as List<dynamic>)
         .map(
           (dynamic e) =>
               CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
 
-    final normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.isNotEmpty) {
-      posts = posts.where((CommunityPostModel post) {
-        return post.title.toLowerCase().contains(normalizedQuery) ||
-            post.plainText.toLowerCase().contains(normalizedQuery) ||
-            post.bodyText.toLowerCase().contains(normalizedQuery) ||
-            (post.category ?? '').toLowerCase().contains(normalizedQuery) ||
-            post.authorName.toLowerCase().contains(normalizedQuery);
-      }).toList();
-    }
-
-    if (category != 'All') {
-      posts = posts
-          .where(
-            (CommunityPostModel post) =>
-                (post.category ?? 'General') == category,
-          )
-          .toList();
-    }
-
-    final String normalizedLanguage = _normalizePostLanguage(preferredLanguage);
-    if (normalizedLanguage != 'all') {
-      posts = posts.where((CommunityPostModel post) {
-        final String postLanguage = _normalizePostLanguage(post.language);
-        if (normalizedLanguage == 'bilingual') {
-          return true;
-        }
-        return postLanguage == normalizedLanguage ||
-            postLanguage == 'bilingual';
-      }).toList();
-    }
-
-    return posts;
+    return CommunityPostsPage(
+      items: posts,
+      nextOffset: offset + posts.length,
+      hasMore: posts.length >= limit,
+    );
   }
 
   Future<List<CommunityPostModel>> fetchPostsByAuthor(

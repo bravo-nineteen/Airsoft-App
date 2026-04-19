@@ -22,6 +22,8 @@ class _CommunityPostDetailsScreenState
     extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _commentController = TextEditingController();
+  RealtimeChannel? _postChannel;
+  RealtimeChannel? _commentsChannel;
 
   CommunityPostModel? _post;
   List<CommunityCommentModel> _comments = <CommunityCommentModel>[];
@@ -84,7 +86,126 @@ class _CommunityPostDetailsScreenState
   @override
   void initState() {
     super.initState();
+    _subscribeRealtime();
     _load(incrementView: true);
+  }
+
+  void _subscribeRealtime() {
+    _postChannel = Supabase.instance.client.channel(
+      'community-post-${widget.postId}',
+    );
+    _commentsChannel = Supabase.instance.client.channel(
+      'community-comments-${widget.postId}',
+    );
+
+    _postChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            final String id = payload.newRecord['id']?.toString() ?? '';
+            if (id == widget.postId) {
+              _applyRealtimePost(payload.newRecord);
+            }
+          },
+        )
+        .subscribe();
+
+    _commentsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'community_comments',
+          callback: (payload) {
+            _applyRealtimeComment(payload.newRecord, isInsert: true);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_comments',
+          callback: (payload) {
+            _applyRealtimeComment(payload.newRecord, isInsert: false);
+          },
+        )
+        .subscribe();
+  }
+
+  void _applyRealtimePost(Map<String, dynamic> row) {
+    if (!mounted || _post == null) {
+      return;
+    }
+
+    final CommunityPostModel parsed = CommunityPostModel.fromJson(row);
+    setState(() {
+      _post = _post!.copyWith(
+        title: parsed.title,
+        bodyText: parsed.bodyText,
+        plainText: parsed.plainText,
+        imageUrl: parsed.imageUrl,
+        imageUrls: parsed.imageUrls,
+        category: parsed.category,
+        likeCount: parsed.likeCount,
+        commentCount: parsed.commentCount,
+        viewCount: parsed.viewCount,
+        updatedAt: parsed.updatedAt,
+      );
+    });
+  }
+
+  void _applyRealtimeComment(Map<String, dynamic> row, {required bool isInsert}) {
+    if (!mounted) {
+      return;
+    }
+
+    final String postId = row['post_id']?.toString() ?? '';
+    if (postId != widget.postId) {
+      return;
+    }
+
+    final CommunityCommentModel incoming = CommunityCommentModel.fromJson(row);
+    final bool isDeleted = row['is_deleted'] == true;
+
+    setState(() {
+      final int existingIndex = _comments.indexWhere(
+        (CommunityCommentModel c) => c.id == incoming.id,
+      );
+
+      if (isDeleted) {
+        _comments = _comments
+            .where((CommunityCommentModel c) => c.id != incoming.id)
+            .toList();
+        return;
+      }
+
+      if (existingIndex != -1) {
+        _comments[existingIndex] = _comments[existingIndex].copyWith(
+          message: incoming.message,
+          likeCount: incoming.likeCount,
+          likedByMe: _comments[existingIndex].likedByMe,
+          parentCommentId: incoming.parentCommentId,
+        );
+        return;
+      }
+
+      if (!isInsert) {
+        return;
+      }
+
+      final int tempIndex = _comments.indexWhere(
+        (CommunityCommentModel c) =>
+            c.id.startsWith('temp-') &&
+            c.parentCommentId == incoming.parentCommentId &&
+            c.message.trim() == incoming.message.trim(),
+      );
+
+      if (tempIndex != -1) {
+        _comments[tempIndex] = incoming;
+      } else {
+        _comments = <CommunityCommentModel>[..._comments, incoming];
+      }
+    });
   }
 
   Future<void> _load({bool incrementView = false, bool preserveContent = true}) async {
@@ -692,6 +813,12 @@ class _CommunityPostDetailsScreenState
 
   @override
   void dispose() {
+    if (_postChannel != null) {
+      Supabase.instance.client.removeChannel(_postChannel!);
+    }
+    if (_commentsChannel != null) {
+      Supabase.instance.client.removeChannel(_commentsChannel!);
+    }
     _commentController.dispose();
     super.dispose();
   }
