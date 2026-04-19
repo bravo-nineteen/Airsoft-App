@@ -13,18 +13,29 @@ import '../events/events_screen.dart';
 
 enum HomeInterestFilter { all, posts, events, blog }
 
+typedef HomePostsLoader = Future<List<CommunityPostModel>> Function();
+typedef HomeBlogPostsLoader = Future<List<AojBlogPost>> Function();
+
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onOpenEventsTab, this.onOpenBoardsTab});
+  const HomeScreen({
+    super.key,
+    this.onOpenEventsTab,
+    this.onOpenBoardsTab,
+    this.loadLatestPosts,
+    this.loadBlogPosts,
+  });
 
   final VoidCallback? onOpenEventsTab;
   final VoidCallback? onOpenBoardsTab;
+  final HomePostsLoader? loadLatestPosts;
+  final HomeBlogPostsLoader? loadBlogPosts;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final CommunityRepository _communityRepository = CommunityRepository();
+  CommunityRepository? _communityRepository;
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
   List<AojBlogPost> _blogPosts = <AojBlogPost>[];
@@ -45,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final results = await Future.wait<dynamic>([
-        _communityRepository.fetchPosts(),
+        _fetchLatestPosts(),
         _fetchBlogPosts(),
       ]);
 
@@ -71,7 +82,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<List<CommunityPostModel>> _fetchLatestPosts() {
+    final HomePostsLoader? loader = widget.loadLatestPosts;
+    if (loader != null) {
+      return loader();
+    }
+
+    final CommunityRepository repository =
+        _communityRepository ??= CommunityRepository();
+    return repository.fetchPosts();
+  }
+
   Future<List<AojBlogPost>> _fetchBlogPosts() async {
+    final HomeBlogPostsLoader? loader = widget.loadBlogPosts;
+    if (loader != null) {
+      return loader();
+    }
+
     const endpoint =
         'https://airsoftonlinejapan.com/wp-json/wp/v2/posts?per_page=5&_embed';
 

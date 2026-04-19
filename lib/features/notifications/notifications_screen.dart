@@ -33,12 +33,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         await _refresh();
       },
     );
-    _markAllReadSoon();
-  }
-
-  Future<void> _markAllReadSoon() async {
-    await _repository.markAllRead();
-    await _refresh();
   }
 
   Future<void> _refresh() async {
