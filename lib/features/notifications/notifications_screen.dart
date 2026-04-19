@@ -11,15 +11,28 @@ import 'notification_model.dart';
 import 'notification_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({
+    super.key,
+    NotificationRepository? repository,
+    EventRepository? eventRepository,
+    this.subscribeToRealtime = true,
+    this.onOpenNotification,
+  }) : _repository = repository,
+       _eventRepository = eventRepository;
+
+  final NotificationRepository? _repository;
+  final EventRepository? _eventRepository;
+  final bool subscribeToRealtime;
+  final Future<void> Function(BuildContext context, AppNotificationModel item)?
+      onOpenNotification;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final NotificationRepository _repository = NotificationRepository();
-  final EventRepository _eventRepository = EventRepository();
+  late final NotificationRepository _repository;
+  late final EventRepository _eventRepository;
 
   late Future<List<AppNotificationModel>> _future;
   RealtimeChannel? _channel;
@@ -27,12 +40,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    _repository = widget._repository ?? NotificationRepository();
+    _eventRepository = widget._eventRepository ?? EventRepository();
     _future = _repository.getNotifications();
-    _channel = _repository.subscribeToNotifications(
-      onNotification: () async {
-        await _refresh();
-      },
-    );
+    if (widget.subscribeToRealtime) {
+      _channel = _repository.subscribeToNotifications(
+        onNotification: () async {
+          await _refresh();
+        },
+      );
+    }
   }
 
   Future<void> _refresh() async {
@@ -55,6 +72,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'direct_message':
         return Icons.chat_bubble_outline;
       case 'contact_request':
+      case 'contact_request_accepted':
         return Icons.person_add_alt_1;
       case 'community_post_comment':
         return Icons.comment_outlined;
@@ -73,10 +91,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (!mounted) return;
 
+    if (widget.onOpenNotification != null) {
+      await widget.onOpenNotification!(context, item);
+      await _refresh();
+      return;
+    }
+
     final String normalizedType = item.type.trim().toLowerCase();
 
     if (normalizedType == 'contact_request' ||
-        normalizedType == 'friend_request') {
+        normalizedType == 'friend_request' ||
+        normalizedType == 'contact_request_accepted') {
       await Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));

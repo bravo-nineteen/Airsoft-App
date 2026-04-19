@@ -1,12 +1,15 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
+import '../notifications/notification_writer.dart';
 
 class CommunityRepository {
   CommunityRepository({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client,
+      _notificationWriter = NotificationWriter(client: client);
 
   final SupabaseClient _client;
+  final NotificationWriter _notificationWriter;
 
   Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
     final user = _client.auth.currentUser;
@@ -377,6 +380,19 @@ class CommunityRepository {
         .toString();
     final authorAvatarUrl = profile?['avatar_url']?.toString();
     final now = DateTime.now().toUtc().toIso8601String();
+    final Map<String, dynamic>? postRecord = await _client
+      .from('community_posts')
+      .select('id, title, author_id, user_id, comment_count')
+      .eq('id', postId)
+      .maybeSingle();
+    final Map<String, dynamic>? parentCommentRecord =
+      parentCommentId == null || parentCommentId.trim().isEmpty
+      ? null
+      : await _client
+          .from('community_comments')
+          .select('id, author_id, user_id')
+          .eq('id', parentCommentId)
+          .maybeSingle();
 
     final payload = <String, dynamic>{
       'post_id': postId,
@@ -393,13 +409,47 @@ class CommunityRepository {
       'parent_comment_id': _nullIfEmpty(parentCommentId),
     };
 
-    await _client.from('community_comments').insert(payload);
+    final Map<String, dynamic> insertedComment = await _client
+        .from('community_comments')
+        .insert(payload)
+        .select('id')
+        .single();
 
-    final post = await fetchPostById(postId);
+    final int currentCommentCount =
+        (postRecord?['comment_count'] as num?)?.toInt() ?? 0;
     await _client
         .from('community_posts')
-        .update({'comment_count': post.commentCount + 1, 'updated_at': now})
+        .update({'comment_count': currentCommentCount + 1, 'updated_at': now})
         .eq('id', postId);
+
+    final String postTitle =
+        _nullIfEmpty(postRecord?['title']?.toString()) ?? 'your post';
+    if (parentCommentRecord != null) {
+      await _notificationWriter.safeCreateNotification(
+        userId: _nullIfEmpty(
+              parentCommentRecord['author_id']?.toString() ??
+                  parentCommentRecord['user_id']?.toString(),
+            ) ??
+            '',
+        type: 'community_comment_reply',
+        entityId: insertedComment['id']?.toString(),
+        title: authorName,
+        body: 'replied to your comment on $postTitle.',
+      );
+      return;
+    }
+
+    await _notificationWriter.safeCreateNotification(
+      userId: _nullIfEmpty(
+            postRecord?['author_id']?.toString() ??
+                postRecord?['user_id']?.toString(),
+          ) ??
+          '',
+      type: 'community_post_comment',
+      entityId: postId,
+      title: authorName,
+      body: 'commented on $postTitle.',
+    );
   }
 
   String? _nullIfEmpty(String? value) {
@@ -474,6 +524,12 @@ class CommunityRepository {
         .eq('user_id', user.id)
         .maybeSingle();
 
+    final Map<String, dynamic>? postRecord = await _client
+        .from('community_posts')
+        .select('id, title, author_id, user_id')
+        .eq('id', postId)
+        .maybeSingle();
+
     if (existing == null) {
       await _client.from('community_post_likes').insert({
         'post_id': postId,
@@ -500,6 +556,22 @@ class CommunityRepository {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', postId);
+
+    if (existing == null) {
+      final String actorName = await _notificationWriter.getCurrentActorName();
+      await _notificationWriter.safeCreateNotification(
+        userId: _nullIfEmpty(
+              postRecord?['author_id']?.toString() ??
+                  postRecord?['user_id']?.toString(),
+            ) ??
+            '',
+        type: 'community_post_like',
+        entityId: postId,
+        title: actorName,
+        body:
+            'liked ${_nullIfEmpty(postRecord?['title']?.toString()) ?? 'your post'}.',
+      );
+    }
   }
 
   Future<void> toggleLikeComment(String commentId) async {
@@ -515,6 +587,12 @@ class CommunityRepository {
         .eq('user_id', user.id)
         .maybeSingle();
 
+    final Map<String, dynamic>? commentRecord = await _client
+        .from('community_comments')
+        .select('id, author_id, user_id')
+        .eq('id', commentId)
+        .maybeSingle();
+
     if (existing == null) {
       await _client.from('community_comment_likes').insert({
         'comment_id': commentId,
@@ -526,6 +604,34 @@ class CommunityRepository {
           .delete()
           .eq('comment_id', commentId)
           .eq('user_id', user.id);
+    }
+
+    final int likeCount = await _countRows(
+      'community_comment_likes',
+      'comment_id',
+      commentId,
+    );
+    await _client
+        .from('community_comments')
+        .update({
+          'like_count': likeCount,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', commentId);
+
+    if (existing == null) {
+      final String actorName = await _notificationWriter.getCurrentActorName();
+      await _notificationWriter.safeCreateNotification(
+        userId: _nullIfEmpty(
+              commentRecord?['author_id']?.toString() ??
+                  commentRecord?['user_id']?.toString(),
+            ) ??
+            '',
+        type: 'community_comment_like',
+        entityId: commentId,
+        title: actorName,
+        body: 'liked your comment.',
+      );
     }
   }
 

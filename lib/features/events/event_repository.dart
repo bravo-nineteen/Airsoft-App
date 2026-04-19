@@ -1,16 +1,22 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'event_model.dart';
+import '../notifications/notification_writer.dart';
 
 class EventRepository {
-  EventRepository();
+  EventRepository({SupabaseClient? client})
+    : _client = client,
+      _notificationWriter = NotificationWriter(client: client);
 
-  final SupabaseClient _client = Supabase.instance.client;
+  final SupabaseClient? _client;
+  final NotificationWriter _notificationWriter;
 
-  User? get currentUser => _client.auth.currentUser;
+  SupabaseClient get _resolvedClient => _client ?? Supabase.instance.client;
+
+  User? get currentUser => _resolvedClient.auth.currentUser;
 
   Future<List<EventModel>> getEvents() async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('events')
         .select()
         .order('starts_at', ascending: true);
@@ -28,7 +34,7 @@ class EventRepository {
   }
 
   Future<EventModel> getEventById(String eventId) async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('events')
         .select()
         .eq('id', eventId)
@@ -93,13 +99,13 @@ class EventRepository {
     };
 
     try {
-      await _client.from('events').insert(payload);
+      await _resolvedClient.from('events').insert(payload);
     } on PostgrestException catch (error) {
       if (!_isMissingColumnError(error, 'is_official')) {
         rethrow;
       }
       payload.remove('is_official');
-      await _client.from('events').insert(payload);
+      await _resolvedClient.from('events').insert(payload);
     }
   }
 
@@ -151,13 +157,13 @@ class EventRepository {
     };
 
     try {
-      await _client.from('events').update(payload).eq('id', eventId);
+      await _resolvedClient.from('events').update(payload).eq('id', eventId);
     } on PostgrestException catch (error) {
       if (!_isMissingColumnError(error, 'is_official')) {
         rethrow;
       }
       payload.remove('is_official');
-      await _client.from('events').update(payload).eq('id', eventId);
+      await _resolvedClient.from('events').update(payload).eq('id', eventId);
     }
   }
 
@@ -167,7 +173,7 @@ class EventRepository {
       throw Exception('You must be logged in.');
     }
 
-    await _client.from('events').delete().eq('id', eventId);
+    await _resolvedClient.from('events').delete().eq('id', eventId);
   }
 
   Future<void> attendEvent(String eventId) async {
@@ -176,7 +182,13 @@ class EventRepository {
       throw Exception('You must be logged in to attend events.');
     }
 
-    final Map<String, dynamic>? existing = await _client
+    final Map<String, dynamic>? eventRecord = await _resolvedClient
+        .from('events')
+        .select('id, title, host_user_id')
+        .eq('id', eventId)
+        .maybeSingle();
+
+    final Map<String, dynamic>? existing = await _resolvedClient
         .from('event_attendees')
         .select('id')
         .eq('event_id', eventId)
@@ -190,14 +202,23 @@ class EventRepository {
     };
 
     if (existing == null) {
-      await _client.from('event_attendees').insert(payload);
+      await _resolvedClient.from('event_attendees').insert(payload);
     } else {
-      await _client
+        await _resolvedClient
           .from('event_attendees')
           .update({'status': 'attending'})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    await _notificationWriter.safeCreateNotification(
+      userId: eventRecord?['host_user_id']?.toString() ?? '',
+      type: 'event_attendance_update',
+      entityId: eventId,
+      title: actorName,
+      body: 'is attending ${eventRecord?['title'] ?? 'your event'}.',
+    );
   }
 
   Future<void> cancelAttendance(String eventId) async {
@@ -206,7 +227,13 @@ class EventRepository {
       throw Exception('You must be logged in to cancel attendance.');
     }
 
-    final Map<String, dynamic>? existing = await _client
+    final Map<String, dynamic>? eventRecord = await _resolvedClient
+        .from('events')
+        .select('id, title, host_user_id')
+        .eq('id', eventId)
+        .maybeSingle();
+
+    final Map<String, dynamic>? existing = await _resolvedClient
         .from('event_attendees')
         .select('id')
         .eq('event_id', eventId)
@@ -214,18 +241,27 @@ class EventRepository {
         .maybeSingle();
 
     if (existing == null) {
-      await _client.from('event_attendees').insert({
+      await _resolvedClient.from('event_attendees').insert({
         'event_id': eventId,
         'user_id': user.id,
         'status': 'cancelled',
       });
     } else {
-      await _client
+      await _resolvedClient
           .from('event_attendees')
           .update({'status': 'cancelled'})
           .eq('event_id', eventId)
           .eq('user_id', user.id);
     }
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    await _notificationWriter.safeCreateNotification(
+      userId: eventRecord?['host_user_id']?.toString() ?? '',
+      type: 'event_attendance_update',
+      entityId: eventId,
+      title: actorName,
+      body: 'cancelled attendance for ${eventRecord?['title'] ?? 'your event'}.',
+    );
   }
 
   Future<void> hostConfirmAttendance({
@@ -257,7 +293,7 @@ class EventRepository {
     };
 
     try {
-      await _client
+        await _resolvedClient
           .from('event_attendees')
           .update(payload)
           .eq('event_id', eventId)
@@ -268,12 +304,33 @@ class EventRepository {
       }
 
       payload.remove('confirmed_at');
-      await _client
+        await _resolvedClient
           .from('event_attendees')
           .update(payload)
           .eq('event_id', eventId)
           .eq('user_id', attendeeUserId);
     }
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    final String body;
+    switch (status) {
+      case 'attended':
+        body = 'confirmed your attendance for ${event.title}.';
+        break;
+      case 'no_show':
+        body = 'marked you as no-show for ${event.title}.';
+        break;
+      default:
+        body = 'updated your attendance for ${event.title}.';
+        break;
+    }
+    await _notificationWriter.safeCreateNotification(
+      userId: attendeeUserId,
+      type: 'event_attendance_update',
+      entityId: eventId,
+      title: actorName,
+      body: body,
+    );
   }
 
   bool _isMissingConfirmedAtColumnError(PostgrestException error) {
@@ -306,7 +363,7 @@ class EventRepository {
   Future<List<EventAttendanceRecord>> getEventAttendeesForHost(
     String eventId,
   ) async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('event_attendees')
         .select()
         .eq('event_id', eventId)
@@ -326,7 +383,7 @@ class EventRepository {
 
     final List<String> userIds = baseRecords.map((e) => e.userId).toList();
 
-    final profilesResponse = await _client
+    final profilesResponse = await _resolvedClient
         .from('profiles')
         .select('id, call_sign, avatar_url')
         .inFilter('id', userIds);
@@ -353,7 +410,7 @@ class EventRepository {
   }
 
   Future<List<EventModel>> getUserAttendingEvents(String userId) async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('event_attendees')
         .select('event_id')
         .eq('user_id', userId)
@@ -367,7 +424,7 @@ class EventRepository {
       return <EventModel>[];
     }
 
-    final eventsResponse = await _client
+    final eventsResponse = await _resolvedClient
         .from('events')
         .select()
         .inFilter('id', eventIds)
@@ -386,7 +443,7 @@ class EventRepository {
   }
 
   Future<EventAttendanceStats> getUserEventStats(String userId) async {
-    final List<dynamic> response = await _client
+    final List<dynamic> response = await _resolvedClient
         .from('event_attendees')
         .select('status')
         .eq('user_id', userId);
@@ -443,7 +500,7 @@ class EventRepository {
       return null;
     }
 
-    final Map<String, dynamic>? response = await _client
+    final Map<String, dynamic>? response = await _resolvedClient
         .from('event_attendees')
         .select('status')
         .eq('event_id', eventId)
@@ -454,7 +511,7 @@ class EventRepository {
   }
 
   Future<EventAttendanceStats> _getEventAttendanceStats(String eventId) async {
-    final List<dynamic> response = await _client
+    final List<dynamic> response = await _resolvedClient
         .from('event_attendees')
         .select('status')
         .eq('event_id', eventId);

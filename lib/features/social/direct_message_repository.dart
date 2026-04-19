@@ -3,12 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
+import '../notifications/notification_writer.dart';
 
 class DirectMessageRepository {
-  DirectMessageRepository();
+  DirectMessageRepository({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client,
+      _contactRepository = ContactRepository(client: client),
+      _notificationWriter = NotificationWriter(client: client);
 
-  final SupabaseClient _client = Supabase.instance.client;
-  final ContactRepository _contactRepository = ContactRepository();
+  final SupabaseClient _client;
+  final ContactRepository _contactRepository;
+  final NotificationWriter _notificationWriter;
 
   String get _currentUserId {
     final user = _client.auth.currentUser;
@@ -60,6 +65,15 @@ class DirectMessageRepository {
       'recipient_id': recipientId,
       'body': trimmed,
     });
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    await _notificationWriter.safeCreateNotification(
+      userId: recipientId,
+      type: 'direct_message',
+      entityId: currentUserId,
+      title: actorName,
+      body: trimmed.length <= 120 ? trimmed : '${trimmed.substring(0, 117)}...',
+    );
   }
 
   Future<void> markThreadRead(String otherUserId) async {

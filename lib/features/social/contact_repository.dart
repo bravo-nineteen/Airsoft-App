@@ -1,9 +1,15 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'contact_model.dart';
+import '../notifications/notification_writer.dart';
 
 class ContactRepository {
-  final SupabaseClient _client = Supabase.instance.client;
+  ContactRepository({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client,
+      _notificationWriter = NotificationWriter(client: client);
+
+  final SupabaseClient _client;
+  final NotificationWriter _notificationWriter;
 
   Future<List<ContactModel>> getContacts() async {
     final user = _client.auth.currentUser;
@@ -51,6 +57,15 @@ class ContactRepository {
       'addressee_id': userId,
       'status': 'pending',
     });
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    await _notificationWriter.safeCreateNotification(
+      userId: userId,
+      type: 'contact_request',
+      entityId: current.id,
+      title: actorName,
+      body: 'sent you a contact request.',
+    );
   }
 
   Future<void> acceptRequest(ContactModel contact) async {
@@ -60,6 +75,15 @@ class ContactRepository {
         .eq('requester_id', contact.requesterId)
         .eq('addressee_id', contact.addresseeId)
         .eq('status', 'pending');
+
+    final String actorName = await _notificationWriter.getCurrentActorName();
+    await _notificationWriter.safeCreateNotification(
+      userId: contact.requesterId,
+      type: 'contact_request_accepted',
+      entityId: contact.addresseeId,
+      title: actorName,
+      body: 'accepted your contact request.',
+    );
   }
 
   Future<void> rejectRequest(ContactModel contact) async {

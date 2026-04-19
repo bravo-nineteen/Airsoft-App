@@ -4,12 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'notification_model.dart';
 
 class NotificationRepository {
-  NotificationRepository();
+  NotificationRepository({SupabaseClient? client}) : _client = client;
 
-  final SupabaseClient _client = Supabase.instance.client;
+  final SupabaseClient? _client;
+
+  SupabaseClient get _resolvedClient => _client ?? Supabase.instance.client;
 
   String get _currentUserId {
-    final user = _client.auth.currentUser;
+    final user = _resolvedClient.auth.currentUser;
     if (user == null) {
       throw Exception('Not logged in.');
     }
@@ -17,7 +19,7 @@ class NotificationRepository {
   }
 
   Future<List<AppNotificationModel>> getNotifications() async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('notifications')
         .select()
         .eq('user_id', _currentUserId)
@@ -29,7 +31,7 @@ class NotificationRepository {
   }
 
   Future<int> getUnreadCount() async {
-    final response = await _client
+    final response = await _resolvedClient
         .from('notifications')
         .select('id')
         .eq('user_id', _currentUserId)
@@ -39,7 +41,7 @@ class NotificationRepository {
   }
 
   Future<void> markAllRead() async {
-    await _client
+    await _resolvedClient
         .from('notifications')
         .update({'is_read': true})
         .eq('user_id', _currentUserId)
@@ -47,7 +49,7 @@ class NotificationRepository {
   }
 
   Future<void> markRead(String id) async {
-    await _client.from('notifications').update({
+    await _resolvedClient.from('notifications').update({
       'is_read': true,
     }).eq('id', id);
   }
@@ -55,7 +57,7 @@ class NotificationRepository {
   RealtimeChannel subscribeToNotifications({
     required VoidCallback onNotification,
   }) {
-    final channel = _client.channel('notifications-$_currentUserId');
+    final channel = _resolvedClient.channel('notifications-$_currentUserId');
 
     channel
         .onPostgresChanges(
