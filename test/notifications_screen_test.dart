@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:airsoft_app/app/localization/app_localizations.dart';
 import 'package:airsoft_app/features/notifications/notification_model.dart';
 import 'package:airsoft_app/features/notifications/notification_repository.dart';
 import 'package:airsoft_app/features/notifications/notifications_screen.dart';
@@ -54,6 +56,13 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          AppLocalizations.delegate,
+          DefaultWidgetsLocalizations.delegate,
+          DefaultMaterialLocalizations.delegate,
+          DefaultCupertinoLocalizations.delegate,
+        ],
         home: NotificationsScreen(
           repository: repository,
           subscribeToRealtime: false,
@@ -61,7 +70,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(repository.markAllReadCalls, 0);
     expect(find.text('Raven'), findsOneWidget);
@@ -88,6 +97,13 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          AppLocalizations.delegate,
+          DefaultWidgetsLocalizations.delegate,
+          DefaultMaterialLocalizations.delegate,
+          DefaultCupertinoLocalizations.delegate,
+        ],
         home: NotificationsScreen(
           repository: repository,
           subscribeToRealtime: false,
@@ -97,10 +113,10 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Commander'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(repository.markedReadIds, <String>['n1']);
     expect(openCalls, 1);

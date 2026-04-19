@@ -32,7 +32,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   late final NotificationRepository _repository;
-  late final EventRepository _eventRepository;
+  EventRepository? _eventRepository;
 
   late Future<List<AppNotificationModel>> _future;
   RealtimeChannel? _channel;
@@ -41,7 +41,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _repository = widget._repository ?? NotificationRepository();
-    _eventRepository = widget._eventRepository ?? EventRepository();
+    _eventRepository = widget._eventRepository;
     _future = _repository.getNotifications();
     if (widget.subscribeToRealtime) {
       _channel = _repository.subscribeToNotifications(
@@ -139,7 +139,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final String? eventId = await _resolveEventIdForNotification(item);
       if (eventId != null && eventId.isNotEmpty && mounted) {
         try {
-          final event = await _eventRepository.getEventById(eventId);
+          final EventRepository eventRepository =
+              _eventRepository ??= EventRepository();
+          final event = await eventRepository.getEventById(eventId);
           if (!mounted) return;
           await Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
