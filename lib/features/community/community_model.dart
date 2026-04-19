@@ -169,6 +169,7 @@ class CommunityCommentModel {
   final int likeCount;
   final bool likedByMe;
   final DateTime createdAt;
+  final String? parentCommentId;
 
   const CommunityCommentModel({
     required this.id,
@@ -180,6 +181,7 @@ class CommunityCommentModel {
     required this.likeCount,
     required this.likedByMe,
     required this.createdAt,
+    this.parentCommentId,
   });
 
   CommunityCommentModel copyWith({
@@ -192,6 +194,7 @@ class CommunityCommentModel {
     int? likeCount,
     bool? likedByMe,
     DateTime? createdAt,
+    Object? parentCommentId = _communityCommentNoChange,
   }) {
     return CommunityCommentModel(
       id: id ?? this.id,
@@ -203,6 +206,9 @@ class CommunityCommentModel {
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
       createdAt: createdAt ?? this.createdAt,
+      parentCommentId: parentCommentId == _communityCommentNoChange
+          ? this.parentCommentId
+          : parentCommentId as String?,
     );
   }
 
@@ -224,9 +230,12 @@ class CommunityCommentModel {
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
               ?.toLocal() ??
           DateTime.now(),
+      parentCommentId: _readNullableString(json['parent_comment_id']),
     );
   }
 }
+
+const Object _communityCommentNoChange = Object();
 
 String? _readNullableString(dynamic value) {
   if (value == null) {

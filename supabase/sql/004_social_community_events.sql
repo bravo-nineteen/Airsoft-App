@@ -43,6 +43,7 @@ create index if not exists idx_community_posts_category
 create table if not exists public.community_comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.community_posts(id) on delete cascade,
+  parent_comment_id uuid references public.community_comments(id) on delete cascade,
   author_id uuid references auth.users(id) on delete set null,
   user_id uuid references auth.users(id) on delete set null,
   author_name text not null default 'Unknown',
@@ -59,6 +60,8 @@ create table if not exists public.community_comments (
 
 create index if not exists idx_community_comments_post_id
   on public.community_comments (post_id);
+create index if not exists idx_community_comments_parent_comment_id
+  on public.community_comments (parent_comment_id);
 create index if not exists idx_community_comments_author_id
   on public.community_comments (author_id);
 create index if not exists idx_community_comments_user_id
@@ -240,6 +243,19 @@ alter table public.event_attendees
   add column if not exists confirmed_by_host boolean not null default false;
 alter table public.event_attendees
   add column if not exists confirmed_at timestamptz;
+
+alter table public.community_posts
+  add column if not exists updated_at timestamptz not null default now();
+alter table public.community_comments
+  add column if not exists updated_at timestamptz not null default now();
+alter table public.user_contacts
+  add column if not exists updated_at timestamptz not null default now();
+alter table public.notifications
+  add column if not exists updated_at timestamptz not null default now();
+alter table public.events
+  add column if not exists updated_at timestamptz not null default now();
+alter table public.event_attendees
+  add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists idx_event_attendees_event_id
   on public.event_attendees (event_id);

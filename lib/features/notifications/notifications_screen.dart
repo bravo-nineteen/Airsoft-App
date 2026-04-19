@@ -6,6 +6,7 @@ import '../community/community_post_details_screen.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_repository.dart';
 import '../social/contacts_screen.dart';
+import '../social/direct_message_screen.dart';
 import 'notification_model.dart';
 import 'notification_repository.dart';
 
@@ -81,11 +82,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final String normalizedType = item.type.trim().toLowerCase();
 
     if (normalizedType == 'contact_request' ||
-        normalizedType == 'friend_request' ||
-        normalizedType == 'direct_message') {
+        normalizedType == 'friend_request') {
       await Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
+    } else if (normalizedType == 'direct_message') {
+      final String? otherUserId = item.entityId?.trim();
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DirectMessageScreen(
+              otherUserId: otherUserId,
+              otherDisplayName: item.title.trim().isNotEmpty
+                  ? item.title
+                  : 'Direct Message',
+            ),
+          ),
+        );
+      } else {
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
+      }
     } else if (normalizedType == 'community_post_comment' ||
         normalizedType == 'community_post_like' ||
         normalizedType == 'community_comment_reply' ||
@@ -99,7 +117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     } else if (normalizedType.contains('event')) {
-      final String? eventId = item.entityId?.trim();
+      final String? eventId = await _resolveEventIdForNotification(item);
       if (eventId != null && eventId.isNotEmpty && mounted) {
         try {
           final event = await _eventRepository.getEventById(eventId);
@@ -145,6 +163,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return null;
+  }
+
+  Future<String?> _resolveEventIdForNotification(
+    AppNotificationModel item,
+  ) async {
+    final String? entityId = item.entityId?.trim();
+    if (entityId == null || entityId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('id')
+          .eq('id', entityId)
+          .maybeSingle();
+      if (response != null) {
+        return entityId;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await Supabase.instance.client
+          .from('event_attendees')
+          .select('event_id')
+          .eq('id', entityId)
+          .maybeSingle();
+      return response?['event_id']?.toString();
+    } catch (_) {
+      return null;
+    }
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
