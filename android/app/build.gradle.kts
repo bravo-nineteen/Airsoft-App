@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keyProperties = Properties()
+val keyPropertiesFile = rootProject.file("key.properties")
+if (keyPropertiesFile.exists() && keyPropertiesFile.length() > 0) {
+    keyPropertiesFile.inputStream().use { keyProperties.load(it) }
 }
 
 android {
@@ -27,9 +35,40 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = keyProperties.getProperty("storeFile")
+            val storePasswordValue = keyProperties.getProperty("storePassword")
+            val keyAliasValue = keyProperties.getProperty("keyAlias")
+            val keyPasswordValue = keyProperties.getProperty("keyPassword")
+
+            if (!storeFilePath.isNullOrBlank() &&
+                !storePasswordValue.isNullOrBlank() &&
+                !keyAliasValue.isNullOrBlank() &&
+                !keyPasswordValue.isNullOrBlank()
+            ) {
+                storeFile = file(storeFilePath)
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            val hasReleaseKeystore =
+                !keyProperties.getProperty("storeFile").isNullOrBlank() &&
+                !keyProperties.getProperty("storePassword").isNullOrBlank() &&
+                !keyProperties.getProperty("keyAlias").isNullOrBlank() &&
+                !keyProperties.getProperty("keyPassword").isNullOrBlank()
+
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                // Temporary signing fallback for CI/local verification builds.
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
         }
