@@ -28,6 +28,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const Set<String> _supportedLanguageCodes = <String>{'en', 'ja'};
+
   final AdminRepository _adminRepository = AdminRepository();
   late ThemeMode _selectedThemeMode;
   String? _selectedLanguageCode;
@@ -86,15 +88,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _updateLanguageCode(String? languageCode) {
+    final normalizedLanguageCode =
+        _supportedLanguageCodes.contains(languageCode) ? languageCode : null;
+
     setState(() {
-      _selectedLanguageCode = languageCode;
+      _selectedLanguageCode = normalizedLanguageCode;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       widget.onLocaleChanged?.call(
-        languageCode == null ? null : Locale(languageCode),
+        normalizedLanguageCode == null ? null : Locale(normalizedLanguageCode),
       );
     });
   }
@@ -161,6 +166,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final selectedLanguageCode =
+      _supportedLanguageCodes.contains(_selectedLanguageCode)
+        ? _selectedLanguageCode
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('settings'))),
@@ -206,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.language_outlined),
             title: Text(l10n.t('language')),
             trailing: DropdownButton<String?>(
-              value: _selectedLanguageCode,
+              value: selectedLanguageCode,
               onChanged: _updateLanguageCode,
               items: [
                 DropdownMenuItem<String?>(

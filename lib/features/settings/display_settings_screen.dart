@@ -16,11 +16,16 @@ class DisplaySettingsScreen extends StatelessWidget {
   final ThemeMode? currentThemeMode;
   final ValueChanged<ThemeMode>? onThemeModeChanged;
 
+  static const Set<String> _supportedLanguageCodes = <String>{'en', 'ja'};
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final selectedThemeMode = currentThemeMode ?? ThemeMode.system;
-    final selectedLanguageCode = currentLocale?.languageCode;
+    final selectedLanguageCode =
+      _supportedLanguageCodes.contains(currentLocale?.languageCode)
+        ? currentLocale?.languageCode
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('display'))),
@@ -74,9 +79,15 @@ class DisplaySettingsScreen extends StatelessWidget {
               onChanged: onLocaleChanged == null
                   ? null
                   : (languageCode) {
+                      final normalizedLanguageCode =
+                          _supportedLanguageCodes.contains(languageCode)
+                              ? languageCode
+                              : null;
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         onLocaleChanged!(
-                          languageCode == null ? null : Locale(languageCode),
+                          normalizedLanguageCode == null
+                              ? null
+                              : Locale(normalizedLanguageCode),
                         );
                       });
                     },
