@@ -15,6 +15,7 @@ class CommunityPostModel {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isPinned;
+  final bool isLikedByMe;
 
   const CommunityPostModel({
     required this.id,
@@ -33,7 +34,35 @@ class CommunityPostModel {
     required this.createdAt,
     required this.updatedAt,
     required this.isPinned,
+    this.isLikedByMe = false,
   });
+
+  CommunityPostModel copyWith({
+    int? likeCount,
+    int? commentCount,
+    int? viewCount,
+    bool? isLikedByMe,
+  }) {
+    return CommunityPostModel(
+      id: id,
+      authorId: authorId,
+      authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
+      title: title,
+      bodyText: bodyText,
+      plainText: plainText,
+      imageUrl: imageUrl,
+      imageUrls: imageUrls,
+      category: category,
+      commentCount: commentCount ?? this.commentCount,
+      likeCount: likeCount ?? this.likeCount,
+      viewCount: viewCount ?? this.viewCount,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      isPinned: isPinned,
+      isLikedByMe: isLikedByMe ?? this.isLikedByMe,
+    );
+  }
 
   String get excerpt {
     final source = bodyText.isNotEmpty ? bodyText : plainText;
@@ -80,6 +109,7 @@ class CommunityPostModel {
           ? null
           : DateTime.parse(json['updated_at'].toString()).toLocal(),
       isPinned: json['is_pinned'] == true,
+      isLikedByMe: json['liked_by_me'] == true,
     );
   }
 }

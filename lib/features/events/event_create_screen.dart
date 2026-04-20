@@ -27,7 +27,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   DateTime _endAt = DateTime.now().add(const Duration(days: 7, hours: 6));
 
   String _eventType = 'Skirmish';
-  String _language = 'English / Japanese';
+  String _language = 'Bilingual';
   String _skillLevel = 'All Levels';
 
   bool _isSaving = false;
@@ -42,7 +42,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   ];
 
   static const List<String> _languages = [
-    'English / Japanese',
+    'Bilingual',
     'English',
     'Japanese',
   ];

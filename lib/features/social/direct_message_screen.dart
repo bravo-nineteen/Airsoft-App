@@ -26,18 +26,19 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  late Future<List<DirectMessageModel>> _futureMessages;
+  List<DirectMessageModel> _messages = <DirectMessageModel>[];
   RealtimeChannel? _channel;
   bool _isSending = false;
   bool _isAllowed = false;
   bool _loadingPermission = true;
+  bool _isLoadingMessages = false;
+  bool _isRefreshingMessages = false;
 
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
 
   @override
   void initState() {
     super.initState();
-    _futureMessages = Future.value(const <DirectMessageModel>[]);
     _initialize();
   }
 
@@ -58,7 +59,6 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
       }
 
       _isAllowed = true;
-      _futureMessages = _repository.getMessages(widget.otherUserId);
 
       _channel = _repository.subscribeToThread(
         otherUserId: widget.otherUserId,
@@ -74,7 +74,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         _loadingPermission = false;
       });
 
-      await _refresh();
+      await _refresh(showLoading: true);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -84,18 +84,60 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _futureMessages = _repository.getMessages(widget.otherUserId);
-    });
+  Future<void> _refresh({bool showLoading = false}) async {
+    if (showLoading && _messages.isEmpty) {
+      setState(() {
+        _isLoadingMessages = true;
+      });
+    } else {
+      setState(() {
+        _isRefreshingMessages = true;
+      });
+    }
 
-    await _futureMessages;
-    await _repository.markThreadRead(widget.otherUserId);
+    try {
+      final messages = await _repository.getMessages(widget.otherUserId);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    });
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _messages = messages;
+      });
+
+      await _repository.markThreadRead(widget.otherUserId);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedLoadMessages', args: {'error': '$e'}),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMessages = false;
+          _isRefreshingMessages = false;
+        });
+      }
+    }
   }
 
   Future<void> _send() async {
@@ -126,10 +168,11 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         ),
       );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isSending = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 
@@ -173,83 +216,63 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
       appBar: AppBar(title: Text(widget.otherDisplayName)),
       body: Column(
         children: [
+          if (_isRefreshingMessages)
+            const LinearProgressIndicator(minHeight: 2),
           Expanded(
-            child: FutureBuilder<List<DirectMessageModel>>(
-              future: _futureMessages,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            child: _isLoadingMessages
+                ? const Center(child: CircularProgressIndicator())
+                : _messages.isEmpty
+                    ? Center(
+                        child: Text(l10n.t('noMessagesYet')),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final message = _messages[index];
+                          final isMine = message.senderId == _currentUserId;
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        l10n.t(
-                          'failedLoadMessages',
-                          args: {'error': '${snapshot.error}'},
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-
-                final messages = snapshot.data ?? [];
-
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Text(l10n.t('noMessagesYet')),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMine = message.senderId == _currentUserId;
-
-                    return Align(
-                      alignment: isMine
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.72,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isMine
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(message.body),
-                            const SizedBox(height: 6),
-                            Text(
-                              _formatTime(message.createdAt),
-                              style: Theme.of(context).textTheme.bodySmall,
+                          return Align(
+                            alignment: isMine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.72,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isMine
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(message.body),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _formatTime(message.createdAt),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                );
-              },
-            ),
           ),
           SafeArea(
             top: false,

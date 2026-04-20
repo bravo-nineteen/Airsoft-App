@@ -55,9 +55,9 @@ class ContactRepository {
           'and(requester_id.eq.${current.id},addressee_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,addressee_id.eq.${current.id})',
         )
         .eq('status', 'accepted')
-        .maybeSingle();
+        .limit(1);
 
-    return response != null;
+    return (response as List).isNotEmpty;
   }
 
   Future<int> getPendingRequestsCount() async {

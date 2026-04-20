@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,22 +22,28 @@ class _DirectMessageThreadsScreenState
       DirectMessageThreadRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
+  final Map<String, String> _displayNameByUserId = <String, String>{};
 
   @override
   void initState() {
     super.initState();
-    _future = _repo.getThreads();
+    _future = _loadThreads();
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = _repo.getThreads();
+      _future = _loadThreads();
     });
     await _future;
   }
 
-  Future<String> _resolveName(String userId) async {
-    final l10n = AppLocalizations.of(context);
+  Future<List<DirectMessageThreadModel>> _loadThreads() async {
+    final threads = await _repo.getThreads();
+    unawaited(_warmDisplayNames(threads));
+    return threads;
+  }
+
+  Future<String> _resolveName(String userId, String fallback) async {
     final data = await Supabase.instance.client
         .from('profiles')
         .select('call_sign')
@@ -43,11 +51,47 @@ class _DirectMessageThreadsScreenState
         .maybeSingle();
 
     if (data == null) {
-      return l10n.t('operator');
+      return fallback;
     }
 
-    final value = (data['call_sign'] ?? l10n.t('operator')).toString().trim();
-    return value.isEmpty ? l10n.t('operator') : value;
+    final value = (data['call_sign'] ?? fallback).toString().trim();
+    return value.isEmpty ? fallback : value;
+  }
+
+  Future<void> _warmDisplayNames(List<DirectMessageThreadModel> threads) async {
+    if (!mounted || threads.isEmpty) {
+      return;
+    }
+
+    final fallback = AppLocalizations.of(context).t('operator');
+    final missingUserIds = threads
+        .map((thread) => thread.otherUserId)
+        .where((id) => !_displayNameByUserId.containsKey(id))
+        .toSet()
+        .toList();
+
+    if (missingUserIds.isEmpty) {
+      return;
+    }
+
+    final entries = await Future.wait(
+      missingUserIds.map(
+        (userId) async => MapEntry(
+          userId,
+          await _resolveName(userId, fallback),
+        ),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      for (final entry in entries) {
+        _displayNameByUserId[entry.key] = entry.value;
+      }
+    });
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
@@ -114,14 +158,25 @@ class _DirectMessageThreadsScreenState
               itemCount: threads.length,
               itemBuilder: (context, index) {
                 final thread = threads[index];
+                final name = _displayNameByUserId[thread.otherUserId] ??
+                    l10n.t('operator');
 
-                return FutureBuilder<String>(
-                  future: _resolveName(thread.otherUserId),
-                  builder: (context, nameSnap) {
-                    final name = nameSnap.data ?? '...';
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => DirectMessageScreen(
+                            otherUserId: thread.otherUserId,
+                            otherDisplayName: name,
+                          ),
+                        ),
+                      );
+                      await _refresh();
+                    },
+                    child: IgnorePointer(
                       child: ListTile(
                         leading: CircleAvatar(
                           child: Text(name.isEmpty ? '?' : name[0]),
@@ -154,20 +209,9 @@ class _DirectMessageThreadsScreenState
                               ),
                           ],
                         ),
-                        onTap: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => DirectMessageScreen(
-                                otherUserId: thread.otherUserId,
-                                otherDisplayName: name,
-                              ),
-                            ),
-                          );
-                          await _refresh();
-                        },
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 );
               },
             );

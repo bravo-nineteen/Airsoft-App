@@ -167,7 +167,7 @@ class CommunityRepository {
         );
         return comment.copyWith(
           likeCount: likeCount,
-          isLikedByMe: isLikedByMe,
+          likedByMe: isLikedByMe,
         );
       }),
     );

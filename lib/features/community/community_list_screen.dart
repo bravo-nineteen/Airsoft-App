@@ -1,12 +1,11 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_details_screen.dart';
-import 'community_user_profile_screen.dart';
 import 'community_repository.dart';
+import 'community_user_profile_screen.dart';
 
 class CommunityListScreen extends StatefulWidget {
   const CommunityListScreen({super.key});
@@ -20,7 +19,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
-  bool _isLoading = true;
+  bool _isInitialLoading = true;
+  bool _isRefreshing = false;
   String _selectedCategory = 'All';
 
   static const List<String> _categories = <String>[
@@ -40,9 +40,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   }
 
   Future<void> _loadPosts() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (_posts.isEmpty) {
+      setState(() {
+        _isInitialLoading = true;
+      });
+    } else {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
 
     try {
       final posts = await _repository.fetchPosts(
@@ -56,7 +62,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
       setState(() {
         _posts = posts;
-        _isLoading = false;
+        _isInitialLoading = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -64,7 +71,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       }
 
       setState(() {
-        _isLoading = false;
+        _isInitialLoading = false;
+        _isRefreshing = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,6 +104,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   }
 
   void _openProfile(String? userId, String fallbackName) {
+    final _ = fallbackName;
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile not available')),
@@ -105,9 +114,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CommunityPublicProfileScreen(
+        builder: (_) => CommunityUserProfileScreen(
           userId: userId,
-          fallbackName: fallbackName,
         ),
       ),
     );
@@ -134,15 +142,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     if (difference.inDays < 7) {
       return '${difference.inDays}d';
     }
-    return DateFormat('dd MMM').format(dateTime);
+    final yyyy = dateTime.year.toString().padLeft(4, '0');
+    final mm = dateTime.month.toString().padLeft(2, '0');
+    final dd = dateTime.day.toString().padLeft(2, '0');
+    return '$yyyy-$mm-$dd';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Boards'),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateScreen,
         icon: const Icon(Icons.edit_outlined),
@@ -150,83 +158,102 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadPosts,
-        child: Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Column(
-                children: <Widget>[
-                  TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _loadPosts(),
-                    decoration: InputDecoration(
-                      hintText: 'Search posts',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        onPressed: _loadPosts,
-                        icon: const Icon(Icons.arrow_forward),
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 38,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (BuildContext context, int index) {
-                        final category = _categories[index];
-                        final isSelected = category == _selectedCategory;
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              floating: false,
+              expandedHeight: 150,
+              title: const Text('Boards'),
+              flexibleSpace: FlexibleSpaceBar(
+                background: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 64, 16, 8),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _loadPosts(),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Search posts',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: IconButton(
+                              onPressed: _loadPosts,
+                              icon: const Icon(Icons.arrow_forward),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 34,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _categories.length,
+                              separatorBuilder: (_, index) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (BuildContext context, int index) {
+                              final category = _categories[index];
+                              final isSelected =
+                                  category == _selectedCategory;
 
-                        return ChoiceChip(
-                          label: Text(category),
-                          selected: isSelected,
-                          onSelected: (_) {
-                            setState(() {
-                              _selectedCategory = category;
-                            });
-                            _loadPosts();
-                          },
-                        );
-                      },
+                              return ChoiceChip(
+                                label: Text(category),
+                                selected: isSelected,
+                                onSelected: (_) {
+                                  setState(() {
+                                    _selectedCategory = category;
+                                  });
+                                  _loadPosts();
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _posts.isEmpty
-                      ? ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          children: const <Widget>[
-                            SizedBox(height: 120),
-                            Center(child: Text('No posts found')),
-                          ],
-                        )
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                          itemCount: _posts.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final post = _posts[index];
+            if (_isRefreshing)
+              const SliverToBoxAdapter(
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+            if (_isInitialLoading)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_posts.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: Text('No posts found')),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
+                sliver: SliverList.builder(
+                  itemCount: _posts.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final post = _posts[index];
 
-                            return _CompactPostCard(
-                              post: post,
-                              timeAgo: _timeAgo(post.createdAt),
-                              onTap: () => _openPostDetails(post),
-                              onAuthorTap: () =>
-                                  _openProfile(post.authorId, post.authorName),
-                            );
-                          },
-                        ),
-            ),
+                    return _CompactPostCard(
+                      post: post,
+                      timeAgo: _timeAgo(post.createdAt),
+                      onTap: () => _openPostDetails(post),
+                      onAuthorTap: () =>
+                          _openProfile(post.authorId, post.authorName),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -250,8 +277,8 @@ class _CompactPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final imageUrl = post.primaryImageUrl;
-    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+    final resolvedImageUrl = post.primaryImageUrl?.trim() ?? '';
+    final hasImage = resolvedImageUrl.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -277,7 +304,7 @@ class _CompactPostCard extends StatelessWidget {
                   height: 72,
                   child: hasImage
                       ? ExtendedImage.network(
-                          imageUrl!,
+                      resolvedImageUrl,
                           fit: BoxFit.cover,
                           cache: true,
                           loadStateChanged: (state) {

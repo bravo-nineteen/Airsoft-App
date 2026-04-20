@@ -27,6 +27,7 @@ class AppTheme {
         backgroundColor: darkBackground,
         elevation: 0,
         centerTitle: false,
+        toolbarHeight: 52,
       ),
       cardTheme: CardThemeData(
         color: darkSurface,
@@ -87,6 +88,7 @@ class AppTheme {
         backgroundColor: lightBackground,
         elevation: 0,
         centerTitle: false,
+        toolbarHeight: 52,
       ),
       cardTheme: CardThemeData(
         color: lightSurface,
