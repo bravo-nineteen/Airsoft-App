@@ -97,6 +97,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (!mounted) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
 
     if (widget.onOpenNotification != null) {
       await widget.onOpenNotification!(context, item);
@@ -121,7 +122,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               otherUserId: otherUserId,
               otherDisplayName: item.title.trim().isNotEmpty
                   ? item.title
-                  : 'Direct Message',
+                  : l10n.t('directMessageFallback'),
             ),
           ),
         );
@@ -143,7 +144,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This post is no longer available.')),
+          SnackBar(content: Text(l10n.t('postNoLongerAvailable'))),
         );
       }
     } else if (normalizedType.contains('event')) {
@@ -174,8 +175,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) {
         return;
       }
+      final AppLocalizations l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove notification: $error')),
+        SnackBar(
+          content: Text(
+            l10n.t('failedRemoveNotification', args: {'error': '$error'}),
+          ),
+        ),
       );
     }
   }
@@ -374,7 +380,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     await _deleteNotification(item);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notification removed')),
+                      SnackBar(content: Text(l10n.t('notificationRemoved'))),
                     );
                   },
                   child: Card(
@@ -403,15 +409,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               child: Icon(Icons.fiber_manual_record, size: 12),
                             ),
                           IconButton(
-                            tooltip: 'Delete notification',
+                            tooltip: l10n.t('deleteNotification'),
                             onPressed: () async {
                               await _deleteNotification(item);
                               if (!context.mounted) {
                                 return;
                               }
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Notification removed'),
+                                SnackBar(
+                                  content: Text(l10n.t('notificationRemoved')),
                                 ),
                               );
                             },

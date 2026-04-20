@@ -122,16 +122,16 @@ class _EventsScreenState extends State<EventsScreen> {
     return parts.join(' • ');
   }
 
-  String? _statusLabel(EventModel event) {
+  String? _statusLabel(AppLocalizations l10n, EventModel event) {
     switch (event.currentUserAttendanceStatus) {
       case 'attending':
-        return 'Attending';
+        return l10n.t('attendanceAttending');
       case 'cancelled':
-        return 'Cancelled';
+        return l10n.t('attendanceCancelled');
       case 'attended':
-        return 'Attended';
+        return l10n.t('attendanceAttended');
       case 'no_show':
-        return 'No Show';
+        return l10n.t('attendanceNoShow');
       default:
         return null;
     }
@@ -203,8 +203,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         });
                       },
                       decoration: InputDecoration(
-                        hintText:
-                            'Search language, location, type, skill, organiser',
+                        hintText: l10n.t('eventSearchHint'),
                         prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -212,7 +211,7 @@ class _EventsScreenState extends State<EventsScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const Center(child: Text('No matching events found')),
+                    Center(child: Text(l10n.t('noMatchingEventsFound'))),
                   ],
                 );
               }
@@ -251,7 +250,7 @@ class _EventsScreenState extends State<EventsScreen> {
                   }
 
                   final EventModel event = filteredEvents[index - 2];
-                  final String? statusLabel = _statusLabel(event);
+                    final String? statusLabel = _statusLabel(l10n, event);
                   final bool canEdit =
                       currentUserId != null && event.hostUserId == currentUserId;
 
@@ -271,16 +270,22 @@ class _EventsScreenState extends State<EventsScreen> {
                               if (event.isOfficial)
                                 _MiniInfoChip(
                                   icon: Icons.verified,
-                                  label: 'Official',
+                                  label: l10n.t('official'),
                                   color: Colors.blue,
                                 ),
                               _MiniInfoChip(
                                 icon: Icons.event_available,
-                                label: 'Going ${event.attendingCount}',
+                                label: l10n.t(
+                                  'goingWithCount',
+                                  args: {'count': '${event.attendingCount}'},
+                                ),
                               ),
                               _MiniInfoChip(
                                 icon: Icons.verified,
-                                label: 'Attended ${event.attendedCount}',
+                                label: l10n.t(
+                                  'attendedWithCount',
+                                  args: {'count': '${event.attendedCount}'},
+                                ),
                               ),
                               if (statusLabel != null)
                                 _MiniInfoChip(
@@ -296,7 +301,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         children: <Widget>[
                           if (canEdit)
                             IconButton(
-                              tooltip: 'Edit event',
+                              tooltip: l10n.t('editEvent'),
                               onPressed: () => _openEdit(event),
                               icon: const Icon(Icons.edit_outlined),
                             ),
@@ -328,7 +333,7 @@ class _EventsScreenState extends State<EventsScreen> {
             child: FloatingActionButton.extended(
               onPressed: _openCreate,
               icon: const Icon(Icons.add),
-              label: const Text('New event'),
+              label: Text(l10n.t('newEventCta')),
             ),
           ),
         ),

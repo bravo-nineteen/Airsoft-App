@@ -79,16 +79,22 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       if (!mounted) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Review posted')));
+      ).showSnackBar(SnackBar(content: Text(l10n.t('reviewPosted'))));
     } catch (error) {
       if (!mounted) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to post review: $error')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('failedPostReview', args: {'error': '$error'})),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
