@@ -167,13 +167,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await _refresh();
   }
 
-  Future<void> _deleteNotification(AppNotificationModel item) async {
+  Future<bool> _deleteNotification(AppNotificationModel item) async {
     try {
       await _repository.deleteNotification(item.id);
       await _refresh();
+      return true;
     } catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
       final AppLocalizations l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -183,6 +184,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         ),
       );
+      return false;
     }
   }
 
@@ -376,8 +378,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
                   ),
-                  onDismissed: (_) async {
-                    await _deleteNotification(item);
+                  confirmDismiss: (_) async {
+                    final bool deleted = await _deleteNotification(item);
+                    return deleted;
+                  },
+                  onDismissed: (_) {
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(l10n.t('notificationRemoved'))),
@@ -411,7 +416,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           IconButton(
                             tooltip: l10n.t('deleteNotification'),
                             onPressed: () async {
-                              await _deleteNotification(item);
+                              final bool deleted = await _deleteNotification(
+                                item,
+                              );
+                              if (!deleted) {
+                                return;
+                              }
                               if (!context.mounted) {
                                 return;
                               }

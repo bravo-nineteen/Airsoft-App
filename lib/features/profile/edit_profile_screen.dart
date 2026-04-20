@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'avatar_picker_widget.dart';
+import 'loadout_storage_service.dart';
 import 'profile_model.dart';
 import 'profile_repository.dart';
 
@@ -19,6 +23,8 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final ProfileRepository _repository = ProfileRepository();
+  final ImagePicker _picker = ImagePicker();
+  final LoadoutStorageService _loadoutStorageService = LoadoutStorageService();
 
   late final TextEditingController _callSignController;
   late final TextEditingController _areaController;
@@ -27,12 +33,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _instagramController;
   late final TextEditingController _facebookController;
   late final TextEditingController _youtubeController;
-    final List<TextEditingController> _loadoutTitleControllers =
+  final List<TextEditingController> _loadoutTitleControllers =
       <TextEditingController>[];
-    final List<TextEditingController> _loadoutDescriptionControllers =
+  final List<TextEditingController> _loadoutDescriptionControllers =
       <TextEditingController>[];
-    final List<TextEditingController> _loadoutImageControllers =
+  final List<TextEditingController> _loadoutImageControllers =
       <TextEditingController>[];
+  final Set<int> _uploadingLoadoutIndices = <int>{};
 
   late ProfileModel _profile;
   bool _isSaving = false;
@@ -101,6 +108,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _pickAndUploadLoadoutImage(int index) async {
+    if (_uploadingLoadoutIndices.contains(index)) {
+      return;
+    }
+
+    final XFile? picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 1800,
+      maxHeight: 1800,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _uploadingLoadoutIndices.add(index);
+    });
+
+    try {
+      final String uploadedUrl = await _loadoutStorageService.uploadLoadoutImage(
+        File(picked.path),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadoutImageControllers[index].text = uploadedUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingLoadoutIndices.remove(index);
+        });
+      }
     }
   }
 
@@ -189,10 +241,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const SizedBox(height: 10),
-                      TextField(
-                        controller: _loadoutImageControllers[index],
-                        decoration: const InputDecoration(
-                          labelText: 'Image URL',
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: AspectRatio(
+                          aspectRatio: 4 / 3,
+                          child: _loadoutImageControllers[index].text.trim().isEmpty
+                              ? Container(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.image_outlined),
+                                )
+                              : Image.network(
+                                  _loadoutImageControllers[index].text.trim(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.broken_image_outlined),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _uploadingLoadoutIndices.contains(index)
+                            ? null
+                            : () => _pickAndUploadLoadoutImage(index),
+                        icon: _uploadingLoadoutIndices.contains(index)
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.upload_outlined),
+                        label: Text(
+                          _uploadingLoadoutIndices.contains(index)
+                              ? 'Uploading...'
+                              : 'Upload image',
                         ),
                       ),
                       const SizedBox(height: 10),

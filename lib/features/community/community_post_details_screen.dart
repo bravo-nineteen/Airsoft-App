@@ -915,12 +915,68 @@ class _CommunityPostDetailsScreenState
                   Text(_postBody(post), style: theme.textTheme.bodyLarge),
                   if (post.imageUrls.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        DefaultTabController.of(context).animateTo(1);
-                      },
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: Text('Open media (${post.imageUrls.length})'),
+                    Text(
+                      'Media (${post.imageUrls.length})',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 96,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: post.imageUrls.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (BuildContext context, int index) {
+                          final String imageUrl = post.imageUrls[index];
+                          return InkWell(
+                            onTap: () => _openImageLightbox(imageUrl),
+                            borderRadius: BorderRadius.circular(12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: 120,
+                                child: ExtendedImage.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  cache: true,
+                                  loadStateChanged: (state) {
+                                    if (state.extendedImageLoadState ==
+                                        LoadState.completed) {
+                                      return ExtendedRawImage(
+                                        image: state.extendedImageInfo?.image,
+                                        fit: BoxFit.cover,
+                                      );
+                                    }
+
+                                    if (state.extendedImageLoadState ==
+                                        LoadState.failed) {
+                                      return Container(
+                                        color: theme.colorScheme.surfaceContainerHighest,
+                                        alignment: Alignment.center,
+                                        child: const Icon(Icons.broken_image_outlined),
+                                      );
+                                    }
+
+                                    return Container(
+                                      color: theme.colorScheme.surfaceContainerHighest,
+                                      alignment: Alignment.center,
+                                      child: const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                   const SizedBox(height: 8),
