@@ -13,6 +13,25 @@ import 'community_model.dart';
 import 'community_post_details_screen.dart';
 import 'community_repository.dart';
 
+class CommunityUserProfileScreen extends StatelessWidget {
+  const CommunityUserProfileScreen({
+    super.key,
+    required this.userId,
+    this.fallbackName = 'Operator',
+  });
+
+  final String userId;
+  final String fallbackName;
+
+  @override
+  Widget build(BuildContext context) {
+    return CommunityPublicProfileScreen(
+      userId: userId,
+      fallbackName: fallbackName,
+    );
+  }
+}
+
 class CommunityPublicProfileScreen extends StatefulWidget {
   const CommunityPublicProfileScreen({
     super.key,

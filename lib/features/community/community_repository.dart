@@ -270,17 +270,6 @@ class CommunityRepository {
             );
           }),
         );
-        final isLikedByMe = await _isLikedByCurrentUser(
-          'community_comment_likes',
-          'comment_id',
-          comment.id,
-        );
-        return comment.copyWith(
-          likeCount: likeCount,
-          likedByMe: isLikedByMe,
-        );
-      }),
-    );
 
     return enriched;
   }

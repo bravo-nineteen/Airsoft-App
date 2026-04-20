@@ -37,6 +37,15 @@ class _DirectMessageThreadsScreenState
     await _future;
   }
 
+  Future<void> _openCompose() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const ContactsScreen(),
+      ),
+    );
+    await _refresh();
+  }
+
   Future<List<DirectMessageThreadModel>> _loadThreads() async {
     final threads = await _repo.getThreads();
     unawaited(_warmDisplayNames(threads));

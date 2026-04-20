@@ -1,6 +1,8 @@
 import 'package:extended_image/extended_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
@@ -24,9 +26,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   RealtimeChannel? _postsChannel;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
+  final List<CommunityPostModel> _pendingPosts = <CommunityPostModel>[];
+  final Set<String> _busyLikePostIds = <String>{};
   bool _isInitialLoading = true;
   bool _isRefreshing = false;
+  bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  bool _didInitLanguagePreference = false;
+  int _offset = 0;
+  String _selectedLanguagePreference = 'english';
   String _selectedCategory = 'All';
+
+  static const int _pageSize = 20;
 
   static const List<String> _categories =
       CommunityPostCategories.communityCategoriesWithAll;
@@ -214,10 +226,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   Future<void> _loadPosts() async {
     if (_posts.isEmpty) {
       setState(() {
+        _isLoading = true;
         _isInitialLoading = true;
       });
     } else {
       setState(() {
+        _isLoading = true;
         _isRefreshing = true;
       });
     }
@@ -236,7 +250,19 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       }
 
       setState(() {
-        _posts = posts;
+        _posts = page.items
+            .map(
+              (CommunityPostModel post) => post.copyWith(
+                category: CommunityPostCategories.normalizeCommunityCategory(
+                  post.category,
+                ),
+              ),
+            )
+            .toList();
+        _offset = page.nextOffset;
+        _hasMore = page.hasMore;
+        _pendingPosts.clear();
+        _isLoading = false;
         _isInitialLoading = false;
         _isRefreshing = false;
       });
@@ -247,6 +273,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       }
 
       setState(() {
+        _isLoading = false;
         _isInitialLoading = false;
         _isRefreshing = false;
       });
@@ -591,7 +618,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                     return _CompactPostCard(
                       post: post,
                       timeAgo: _timeAgo(post.createdAt),
+                      languageLabel:
+                          languageLabels[post.language ?? ''] ??
+                          languageSummary,
                       onTap: () => _openPostDetails(post),
+                      onLikeTap: () => _toggleLikeFromFeed(post),
+                      isLiking: _busyLikePostIds.contains(post.id),
                       onAuthorTap: () =>
                           _openProfile(post.authorId, post.authorName),
                     );
@@ -627,6 +659,8 @@ class _CompactPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final String normalizedCategory =
+        CommunityPostCategories.normalizeCommunityCategory(post.category);
     final resolvedImageUrl = post.primaryImageUrl?.trim() ?? '';
     final hasImage = resolvedImageUrl.isNotEmpty;
 

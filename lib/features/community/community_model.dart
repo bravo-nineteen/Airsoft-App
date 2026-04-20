@@ -17,6 +17,8 @@ class CommunityPostModel {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isPinned;
+  final String postContext;
+  final String? targetUserId;
   final bool isLikedByMe;
 
   const CommunityPostModel({
@@ -38,32 +40,66 @@ class CommunityPostModel {
     required this.createdAt,
     required this.updatedAt,
     required this.isPinned,
+    required this.postContext,
+    required this.targetUserId,
     this.isLikedByMe = false,
   });
 
   CommunityPostModel copyWith({
+    String? id,
+    String? authorId,
+    String? authorName,
+    String? authorAvatarUrl,
+    String? title,
+    String? bodyText,
+    String? plainText,
+    Object? imageUrl = _communityPostNoChange,
+    List<String>? imageUrls,
+    Object? category = _communityPostNoChange,
+    Object? language = _communityPostNoChange,
+    Object? languageCode = _communityPostNoChange,
     int? likeCount,
     int? commentCount,
     int? viewCount,
+    DateTime? createdAt,
+    Object? updatedAt = _communityPostNoChange,
+    bool? isPinned,
+    String? postContext,
+    Object? targetUserId = _communityPostNoChange,
     bool? isLikedByMe,
   }) {
     return CommunityPostModel(
-      id: id,
-      authorId: authorId,
-      authorName: authorName,
-      authorAvatarUrl: authorAvatarUrl,
-      title: title,
-      bodyText: bodyText,
-      plainText: plainText,
-      imageUrl: imageUrl,
-      imageUrls: imageUrls,
-      category: category,
+      id: id ?? this.id,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      title: title ?? this.title,
+      bodyText: bodyText ?? this.bodyText,
+      plainText: plainText ?? this.plainText,
+      imageUrl:
+          imageUrl == _communityPostNoChange ? this.imageUrl : imageUrl as String?,
+      imageUrls: imageUrls ?? this.imageUrls,
+      category: category == _communityPostNoChange
+          ? this.category
+          : category as String?,
+      language: language == _communityPostNoChange
+          ? this.language
+          : language as String?,
+      languageCode: languageCode == _communityPostNoChange
+          ? this.languageCode
+          : languageCode as String?,
       commentCount: commentCount ?? this.commentCount,
       likeCount: likeCount ?? this.likeCount,
       viewCount: viewCount ?? this.viewCount,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      isPinned: isPinned,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt == _communityPostNoChange
+          ? this.updatedAt
+          : updatedAt as DateTime?,
+      isPinned: isPinned ?? this.isPinned,
+      postContext: postContext ?? this.postContext,
+      targetUserId: targetUserId == _communityPostNoChange
+          ? this.targetUserId
+          : targetUserId as String?,
       isLikedByMe: isLikedByMe ?? this.isLikedByMe,
     );
   }
@@ -153,7 +189,10 @@ class CommunityPostModel {
       updatedAt: DateTime.tryParse((json['updated_at'] ?? '').toString())
           ?.toLocal(),
       isPinned: json['is_pinned'] == true,
-      isLikedByMe: json['liked_by_me'] == true,
+      postContext: _readNullableString(json['post_context']) ?? 'community',
+      targetUserId: _readNullableString(json['target_user_id']),
+      isLikedByMe:
+          json['is_liked_by_me'] == true || json['liked_by_me'] == true,
     );
   }
 }
@@ -235,6 +274,7 @@ class CommunityCommentModel {
 }
 
 const Object _communityCommentNoChange = Object();
+const Object _communityPostNoChange = Object();
 
 String? _readNullableString(dynamic value) {
   if (value == null) {
