@@ -39,6 +39,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
 
   Future<void> _selectAndUploadAvatar() async {
     if (_isBusy) return;
+    final l10n = AppLocalizations.of(context);
 
     setState(() {
       _isBusy = true;
@@ -60,6 +61,8 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
         return;
       }
 
+      if (!mounted) return;
+
       String uploadPath = picked.path;
       final bool shouldCrop = !kIsWeb &&
           defaultTargetPlatform == TargetPlatform.iOS;
@@ -73,7 +76,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
             aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
             uiSettings: [
               IOSUiSettings(
-                title: AppLocalizations.of(context).t('cropAvatar'),
+                title: l10n.t('cropAvatar'),
                 aspectRatioLockEnabled: true,
                 resetAspectRatioEnabled: false,
                 cropStyle: CropStyle.circle,
@@ -108,7 +111,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
       widget.onAvatarUpdated(uploadedUrl);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).t('avatarUpdated'))),
+        SnackBar(content: Text(l10n.t('avatarUpdated'))),
       );
     } catch (error) {
       if (!mounted) return;
@@ -119,9 +122,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(
-              context,
-            ).t('avatarUpdateFailed', args: {'error': '$error'}),
+            l10n.t('avatarUpdateFailed', args: {'error': '$error'}),
           ),
         ),
       );

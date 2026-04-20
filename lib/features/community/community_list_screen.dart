@@ -716,7 +716,7 @@ class _CompactPostCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: theme.dividerColor.withOpacity(0.18),
+          color: theme.dividerColor.withValues(alpha: 0.18),
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -834,17 +834,17 @@ class _CompactPostCard extends StatelessWidget {
                         if (post.isPinned)
                           _MiniBadge(
                             text: AppLocalizations.of(context).t('pinned'),
-                            color: theme.colorScheme.primary.withOpacity(0.14),
+                            color: theme.colorScheme.primary.withValues(alpha: 0.14),
                             textColor: theme.colorScheme.primary,
                           ),
                         _MiniBadge(
                           text: normalizedCategory,
-                          color: theme.colorScheme.secondary.withOpacity(0.14),
+                          color: theme.colorScheme.secondary.withValues(alpha: 0.14),
                           textColor: theme.colorScheme.secondary,
                         ),
                         _MiniBadge(
                           text: languageLabel,
-                          color: theme.colorScheme.tertiary.withOpacity(0.14),
+                          color: theme.colorScheme.tertiary.withValues(alpha: 0.14),
                           textColor: theme.colorScheme.tertiary,
                         ),
                       ],
@@ -993,7 +993,7 @@ class _MetaPill extends StatelessWidget {
         color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest
-            .withOpacity(0.65),
+          .withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

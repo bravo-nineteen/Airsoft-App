@@ -417,7 +417,7 @@ class _HomePostCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.14)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -565,7 +565,7 @@ class _BlogPostCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.14)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -694,7 +694,7 @@ class _InfoFeedCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: theme.dividerColor.withOpacity(0.14)),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.14)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),

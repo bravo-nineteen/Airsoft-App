@@ -216,7 +216,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: IgnorePointer(
                 child: CustomPaint(
                   painter: _GridPainter(
-                    lineColor: _olive.withOpacity(0.10),
+                    lineColor: _olive.withValues(alpha: 0.10),
                   ),
                 ),
               ),
@@ -247,15 +247,15 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 132,
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: _surface.withOpacity(0.95),
+                            color: _surface.withValues(alpha: 0.95),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: _sand.withOpacity(0.45),
+                              color: _sand.withValues(alpha: 0.45),
                               width: 2,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: _olive.withOpacity(0.28),
+                                color: _olive.withValues(alpha: 0.28),
                                 blurRadius: 28,
                                 spreadRadius: 2,
                               ),
@@ -289,7 +289,7 @@ class _SplashScreenState extends State<SplashScreen>
                         'フィールドオプス',
                         style: TextStyle(
                           fontSize: 17,
-                          color: _sand.withOpacity(0.95),
+                          color: _sand.withValues(alpha: 0.95),
                           letterSpacing: 0.8,
                           fontWeight: FontWeight.w500,
                         ),
@@ -302,9 +302,9 @@ class _SplashScreenState extends State<SplashScreen>
                           gradient: LinearGradient(
                             colors: [
                               Colors.transparent,
-                              _olive.withOpacity(0.25),
-                              _sand.withOpacity(0.75),
-                              _olive.withOpacity(0.25),
+                              _olive.withValues(alpha: 0.25),
+                              _sand.withValues(alpha: 0.75),
+                              _olive.withValues(alpha: 0.25),
                               Colors.transparent,
                             ],
                           ),
@@ -325,7 +325,7 @@ class _SplashScreenState extends State<SplashScreen>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.white.withOpacity(0.78),
+                          color: Colors.white.withValues(alpha: 0.78),
                           letterSpacing: 0.3,
                         ),
                       ),
@@ -334,7 +334,7 @@ class _SplashScreenState extends State<SplashScreen>
                         'v1.1.9',
                         style: TextStyle(
                           fontSize: 12,
-                          color: _olive.withOpacity(0.95),
+                          color: _olive.withValues(alpha: 0.95),
                           letterSpacing: 0.8,
                           fontWeight: FontWeight.w600,
                         ),

@@ -102,7 +102,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startAt),
     );
-    if (pickedTime == null) {
+    if (pickedTime == null || !mounted) {
       return;
     }
 
@@ -137,7 +137,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_endAt),
     );
-    if (pickedTime == null) {
+    if (pickedTime == null || !mounted) {
       return;
     }
 

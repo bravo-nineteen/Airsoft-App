@@ -1231,7 +1231,7 @@ class _MetricPill extends StatelessWidget {
         color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest
-            .withOpacity(0.65),
+          .withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

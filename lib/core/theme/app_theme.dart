@@ -54,7 +54,7 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: sand,
-          side: BorderSide(color: sand.withOpacity(0.6)),
+          side: BorderSide(color: sand.withValues(alpha: 0.6)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
