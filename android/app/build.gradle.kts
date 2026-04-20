@@ -1,17 +1,8 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
-}
-
-val keyProperties = Properties()
-val keyPropertiesFile = rootProject.file("key.properties")
-if (keyPropertiesFile.exists()) {
-    keyProperties.load(FileInputStream(keyPropertiesFile))
 }
 
 android {
@@ -36,30 +27,9 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            val storeFileValue = keyProperties["storeFile"] as String?
-            val storePasswordValue = keyProperties["storePassword"] as String?
-            val keyAliasValue = keyProperties["keyAlias"] as String?
-            val keyPasswordValue = keyProperties["keyPassword"] as String?
-
-            if (
-                storeFileValue != null &&
-                storePasswordValue != null &&
-                keyAliasValue != null &&
-                keyPasswordValue != null
-            ) {
-                storeFile = file(storeFileValue)
-                storePassword = storePasswordValue
-                keyAlias = keyAliasValue
-                keyPassword = keyPasswordValue
-            }
-        }
-    }
-
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             isShrinkResources = false
         }
