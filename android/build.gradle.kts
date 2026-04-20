@@ -23,11 +23,11 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Fix for older plugins that don't declare a namespace (e.g. flutter_app_badger 1.5.0).
+// Fix for older plugins that don't declare a namespace.
 subprojects {
-    afterEvaluate {
-        val androidLib = extensions.findByType<com.android.build.gradle.LibraryExtension>()
-        if (androidLib != null && androidLib.namespace == null) {
+    plugins.withId("com.android.library") {
+        val androidLib = extensions.getByType<com.android.build.gradle.LibraryExtension>()
+        if (androidLib.namespace == null) {
             androidLib.namespace = project.group.toString()
         }
     }

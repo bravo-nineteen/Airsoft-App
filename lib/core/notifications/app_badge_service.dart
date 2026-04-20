@@ -1,5 +1,6 @@
+import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app_badger/flutter_app_badger.dart';
+import 'package:flutter/widgets.dart';
 
 class AppBadgeService {
   AppBadgeService._();
@@ -10,16 +11,16 @@ class AppBadgeService {
     }
 
     try {
-      final bool supported = await FlutterAppBadger.isAppBadgeSupported();
+      final TargetPlatform platform = defaultTargetPlatform;
+      final bool supported =
+          platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS ||
+          platform == TargetPlatform.macOS;
       if (!supported) {
         return;
       }
 
-      if (count <= 0) {
-        await FlutterAppBadger.removeBadge();
-      } else {
-        await FlutterAppBadger.updateBadgeCount(count);
-      }
+      await AppBadgePlus.updateBadge(count < 0 ? 0 : count);
     } catch (_) {
       // Ignore badge update failures on unsupported launchers/devices.
     }
