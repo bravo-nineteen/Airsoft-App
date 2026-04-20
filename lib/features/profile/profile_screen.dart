@@ -37,6 +37,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = _repository.getCurrentProfile();
     });
@@ -49,6 +52,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (_) => EditProfileScreen(profile: profile),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
 
     if (result != null) {
       await _refresh();
@@ -66,6 +73,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     await _refresh();
   }
 

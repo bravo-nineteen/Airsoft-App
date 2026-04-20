@@ -296,7 +296,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
           );
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 36),
             child: isTablet
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

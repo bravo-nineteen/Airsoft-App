@@ -53,6 +53,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = _repository.getNotifications();
     });
@@ -340,11 +343,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                 return Dismissible(
                   key: ValueKey<String>(item.id),
-                  direction: DismissDirection.endToStart,
+                  direction: DismissDirection.horizontal,
                   background: Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     alignment: Alignment.centerRight,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
+                  secondaryBackground: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    alignment: Alignment.centerLeft,
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.errorContainer,
                       borderRadius: BorderRadius.circular(12),

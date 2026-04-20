@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -28,6 +30,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
 
   List<DirectMessageModel> _messages = <DirectMessageModel>[];
   RealtimeChannel? _channel;
+  Timer? _backgroundSyncTimer;
   bool _isSending = false;
   bool _isAllowed = false;
   bool _loadingPermission = true;
@@ -40,6 +43,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   void initState() {
     super.initState();
     _initialize();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (!mounted || !_isAllowed || _isLoadingMessages || _isSending) {
+        return;
+      }
+      _refresh();
+    });
   }
 
   Future<void> _initialize() async {
@@ -178,6 +187,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
 
   @override
   void dispose() {
+    _backgroundSyncTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     if (_channel != null) {

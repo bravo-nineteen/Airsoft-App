@@ -127,6 +127,11 @@ class EventRepository {
     int? priceYen,
     int? maxPlayers,
   }) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to edit events.');
+    }
+
     final String trimmedTitle = title.trim();
     final String trimmedDescription = description.trim();
 
@@ -157,13 +162,21 @@ class EventRepository {
     };
 
     try {
-      await _resolvedClient.from('events').update(payload).eq('id', eventId);
+      await _resolvedClient
+          .from('events')
+          .update(payload)
+          .eq('id', eventId)
+          .eq('host_user_id', user.id);
     } on PostgrestException catch (error) {
       if (!_isMissingColumnError(error, 'is_official')) {
         rethrow;
       }
       payload.remove('is_official');
-      await _resolvedClient.from('events').update(payload).eq('id', eventId);
+      await _resolvedClient
+          .from('events')
+          .update(payload)
+          .eq('id', eventId)
+          .eq('host_user_id', user.id);
     }
   }
 
@@ -173,7 +186,11 @@ class EventRepository {
       throw Exception('You must be logged in.');
     }
 
-    await _resolvedClient.from('events').delete().eq('id', eventId);
+    await _resolvedClient
+      .from('events')
+      .delete()
+      .eq('id', eventId)
+      .eq('host_user_id', user.id);
   }
 
   Future<void> attendEvent(String eventId) async {

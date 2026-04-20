@@ -169,6 +169,33 @@ class CommunityRepository {
         )
         .toList();
 
+    if (posts.isNotEmpty) {
+      final List<String> postIds = posts.map((CommunityPostModel p) => p.id).toList();
+      final dynamic commentsResponse = await _withTransientRetry(
+        () => _client
+            .from('community_comments')
+            .select('id, post_id')
+            .inFilter('post_id', postIds)
+            .eq('is_deleted', false),
+      );
+
+      final Map<String, int> commentCountByPostId = <String, int>{};
+      for (final dynamic row in (commentsResponse as List<dynamic>)) {
+        final String postId = row['post_id']?.toString() ?? '';
+        if (postId.isEmpty) {
+          continue;
+        }
+        commentCountByPostId[postId] = (commentCountByPostId[postId] ?? 0) + 1;
+      }
+
+      for (int i = 0; i < posts.length; i++) {
+        final CommunityPostModel current = posts[i];
+        posts[i] = current.copyWith(
+          commentCount: commentCountByPostId[current.id] ?? 0,
+        );
+      }
+    }
+
     return CommunityPostsPage(
       items: posts,
       nextOffset: offset + posts.length,

@@ -24,6 +24,9 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = _repository.getEvents();
     });
@@ -34,6 +37,10 @@ class _EventListScreenState extends State<EventListScreen> {
     final bool? created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const EventCreateScreen()),
     );
+
+    if (!mounted) {
+      return;
+    }
 
     if (created == true) {
       await _refresh();

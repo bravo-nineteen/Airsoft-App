@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'event_create_screen.dart';
@@ -15,15 +18,28 @@ class EventsScreen extends StatefulWidget {
 
 class _EventsScreenState extends State<EventsScreen> {
   final EventRepository _repository = EventRepository();
+  final TextEditingController _searchController = TextEditingController();
   late Future<List<EventModel>> _future;
+  List<EventModel> _cachedEvents = <EventModel>[];
+  Timer? _backgroundSyncTimer;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _future = _repository.getEvents();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (!mounted) {
+        return;
+      }
+      _refresh();
+    });
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = _repository.getEvents();
     });
@@ -35,9 +51,57 @@ class _EventsScreenState extends State<EventsScreen> {
       MaterialPageRoute(builder: (_) => const EventCreateScreen()),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     if (created == true) {
       await _refresh();
     }
+  }
+
+  Future<void> _openEdit(EventModel event) async {
+    final bool? updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EventCreateScreen(
+          existingEvent: event,
+          isOfficial: event.isOfficial,
+        ),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (updated == true) {
+      await _refresh();
+    }
+  }
+
+  bool _matchesEventSearch(EventModel event) {
+    final String query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return true;
+    }
+
+    final String haystack = <String>[
+      event.language ?? '',
+      event.location ?? '',
+      event.prefecture ?? '',
+      event.eventType ?? '',
+      event.skillLevel ?? '',
+      event.organizerName ?? '',
+    ].join(' ').toLowerCase();
+
+    return haystack.contains(query);
+  }
+
+  @override
+  void dispose() {
+    _backgroundSyncTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   String _formatDate(DateTime value) {
@@ -82,8 +146,15 @@ class _EventsScreenState extends State<EventsScreen> {
           onRefresh: _refresh,
           child: FutureBuilder<List<EventModel>>(
             future: _future,
+            initialData: _cachedEvents,
             builder: (BuildContext context, AsyncSnapshot<List<EventModel>> snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
+              final List<EventModel> events = snapshot.data ?? _cachedEvents;
+              if (snapshot.hasData) {
+                _cachedEvents = snapshot.data!;
+              }
+
+              if (snapshot.connectionState != ConnectionState.done &&
+                  events.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
@@ -107,7 +178,10 @@ class _EventsScreenState extends State<EventsScreen> {
                 );
               }
 
-              final List<EventModel> events = snapshot.data ?? <EventModel>[];
+              final List<EventModel> filteredEvents = events
+                  .where(_matchesEventSearch)
+                  .toList();
+
               if (events.isEmpty) {
                 return ListView(
                   children: <Widget>[
@@ -117,13 +191,69 @@ class _EventsScreenState extends State<EventsScreen> {
                 );
               }
 
+              if (filteredEvents.isEmpty) {
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  children: <Widget>[
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText:
+                            'Search language, location, type, skill, organiser',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Center(child: Text('No matching events found')),
+                  ],
+                );
+              }
+
+              final String? currentUserId =
+                  Supabase.instance.client.auth.currentUser?.id;
+
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                itemCount: events.length,
+                itemCount: filteredEvents.length + 2,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (BuildContext context, int index) {
-                  final EventModel event = events[index];
+                  if (index == 0) {
+                    return snapshot.connectionState == ConnectionState.waiting
+                        ? const LinearProgressIndicator(minHeight: 2)
+                        : const SizedBox.shrink();
+                  }
+
+                  if (index == 1) {
+                    return TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText:
+                            'Search language, location, type, skill, organiser',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final EventModel event = filteredEvents[index - 2];
                   final String? statusLabel = _statusLabel(event);
+                  final bool canEdit =
+                      currentUserId != null && event.hostUserId == currentUserId;
 
                   return Card(
                     child: ListTile(
@@ -161,13 +291,27 @@ class _EventsScreenState extends State<EventsScreen> {
                           ),
                         ],
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          if (canEdit)
+                            IconButton(
+                              tooltip: 'Edit event',
+                              onPressed: () => _openEdit(event),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
                       onTap: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => EventDetailsScreen(event: event),
                           ),
                         );
+                        if (!mounted) {
+                          return;
+                        }
                         await _refresh();
                       },
                     ),

@@ -1,4 +1,5 @@
 import 'package:extended_image/extended_image.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   RealtimeChannel? _postsChannel;
+  Timer? _backgroundSyncTimer;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   final List<CommunityPostModel> _pendingPosts = <CommunityPostModel>[];
@@ -35,7 +37,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   bool _hasMore = true;
   bool _didInitLanguagePreference = false;
   int _offset = 0;
-  String _selectedLanguagePreference = 'english';
+  String _selectedLanguagePreference = 'all';
   String _selectedCategory = 'All';
 
   static const int _pageSize = 20;
@@ -49,6 +51,17 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     _scrollController.addListener(_onScroll);
     _restoreCachedPosts();
     _subscribeRealtime();
+    _startBackgroundSync();
+  }
+
+  void _startBackgroundSync() {
+    _backgroundSyncTimer?.cancel();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (!mounted || _isLoading || _isLoadingMore) {
+        return;
+      }
+      _loadPosts();
+    });
   }
 
   void _onScroll() {
@@ -216,14 +229,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       return;
     }
     _didInitLanguagePreference = true;
-    _selectedLanguagePreference =
-        AppLocalizations.of(context).locale.languageCode == 'ja'
-            ? 'japanese'
-            : 'english';
+    _selectedLanguagePreference = 'all';
     _loadPosts();
   }
 
   Future<void> _loadPosts() async {
+    if (!mounted) {
+      return;
+    }
+
     if (_posts.isEmpty) {
       setState(() {
         _isLoading = true;
@@ -398,24 +412,99 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       ),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     await _loadPosts();
   }
 
-  void _cycleLanguagePreference() {
+  Future<void> _pickLanguagePreference() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.public),
+                title: Text(l10n.t('allLanguages')),
+                onTap: () => Navigator.of(sheetContext).pop('all'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.translate),
+                title: Text(l10n.t('english')),
+                onTap: () => Navigator.of(sheetContext).pop('english'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.translate),
+                title: Text(l10n.t('japanese')),
+                onTap: () => Navigator.of(sheetContext).pop('japanese'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected == null || selected == _selectedLanguagePreference) {
+      return;
+    }
+
     setState(() {
-      switch (_selectedLanguagePreference) {
-        case 'english':
-          _selectedLanguagePreference = 'japanese';
-          break;
-        case 'japanese':
-          _selectedLanguagePreference = 'bilingual';
-          break;
-        default:
-          _selectedLanguagePreference = 'english';
-          break;
-      }
+      _selectedLanguagePreference = selected;
     });
     _loadPosts();
+  }
+
+  void _openImageLightbox(List<String> imageUrls, {int initialIndex = 0}) {
+    if (imageUrls.isEmpty) {
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      builder: (BuildContext dialogContext) {
+        final int startIndex = initialIndex.clamp(0, imageUrls.length - 1);
+        final PageController controller = PageController(initialPage: startIndex);
+
+        return Dialog.fullscreen(
+          backgroundColor: Colors.transparent,
+          child: Stack(
+            children: <Widget>[
+              PageView.builder(
+                controller: controller,
+                itemCount: imageUrls.length,
+                itemBuilder: (BuildContext context, int index) {
+                  return InteractiveViewer(
+                    minScale: 0.85,
+                    maxScale: 4.0,
+                    child: Center(
+                      child: ExtendedImage.network(
+                        imageUrls[index],
+                        fit: BoxFit.contain,
+                        cache: true,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: IconButton.filled(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openPostDetails(CommunityPostModel post) async {
@@ -424,6 +513,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         builder: (_) => CommunityPostDetailsScreen(postId: post.id),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
 
     await _loadPosts();
   }
@@ -494,6 +587,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     if (_postsChannel != null) {
       Supabase.instance.client.removeChannel(_postsChannel!);
     }
+    _backgroundSyncTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _searchController.dispose();
@@ -526,14 +620,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final Map<String, String> languageLabels = <String, String>{
+      'all': l10n.t('allLanguages'),
       'english': l10n.t('preferEnglishPosts'),
       'japanese': l10n.t('preferJapanesePosts'),
-      'bilingual': l10n.t('preferBilingualPosts'),
+      'bilingual': l10n.t('bilingual'),
     };
     final String languageSummary = switch (_selectedLanguagePreference) {
+      'all' => l10n.t('allLanguages'),
       'english' => l10n.t('preferEnglishPosts'),
       'japanese' => l10n.t('preferJapanesePosts'),
-      'bilingual' => l10n.t('preferBilingualPosts'),
       _ => l10n.t('allLanguages'),
     };
 
@@ -594,7 +689,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                                   label: Text(languageSummary),
                                   selected: true,
                                   avatar: const Icon(Icons.language, size: 18),
-                                  onSelected: (_) => _cycleLanguagePreference(),
+                                  onSelected: (_) => _pickLanguagePreference(),
                                 );
                               }
 
@@ -665,9 +760,17 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       post: post,
                       timeAgo: _timeAgo(post.createdAt),
                       languageLabel:
-                          languageLabels[post.language ?? ''] ??
-                          languageSummary,
+                          languageLabels[(post.language ?? '').toLowerCase()] ??
+                          l10n.t('allLanguages'),
                       onTap: () => _openPostDetails(post),
+                        onImageTap: () {
+                        final List<String> images = post.imageUrls.isNotEmpty
+                          ? post.imageUrls
+                          : (post.primaryImageUrl == null
+                            ? <String>[]
+                            : <String>[post.primaryImageUrl!]);
+                        _openImageLightbox(images);
+                        },
                       onLikeTap: () => _toggleLikeFromFeed(post),
                       isLiking: _busyLikePostIds.contains(post.id),
                       onAuthorTap: () =>
@@ -689,6 +792,7 @@ class _CompactPostCard extends StatelessWidget {
     required this.timeAgo,
     required this.languageLabel,
     required this.onTap,
+    required this.onImageTap,
     required this.onLikeTap,
     required this.isLiking,
     required this.onAuthorTap,
@@ -698,6 +802,7 @@ class _CompactPostCard extends StatelessWidget {
   final String timeAgo;
   final String languageLabel;
   final VoidCallback onTap;
+  final VoidCallback onImageTap;
   final VoidCallback onLikeTap;
   final bool isLiking;
   final VoidCallback onAuthorTap;
@@ -732,49 +837,52 @@ class _CompactPostCard extends StatelessWidget {
                 child: SizedBox(
                   width: 72,
                   height: 72,
-                  child: hasImage
-                      ? ExtendedImage.network(
+                  child: InkWell(
+                    onTap: hasImage ? onImageTap : null,
+                    child: hasImage
+                        ? ExtendedImage.network(
                       resolvedImageUrl,
-                          fit: BoxFit.cover,
-                          cache: true,
-                          loadStateChanged: (state) {
-                            if (state.extendedImageLoadState ==
-                                LoadState.completed) {
-                              return ExtendedRawImage(
-                                image: state.extendedImageInfo?.image,
-                                fit: BoxFit.cover,
-                              );
-                            }
+                        fit: BoxFit.cover,
+                        cache: true,
+                        loadStateChanged: (state) {
+                          if (state.extendedImageLoadState ==
+                              LoadState.completed) {
+                            return ExtendedRawImage(
+                              image: state.extendedImageInfo?.image,
+                              fit: BoxFit.cover,
+                            );
+                          }
 
-                            if (state.extendedImageLoadState ==
-                                LoadState.failed) {
-                              return Container(
-                                color: theme.colorScheme.surfaceContainerHighest,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.broken_image_outlined),
-                              );
-                            }
-
+                          if (state.extendedImageLoadState ==
+                              LoadState.failed) {
                             return Container(
                               color: theme.colorScheme.surfaceContainerHighest,
                               alignment: Alignment.center,
-                              child: const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
+                              child: const Icon(Icons.broken_image_outlined),
                             );
-                          },
-                        )
-                      : Container(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.forum_outlined,
-                            color: theme.colorScheme.primary,
-                            size: 24,
+                          }
+
+                          return Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                      )
+                        : Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.forum_outlined,
+                              color: theme.colorScheme.primary,
+                              size: 24,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:extended_image/extended_image.dart';
@@ -41,18 +42,32 @@ class _HomeScreenState extends State<HomeScreen> {
   List<AojBlogPost> _blogPosts = <AojBlogPost>[];
 
   bool _isLoading = true;
+  bool _isRefreshing = false;
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
+  Timer? _backgroundSyncTimer;
 
   @override
   void initState() {
     super.initState();
     _loadHomeData();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (!mounted) {
+        return;
+      }
+      _loadHomeData();
+    });
   }
 
   Future<void> _loadHomeData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (_latestPosts.isEmpty && _blogPosts.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    } else {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
 
     try {
       final results = await Future.wait<dynamic>([
@@ -70,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
         _blogPosts = results[1] as List<AojBlogPost>;
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (_) {
       if (!mounted) {
@@ -78,8 +94,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _backgroundSyncTimer?.cancel();
+    super.dispose();
   }
 
   Future<List<CommunityPostModel>> _fetchLatestPosts() {
@@ -192,6 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
                 children: <Widget>[
+                  if (_isRefreshing)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
                   const _HomeTopBar(),
                   const SizedBox(height: 16),
                   _InterestSelector(

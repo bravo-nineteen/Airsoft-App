@@ -97,6 +97,9 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _dashboardFuture = _loadDashboard();
       _profilesFuture = _repository.searchProfiles(_userSearchController.text);
@@ -105,6 +108,9 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Future<void> _searchUsers() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _profilesFuture = _repository.searchProfiles(_userSearchController.text);
     });
@@ -300,6 +306,11 @@ class _AdminScreenState extends State<AdminScreen>
         builder: (_) => const EventCreateScreen(isOfficial: true),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     if (created == true) {
       await _refresh();
     }
@@ -309,6 +320,11 @@ class _AdminScreenState extends State<AdminScreen>
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const AdminCreateFieldScreen()),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     if (created == true) {
       await _refresh();
     }
@@ -323,6 +339,11 @@ class _AdminScreenState extends State<AdminScreen>
         ),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     if (updated == true) {
       await _refresh();
     }
@@ -334,6 +355,11 @@ class _AdminScreenState extends State<AdminScreen>
         builder: (_) => AdminCreateFieldScreen(existingField: field),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     if (updated == true) {
       await _refresh();
     }

@@ -23,14 +23,24 @@ class _DirectMessageThreadsScreenState
 
   late Future<List<DirectMessageThreadModel>> _future;
   final Map<String, String> _displayNameByUserId = <String, String>{};
+  Timer? _backgroundSyncTimer;
 
   @override
   void initState() {
     super.initState();
     _future = _loadThreads();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) {
+        return;
+      }
+      _refresh();
+    });
   }
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = _loadThreads();
     });
@@ -43,6 +53,11 @@ class _DirectMessageThreadsScreenState
         builder: (_) => const ContactsScreen(),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
     await _refresh();
   }
 
@@ -118,6 +133,12 @@ class _DirectMessageThreadsScreenState
   }
 
   @override
+  void dispose() {
+    _backgroundSyncTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
@@ -183,6 +204,11 @@ class _DirectMessageThreadsScreenState
                           ),
                         ),
                       );
+
+                      if (!mounted) {
+                        return;
+                      }
+
                       await _refresh();
                     },
                     child: IgnorePointer(
