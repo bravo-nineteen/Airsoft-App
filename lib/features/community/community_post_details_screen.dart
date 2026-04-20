@@ -1,7 +1,6 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
@@ -62,16 +61,6 @@ class _CommunityPostDetailsScreenState
               comment.parentCommentId!.trim().isEmpty,
         )
         .toList();
-  }
-
-  List<CommunityCommentModel> get _latestComments {
-    final List<CommunityCommentModel> sorted = List<CommunityCommentModel>.from(
-      _comments,
-    )..sort(
-        (CommunityCommentModel a, CommunityCommentModel b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
-    return sorted.take(10).toList();
   }
 
   List<CommunityCommentModel> _childRepliesFor(String parentCommentId) {
@@ -690,10 +679,6 @@ class _CommunityPostDetailsScreenState
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    return DateFormat('dd MMM yyyy • HH:mm').format(dateTime);
-  }
-
   Widget _buildAvatar({
     required String name,
     String? avatarUrl,
@@ -753,7 +738,7 @@ class _CommunityPostDetailsScreenState
                           ),
                         ),
                         Text(
-                          _formatTime(comment.createdAt),
+                          _formatDateTime(comment.createdAt),
                           style: theme.textTheme.bodySmall,
                         ),
                       ],
@@ -826,7 +811,44 @@ class _CommunityPostDetailsScreenState
   @override
   Widget build(BuildContext context) {
     final post = _post;
-    final theme = Theme.of(context);
+    final bool hasMediaTab = post != null && post.imageUrls.isNotEmpty;
+    final Widget body = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : post == null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Post not found'),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _load,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                children: [
+                  if (_isRefreshing)
+                    const LinearProgressIndicator(minHeight: 2),
+                  if (hasMediaTab)
+                    const TabBar(
+                      tabs: <Tab>[Tab(text: 'Discussion'), Tab(text: 'Media')],
+                    ),
+                  Expanded(
+                    child: hasMediaTab
+                        ? TabBarView(
+                            children: <Widget>[
+                              _buildDiscussionTab(post),
+                              _buildMediaTab(post),
+                            ],
+                          )
+                        : _buildDiscussionTab(post),
+                  ),
+                  _buildCommentComposer(),
+                ],
+              );
 
     return Scaffold(
       appBar: AppBar(
@@ -837,285 +859,261 @@ class _CommunityPostDetailsScreenState
             onPressed: post == null ? null : () => _copyPost(post),
             icon: const Icon(Icons.copy_all_outlined),
           ),
+          if (post != null && _isPostOwner(post))
+            PopupMenuButton<String>(
+              onSelected: (String value) {
+                if (value == 'edit') {
+                  _editPost(post);
+                } else if (value == 'delete') {
+                  _deletePost(post);
+                }
+              },
+              itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+                PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+              ],
+            ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : post == null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Post not found'),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: _load,
-                        child: const Text('Retry'),
+      body: hasMediaTab
+          ? DefaultTabController(length: 2, child: body)
+          : body,
+    );
+  }
+
+  Widget _buildDiscussionTab(CommunityPostModel post) {
+    final ThemeData theme = Theme.of(context);
+    final List<CommunityCommentModel> topLevelComments = _topLevelComments;
+    final List<CommunityCommentModel> visibleTopLevel = _showAllComments
+        ? topLevelComments
+        : topLevelComments.take(10).toList();
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        children: <Widget>[
+          _PostHeader(
+            post: post,
+            onAuthorTap: () => _openProfile(post.authorId, post.authorName),
+            timeLabel: _formatDateTime(post.createdAt),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    post.title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(_postBody(post), style: theme.textTheme.bodyLarge),
+                  if (post.imageUrls.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        DefaultTabController.of(context).animateTo(1);
+                      },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: Text('Open media (${post.imageUrls.length})'),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 6,
+                    children: <Widget>[
+                      _MetricPill(
+                        icon: Icons.mode_comment_outlined,
+                        value: '${post.commentCount}',
+                      ),
+                      _MetricPill(
+                        icon: Icons.visibility_outlined,
+                        value: '${post.viewCount}',
+                      ),
+                      TextButton.icon(
+                        onPressed: _isTogglingPostLike ? null : _togglePostLike,
+                        icon: Icon(
+                          post.isLikedByMe ? Icons.favorite : Icons.favorite_border,
+                        ),
+                        label: Text('${post.likeCount}'),
                       ),
                     ],
                   ),
-                )
-              : Column(
-                  children: [
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _load,
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          children: [
-                            _PostHeader(
-                              post: post,
-                              onAuthorTap: () =>
-                                  _openProfile(post.authorId, post.authorName),
-                              timeLabel: _formatDateTime(post.createdAt),
-                            ),
-                            const SizedBox(height: 12),
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      post.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      _postBody(post),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge,
-                                    ),
-                                    if (post.imageUrls.isNotEmpty) ...[
-                                      const SizedBox(height: 14),
-                                      ...post.imageUrls.map(
-                                        (imageUrl) => Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 10),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                            child: AspectRatio(
-                                              aspectRatio: 16 / 9,
-                                              child: ExtendedImage.network(
-                                                imageUrl,
-                                                fit: BoxFit.cover,
-                                                cache: true,
-                                                loadStateChanged: (state) {
-                                                  if (state
-                                                          .extendedImageLoadState ==
-                                                      LoadState.completed) {
-                                                    return ExtendedRawImage(
-                                                      image: state
-                                                          .extendedImageInfo
-                                                          ?.image,
-                                                      fit: BoxFit.cover,
-                                                    );
-                                                  }
-
-                                                  if (state
-                                                          .extendedImageLoadState ==
-                                                      LoadState.failed) {
-                                                    return Container(
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceContainerHighest,
-                                                      alignment: Alignment.center,
-                                                      child: const Icon(Icons
-                                                          .broken_image_outlined),
-                                                    );
-                                                  }
-
-                                                  return const Center(
-                                                    child:
-                                                        CircularProgressIndicator(),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 6,
-                                      children: [
-                                        _MetricPill(
-                                          icon: Icons
-                                              .mode_comment_outlined,
-                                          value: '${post.commentCount}',
-                                        ),
-                                        _MetricPill(
-                                          icon: Icons.visibility_outlined,
-                                          value: '${post.viewCount}',
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: _isTogglingPostLike
-                                              ? null
-                                              : _togglePostLike,
-                                          icon: Icon(
-                                            post.isLikedByMe
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                          ),
-                                          label: Text('${post.likeCount}'),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Comments (${_comments.length})',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 10),
-                            if (_comments.isEmpty)
-                              Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Text(
-                                    'No comments yet',
-                                    style:
-                                        Theme.of(context).textTheme.bodyMedium,
-                                  ),
-                                ),
-                              )
-                            else
-                              ..._comments.map((comment) {
-                                final isToggling =
-                                    _togglingCommentLikes.contains(comment.id);
-
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        InkWell(
-                                          onTap: () => _openProfile(
-                                            comment.authorId,
-                                            comment.authorName,
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 12,
-                                                backgroundImage: comment
-                                                            .authorAvatarUrl !=
-                                                        null
-                                                    ? NetworkImage(comment
-                                                        .authorAvatarUrl!)
-                                                    : null,
-                                                child: comment.authorAvatarUrl ==
-                                                            null ||
-                                                        comment.authorAvatarUrl!
-                                                            .trim()
-                                                            .isEmpty
-                                                    ? Text(comment.authorName
-                                                            .isEmpty
-                                                        ? '?'
-                                                        : comment.authorName[0]
-                                                            .toUpperCase())
-                                                    : null,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  comment.authorName,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .labelLarge,
-                                                ),
-                                              ),
-                                              Text(
-                                                _formatDateTime(
-                                                  comment.createdAt,
-                                                ),
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(comment.message),
-                                        const SizedBox(height: 6),
-                                        TextButton.icon(
-                                          onPressed: isToggling
-                                              ? null
-                                              : () => _toggleCommentLike(
-                                                    comment.id,
-                                                  ),
-                                          icon: Icon(
-                                            comment.likedByMe
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                            size: 18,
-                                          ),
-                                          label: Text('${comment.likeCount}'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }),
-                          ],
-                        ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Comments (${_comments.length})',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_comments.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Text('No comments yet', style: theme.textTheme.bodyMedium),
+              ),
+            )
+          else ...<Widget>[
+            ...visibleTopLevel.map((CommunityCommentModel comment) {
+              final List<CommunityCommentModel> replies = _childRepliesFor(comment.id);
+              return Column(
+                children: <Widget>[
+                  _buildCommentCard(context, theme, comment),
+                  ...replies.map(
+                    (CommunityCommentModel reply) => Padding(
+                      padding: const EdgeInsets.only(left: 18),
+                      child: _buildCommentCard(
+                        context,
+                        theme,
+                        reply,
+                        isReply: true,
                       ),
                     ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _commentController,
-                                minLines: 1,
-                                maxLines: 4,
-                                decoration: const InputDecoration(
-                                  hintText: 'Write a comment',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              onPressed:
-                                  _isSendingComment ? null : _submitComment,
-                              child: _isSendingComment
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.2,
-                                      ),
-                                    )
-                                  : const Text('Send'),
-                            ),
-                          ],
-                        ),
+                  ),
+                ],
+              );
+            }),
+            if (topLevelComments.length > visibleTopLevel.length)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showAllComments = true;
+                    });
+                  },
+                  icon: const Icon(Icons.expand_more),
+                  label: const Text('Show all threads'),
+                ),
+              ),
+          ],
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaTab(CommunityPostModel post) {
+    if (post.imageUrls.isEmpty) {
+      return const Center(child: Text('No images attached to this post.'));
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      itemCount: post.imageUrls.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.1,
+      ),
+      itemBuilder: (BuildContext context, int index) {
+        final String imageUrl = post.imageUrls[index];
+        return InkWell(
+          onTap: () => _openImageLightbox(imageUrl),
+          borderRadius: BorderRadius.circular(12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ExtendedImage.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              cache: true,
+              loadStateChanged: (state) {
+                if (state.extendedImageLoadState == LoadState.completed) {
+                  return ExtendedRawImage(
+                    image: state.extendedImageInfo?.image,
+                    fit: BoxFit.cover,
+                  );
+                }
+
+                if (state.extendedImageLoadState == LoadState.failed) {
+                  return Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.broken_image_outlined),
+                  );
+                }
+
+                return const Center(child: CircularProgressIndicator());
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommentComposer() {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (_replyToCommentId != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'Replying to ${_replyToCommentAuthor ?? 'comment'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                    IconButton(
+                      onPressed: _clearReplyTarget,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Cancel reply',
                     ),
                   ],
                 ),
+              ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(hintText: 'Write a comment'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _isSendingComment ? null : _submitComment,
+                  child: _isSendingComment
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        )
+                      : const Text('Send'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

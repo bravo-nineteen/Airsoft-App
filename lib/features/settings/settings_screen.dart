@@ -89,9 +89,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _selectedLanguageCode = languageCode;
     });
-    widget.onLocaleChanged?.call(
-      languageCode == null ? null : Locale(languageCode),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.onLocaleChanged?.call(
+        languageCode == null ? null : Locale(languageCode),
+      );
+    });
   }
 
   Widget _sectionTitle(String title) {

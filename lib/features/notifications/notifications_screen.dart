@@ -138,6 +138,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             builder: (_) => CommunityPostDetailsScreen(postId: postId),
           ),
         );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This post is no longer available.')),
+        );
       }
     } else if (normalizedType.contains('event')) {
       final String? eventId = await _resolveEventIdForNotification(item);
@@ -160,8 +164,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _deleteNotification(AppNotificationModel item) async {
-    await _repository.deleteNotification(item.id);
-    await _refresh();
+    try {
+      await _repository.deleteNotification(item.id);
+      await _refresh();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove notification: $error')),
+      );
+    }
   }
 
   Future<String?> _resolvePostIdForNotification(
@@ -175,7 +188,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final String normalizedType = item.type.trim().toLowerCase();
     if (normalizedType == 'community_post_comment' ||
         normalizedType == 'community_post_like') {
-      return entityId;
+      try {
+        final response = await Supabase.instance.client
+            .from('community_posts')
+            .select('id')
+            .eq('id', entityId)
+            .maybeSingle();
+        if (response != null) {
+          return entityId;
+        }
+      } catch (_) {}
+
+      try {
+        final response = await Supabase.instance.client
+            .from('community_comments')
+            .select('post_id')
+            .eq('id', entityId)
+            .maybeSingle();
+        return response?['post_id']?.toString();
+      } catch (_) {
+        return null;
+      }
     }
 
     if (normalizedType == 'community_comment_reply' ||
@@ -355,7 +388,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                           IconButton(
                             tooltip: 'Delete notification',
-                            onPressed: () => _deleteNotification(item),
+                            onPressed: () async {
+                              await _deleteNotification(item);
+                              if (!context.mounted) {
+                                return;
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Notification removed'),
+                                ),
+                              );
+                            },
                             icon: const Icon(Icons.close),
                           ),
                         ],

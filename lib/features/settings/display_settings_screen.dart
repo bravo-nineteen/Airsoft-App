@@ -73,9 +73,13 @@ class DisplaySettingsScreen extends StatelessWidget {
               value: selectedLanguageCode,
               onChanged: onLocaleChanged == null
                   ? null
-                  : (languageCode) => onLocaleChanged!(
-                        languageCode == null ? null : Locale(languageCode),
-                      ),
+                  : (languageCode) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onLocaleChanged!(
+                          languageCode == null ? null : Locale(languageCode),
+                        );
+                      });
+                    },
               items: [
                 DropdownMenuItem<String?>(
                   value: null,

@@ -23,6 +23,7 @@ class NotificationRepository {
         .from('notifications')
         .select()
         .eq('user_id', _currentUserId)
+        .neq('type', 'direct_message')
         .order('created_at', ascending: false);
 
     return response
@@ -35,6 +36,7 @@ class NotificationRepository {
         .from('notifications')
         .select('id')
         .eq('user_id', _currentUserId)
+        .neq('type', 'direct_message')
         .eq('is_read', false);
 
     return response.length;
@@ -46,6 +48,7 @@ class NotificationRepository {
           .from('notifications')
           .update({'is_read': true})
           .eq('user_id', _currentUserId)
+          .neq('type', 'direct_message')
           .eq('is_read', false);
     } on PostgrestException catch (error) {
       if (!_isMissingUpdatedAtTriggerError(error)) {
@@ -90,7 +93,8 @@ class NotificationRepository {
           table: 'notifications',
           callback: (payload) {
             final row = payload.newRecord;
-            if (row['user_id']?.toString() == _currentUserId) {
+            if (row['user_id']?.toString() == _currentUserId &&
+                row['type']?.toString() != 'direct_message') {
               onNotification();
             }
           },

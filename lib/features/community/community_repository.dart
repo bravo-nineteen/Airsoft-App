@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
@@ -10,6 +12,31 @@ class CommunityRepository {
 
   final SupabaseClient _client;
   final NotificationWriter _notificationWriter;
+
+  bool _isTransient(Object error) {
+    final String text = error.toString().toLowerCase();
+    return text.contains('502') ||
+        text.contains('503') ||
+        text.contains('gateway') ||
+        text.contains('socketexception') ||
+        text.contains('timeout');
+  }
+
+  Future<T> _withTransientRetry<T>(Future<T> Function() action) async {
+    Object? lastError;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await action();
+      } catch (error) {
+        lastError = error;
+        if (!_isTransient(error) || attempt == 2) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+      }
+    }
+    throw lastError ?? Exception('Unknown community error');
+  }
 
   Future<Map<String, dynamic>?> _fetchCurrentUserProfile() async {
     final user = _client.auth.currentUser;
@@ -127,11 +154,13 @@ class CommunityRepository {
       request = request.inFilter('language', <String>['japanese', 'bilingual']);
     }
 
-    final dynamic response = await request
+    final dynamic response = await _withTransientRetry(
+      () => request
         .order('is_pinned', ascending: false)
         .order('created_at', ascending: false)
         .order('id', ascending: false)
-        .range(offset, offset + limit - 1);
+        .range(offset, offset + limit - 1),
+    );
 
     final List<CommunityPostModel> posts = (response as List<dynamic>)
         .map(
@@ -200,11 +229,17 @@ class CommunityRepository {
   }
 
   Future<CommunityPostModel> fetchPostById(String postId) async {
-    final response = await _client
-        .from('community_posts')
-        .select()
-        .eq('id', postId)
-        .single();
+    final response = await _withTransientRetry(
+      () => _client
+          .from('community_posts')
+          .select()
+          .eq('id', postId)
+          .maybeSingle(),
+    );
+
+    if (response == null) {
+      throw Exception('Post no longer exists.');
+    }
 
     var post = CommunityPostModel.fromJson(Map<String, dynamic>.from(response));
 
@@ -228,14 +263,16 @@ class CommunityRepository {
   }
 
   Future<List<CommunityCommentModel>> fetchComments(String postId) async {
-    final response = await _client
-        .from('community_comments')
-        .select(
-          'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count, parent_comment_id',
-        )
-        .eq('post_id', postId)
-        .eq('is_deleted', false)
-        .order('created_at', ascending: true);
+    final response = await _withTransientRetry(
+      () => _client
+          .from('community_comments')
+          .select(
+            'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count, parent_comment_id',
+          )
+          .eq('post_id', postId)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: true),
+    );
 
     final comments = (response as List<dynamic>)
         .map(

@@ -401,6 +401,23 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     await _loadPosts();
   }
 
+  void _cycleLanguagePreference() {
+    setState(() {
+      switch (_selectedLanguagePreference) {
+        case 'english':
+          _selectedLanguagePreference = 'japanese';
+          break;
+        case 'japanese':
+          _selectedLanguagePreference = 'bilingual';
+          break;
+        default:
+          _selectedLanguagePreference = 'english';
+          break;
+      }
+    });
+    _loadPosts();
+  }
+
   Future<void> _openPostDetails(CommunityPostModel post) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -507,7 +524,6 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
     final Map<String, String> languageLabels = <String, String>{
       'english': l10n.t('preferEnglishPosts'),
@@ -535,13 +551,16 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             SliverAppBar(
               pinned: true,
               floating: false,
-              expandedHeight: 150,
-              title: const Text('Boards'),
+              expandedHeight: 162,
+              title: Text(
+                l10n.t('boards'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               flexibleSpace: FlexibleSpaceBar(
                 background: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 64, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 64, 16, 10),
                     child: Column(
                       children: [
                         TextField(
@@ -550,7 +569,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                           onSubmitted: (_) => _loadPosts(),
                           decoration: InputDecoration(
                             isDense: true,
-                            hintText: 'Search posts',
+                            hintText: l10n.t('searchPosts'),
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: IconButton(
                               onPressed: _loadPosts,
@@ -561,16 +580,25 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         SizedBox(
-                          height: 34,
+                          height: 40,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
-                            itemCount: _categories.length,
-                              separatorBuilder: (_, index) =>
+                            itemCount: _categories.length + 1,
+                            separatorBuilder: (_, index) =>
                                 const SizedBox(width: 8),
                             itemBuilder: (BuildContext context, int index) {
-                              final category = _categories[index];
+                              if (index == 0) {
+                                return FilterChip(
+                                  label: Text(languageSummary),
+                                  selected: true,
+                                  avatar: const Icon(Icons.language, size: 18),
+                                  onSelected: (_) => _cycleLanguagePreference(),
+                                );
+                              }
+
+                              final category = _categories[index - 1];
                               final isSelected =
                                   category == _selectedCategory;
 
@@ -596,6 +624,24 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             if (_isRefreshing)
               const SliverToBoxAdapter(
                 child: LinearProgressIndicator(minHeight: 2),
+              ),
+            if (_pendingPosts.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                  child: Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.fiber_new_outlined),
+                      title: Text(
+                        '${_pendingPosts.length} new posts available',
+                      ),
+                      trailing: TextButton(
+                        onPressed: _revealPendingPosts,
+                        child: const Text('Show'),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             if (_isInitialLoading)
               const SliverFillRemaining(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -23,6 +25,31 @@ class DirectMessageRepository {
     return user.id;
   }
 
+  bool _isTransient(Object error) {
+    final String text = error.toString().toLowerCase();
+    return text.contains('502') ||
+        text.contains('503') ||
+        text.contains('gateway') ||
+        text.contains('socketexception') ||
+        text.contains('timeout');
+  }
+
+  Future<T> _withTransientRetry<T>(Future<T> Function() action) async {
+    Object? lastError;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await action();
+      } catch (error) {
+        lastError = error;
+        if (!_isTransient(error) || attempt == 2) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+      }
+    }
+    throw lastError ?? Exception('Unknown messaging error');
+  }
+
   Future<List<DirectMessageModel>> getMessages(String otherUserId) async {
     final currentUserId = _currentUserId;
 
@@ -31,13 +58,15 @@ class DirectMessageRepository {
       throw Exception('Messaging is only available for accepted contacts.');
     }
 
-    final response = await _client
-        .from('direct_messages')
-        .select()
-        .or(
-          'and(sender_id.eq.$currentUserId,recipient_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,recipient_id.eq.$currentUserId)',
-        )
-        .order('created_at', ascending: true);
+    final response = await _withTransientRetry(
+      () => _client
+          .from('direct_messages')
+          .select()
+          .or(
+            'and(sender_id.eq.$currentUserId,recipient_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,recipient_id.eq.$currentUserId)',
+          )
+          .order('created_at', ascending: true),
+    );
 
     return response
         .map<DirectMessageModel>((e) => DirectMessageModel.fromJson(e))
@@ -79,12 +108,14 @@ class DirectMessageRepository {
   Future<void> markThreadRead(String otherUserId) async {
     final currentUserId = _currentUserId;
 
-    await _client
-        .from('direct_messages')
-        .update({'read_at': DateTime.now().toIso8601String()})
-        .eq('sender_id', otherUserId)
-        .eq('recipient_id', currentUserId)
-        .isFilter('read_at', null);
+    await _withTransientRetry(
+      () => _client
+          .from('direct_messages')
+          .update({'read_at': DateTime.now().toIso8601String()})
+          .eq('sender_id', otherUserId)
+          .eq('recipient_id', currentUserId)
+          .isFilter('read_at', null),
+    );
   }
 
   RealtimeChannel subscribeToThread({
@@ -122,11 +153,13 @@ class DirectMessageRepository {
   Future<int> getUnreadCount() async {
     final currentUserId = _currentUserId;
 
-    final response = await _client
-        .from('direct_messages')
-        .select('id')
-        .eq('recipient_id', currentUserId)
-        .isFilter('read_at', null);
+    final response = await _withTransientRetry(
+      () => _client
+          .from('direct_messages')
+          .select('id')
+          .eq('recipient_id', currentUserId)
+          .isFilter('read_at', null),
+    );
 
     return response.length;
   }
