@@ -1,4 +1,4 @@
-import 'dart:async';
+app launchimport 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,6 +23,9 @@ class _EventsScreenState extends State<EventsScreen> {
   List<EventModel> _cachedEvents = <EventModel>[];
   Timer? _backgroundSyncTimer;
   String _searchQuery = '';
+  String? _selectedEventType;
+  String? _selectedLanguage;
+  String? _selectedSkillLevel;
 
   @override
   void initState() {
@@ -47,9 +50,9 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _openCreate() async {
-    final bool? created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const EventCreateScreen()),
-    );
+    final bool? created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const EventCreateScreen()));
 
     if (!mounted) {
       return;
@@ -79,13 +82,69 @@ class _EventsScreenState extends State<EventsScreen> {
     }
   }
 
+  Future<void> _deleteEvent(EventModel event) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.t('deleteEventPromptTitle')),
+          content: Text(
+            l10n.t('deleteEventPromptBody', args: {'title': event.title}),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.t('cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.t('deleteEventAction')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.deleteEvent(event.id);
+      if (!mounted) {
+        return;
+      }
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('deletedEvent', args: {'title': event.title})),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('failedDeleteEvent', args: {'error': '$error'})),
+        ),
+      );
+    }
+  }
+
   bool _matchesEventSearch(EventModel event) {
     final String query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
-      return true;
+      return _matchesStructuredFilters(event);
     }
 
     final String haystack = <String>[
+      event.title,
+      event.description,
       event.language ?? '',
       event.location ?? '',
       event.prefecture ?? '',
@@ -94,7 +153,137 @@ class _EventsScreenState extends State<EventsScreen> {
       event.organizerName ?? '',
     ].join(' ').toLowerCase();
 
-    return haystack.contains(query);
+    return haystack.contains(query) && _matchesStructuredFilters(event);
+  }
+
+  bool _matchesStructuredFilters(EventModel event) {
+    if (_selectedEventType != null && event.eventType != _selectedEventType) {
+      return false;
+    }
+    if (_selectedLanguage != null && event.language != _selectedLanguage) {
+      return false;
+    }
+    if (_selectedSkillLevel != null &&
+        event.skillLevel != _selectedSkillLevel) {
+      return false;
+    }
+    return true;
+  }
+
+  bool get _hasActiveFilters {
+    return _searchQuery.trim().isNotEmpty ||
+        _selectedEventType != null ||
+        _selectedLanguage != null ||
+        _selectedSkillLevel != null;
+  }
+
+  List<String> _optionsFor(
+    List<EventModel> events,
+    String? Function(EventModel event) selector,
+  ) {
+    final Set<String> values = events
+        .map(selector)
+        .whereType<String>()
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+    final List<String> sorted = values.toList()..sort();
+    return sorted;
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _selectedEventType = null;
+      _selectedLanguage = null;
+      _selectedSkillLevel = null;
+    });
+  }
+
+  Widget _buildSearchAndFilters(
+    AppLocalizations l10n,
+    List<EventModel> events,
+  ) {
+    final List<String> eventTypes = _optionsFor(
+      events,
+      (EventModel event) => event.eventType,
+    );
+    final List<String> languages = _optionsFor(
+      events,
+      (EventModel event) => event.language,
+    );
+    final List<String> skillLevels = _optionsFor(
+      events,
+      (EventModel event) => event.skillLevel,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        TextField(
+          controller: _searchController,
+          onChanged: (String value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+          decoration: InputDecoration(
+            hintText: l10n.t('eventSearchHint'),
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            _FilterDropdown(
+              label: l10n.t('eventType'),
+              value: _selectedEventType,
+              options: eventTypes,
+              onChanged: (String? value) {
+                setState(() {
+                  _selectedEventType = value;
+                });
+              },
+            ),
+            _FilterDropdown(
+              label: l10n.language,
+              value: _selectedLanguage,
+              options: languages,
+              onChanged: (String? value) {
+                setState(() {
+                  _selectedLanguage = value;
+                });
+              },
+            ),
+            _FilterDropdown(
+              label: l10n.t('skillLevel'),
+              value: _selectedSkillLevel,
+              options: skillLevels,
+              onChanged: (String? value) {
+                setState(() {
+                  _selectedSkillLevel = value;
+                });
+              },
+            ),
+          ],
+        ),
+        if (_hasActiveFilters) ...<Widget>[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.clear_all),
+              label: Text(l10n.t('clearFilters')),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -147,183 +336,183 @@ class _EventsScreenState extends State<EventsScreen> {
           child: FutureBuilder<List<EventModel>>(
             future: _future,
             initialData: _cachedEvents,
-            builder: (BuildContext context, AsyncSnapshot<List<EventModel>> snapshot) {
-              final List<EventModel> events = snapshot.data ?? _cachedEvents;
-              if (snapshot.hasData) {
-                _cachedEvents = snapshot.data!;
-              }
-
-              if (snapshot.connectionState != ConnectionState.done &&
-                  events.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return ListView(
-                  children: <Widget>[
-                    const SizedBox(height: 140),
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          l10n.t(
-                            'failedLoadEvents',
-                            args: {'error': '${snapshot.error}'},
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              final List<EventModel> filteredEvents = events
-                  .where(_matchesEventSearch)
-                  .toList();
-
-              if (events.isEmpty) {
-                return ListView(
-                  children: <Widget>[
-                    const SizedBox(height: 160),
-                    Center(child: Text(l10n.t('noEventsFound'))),
-                  ],
-                );
-              }
-
-              if (filteredEvents.isEmpty) {
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                  children: <Widget>[
-                    TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: l10n.t('eventSearchHint'),
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Center(child: Text(l10n.t('noMatchingEventsFound'))),
-                  ],
-                );
-              }
-
-              final String? currentUserId =
-                  Supabase.instance.client.auth.currentUser?.id;
-
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                itemCount: filteredEvents.length + 2,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (BuildContext context, int index) {
-                  if (index == 0) {
-                    return snapshot.connectionState == ConnectionState.waiting
-                        ? const LinearProgressIndicator(minHeight: 2)
-                        : const SizedBox.shrink();
+            builder:
+                (
+                  BuildContext context,
+                  AsyncSnapshot<List<EventModel>> snapshot,
+                ) {
+                  final List<EventModel> events =
+                      snapshot.data ?? _cachedEvents;
+                  if (snapshot.hasData) {
+                    _cachedEvents = snapshot.data!;
                   }
 
-                  if (index == 1) {
-                    return TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText:
-                            'Search language, location, type, skill, organiser',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  if (snapshot.connectionState != ConnectionState.done &&
+                      events.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return ListView(
+                      children: <Widget>[
+                        const SizedBox(height: 140),
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              l10n.t(
+                                'failedLoadEvents',
+                                args: {'error': '${snapshot.error}'},
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   }
 
-                  final EventModel event = filteredEvents[index - 2];
-                    final String? statusLabel = _statusLabel(l10n, event);
-                  final bool canEdit =
-                      currentUserId != null && event.hostUserId == currentUserId;
+                  final List<EventModel> filteredEvents = events
+                      .where(_matchesEventSearch)
+                      .toList();
 
-                  return Card(
-                    child: ListTile(
-                      title: Text(event.title),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          const SizedBox(height: 4),
-                          Text(_buildSubtitle(event)),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                  if (events.isEmpty) {
+                    return ListView(
+                      children: <Widget>[
+                        const SizedBox(height: 160),
+                        Center(child: Text(l10n.t('noEventsFound'))),
+                      ],
+                    );
+                  }
+
+                  if (filteredEvents.isEmpty) {
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                      children: <Widget>[
+                        _buildSearchAndFilters(l10n, events),
+                        const SizedBox(height: 18),
+                        Center(child: Text(l10n.t('noMatchingEventsFound'))),
+                      ],
+                    );
+                  }
+
+                  final String? currentUserId =
+                      Supabase.instance.client.auth.currentUser?.id;
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                    itemCount: filteredEvents.length + 2,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int index) {
+                      if (index == 0) {
+                        return snapshot.connectionState ==
+                                ConnectionState.waiting
+                            ? const LinearProgressIndicator(minHeight: 2)
+                            : const SizedBox.shrink();
+                      }
+
+                      if (index == 1) {
+                        return _buildSearchAndFilters(l10n, events);
+                      }
+
+                      final EventModel event = filteredEvents[index - 2];
+                      final String? statusLabel = _statusLabel(l10n, event);
+                      final bool canEdit =
+                          currentUserId != null &&
+                          event.hostUserId == currentUserId;
+
+                      return Card(
+                        child: ListTile(
+                          title: Text(event.title),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              if (event.isOfficial)
-                                _MiniInfoChip(
-                                  icon: Icons.verified,
-                                  label: l10n.t('official'),
-                                  color: Colors.blue,
-                                ),
-                              _MiniInfoChip(
-                                icon: Icons.event_available,
-                                label: l10n.t(
-                                  'goingWithCount',
-                                  args: {'count': '${event.attendingCount}'},
-                                ),
+                              const SizedBox(height: 4),
+                              Text(_buildSubtitle(event)),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: <Widget>[
+                                  if (event.isOfficial)
+                                    _MiniInfoChip(
+                                      icon: Icons.verified,
+                                      label: l10n.t('official'),
+                                      color: Colors.blue,
+                                    ),
+                                  _MiniInfoChip(
+                                    icon: Icons.event_available,
+                                    label: l10n.t(
+                                      'goingWithCount',
+                                      args: {
+                                        'count': '${event.attendingCount}',
+                                      },
+                                    ),
+                                  ),
+                                  _MiniInfoChip(
+                                    icon: Icons.verified,
+                                    label: l10n.t(
+                                      'attendedWithCount',
+                                      args: {'count': '${event.attendedCount}'},
+                                    ),
+                                  ),
+                                  if (statusLabel != null)
+                                    _MiniInfoChip(
+                                      icon: Icons.person,
+                                      label: statusLabel,
+                                    ),
+                                ],
                               ),
-                              _MiniInfoChip(
-                                icon: Icons.verified,
-                                label: l10n.t(
-                                  'attendedWithCount',
-                                  args: {'count': '${event.attendedCount}'},
-                                ),
-                              ),
-                              if (statusLabel != null)
-                                _MiniInfoChip(
-                                  icon: Icons.person,
-                                  label: statusLabel,
-                                ),
                             ],
                           ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          if (canEdit)
-                            IconButton(
-                              tooltip: l10n.t('editEvent'),
-                              onPressed: () => _openEdit(event),
-                              icon: const Icon(Icons.edit_outlined),
-                            ),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => EventDetailsScreen(event: event),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              if (canEdit)
+                                PopupMenuButton<String>(
+                                  tooltip: l10n.t('manageEvent'),
+                                  onSelected: (String value) {
+                                    if (value == 'edit') {
+                                      _openEdit(event);
+                                    } else if (value == 'delete') {
+                                      _deleteEvent(event);
+                                    }
+                                  },
+                                  itemBuilder: (BuildContext context) =>
+                                      <PopupMenuEntry<String>>[
+                                        PopupMenuItem<String>(
+                                          value: 'edit',
+                                          child: Text(l10n.t('editEvent')),
+                                        ),
+                                        PopupMenuItem<String>(
+                                          value: 'delete',
+                                          child: Text(
+                                            l10n.t('deleteEventAction'),
+                                          ),
+                                        ),
+                                      ],
+                                  icon: const Icon(Icons.more_vert),
+                                ),
+                              const Icon(Icons.chevron_right),
+                            ],
                           ),
-                        );
-                        if (!mounted) {
-                          return;
-                        }
-                        await _refresh();
-                      },
-                    ),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    EventDetailsScreen(event: event),
+                              ),
+                            );
+                            if (!mounted) {
+                              return;
+                            }
+                            await _refresh();
+                          },
+                        ),
+                      );
+                    },
                   );
                 },
-              );
-            },
           ),
         ),
         Positioned(
@@ -342,12 +531,47 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 }
 
-class _MiniInfoChip extends StatelessWidget {
-  const _MiniInfoChip({
-    required this.icon,
+class _FilterDropdown extends StatelessWidget {
+  const _FilterDropdown({
     required this.label,
-    this.color,
+    required this.value,
+    required this.options,
+    required this.onChanged,
   });
+
+  final String label;
+  final String? value;
+  final List<String> options;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 170, maxWidth: 240),
+      child: DropdownButtonFormField<String>(
+        initialValue: options.contains(value) ? value : null,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        items: <DropdownMenuItem<String>>[
+          DropdownMenuItem<String>(
+            value: null,
+            child: Text(AppLocalizations.of(context).t('all')),
+          ),
+          ...options.map(
+            (String option) =>
+                DropdownMenuItem<String>(value: option, child: Text(option)),
+          ),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _MiniInfoChip extends StatelessWidget {
+  const _MiniInfoChip({required this.icon, required this.label, this.color});
 
   final IconData icon;
   final String label;
