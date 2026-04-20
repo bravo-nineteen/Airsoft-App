@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import 'contacts_screen.dart';
 import 'direct_message_screen.dart';
 import 'direct_message_thread_model.dart';
 import 'direct_message_thread_repository.dart';
@@ -18,8 +19,7 @@ class DirectMessageThreadsScreen extends StatefulWidget {
 
 class _DirectMessageThreadsScreenState
     extends State<DirectMessageThreadsScreen> {
-  final DirectMessageThreadRepository _repo =
-      DirectMessageThreadRepository();
+  final DirectMessageThreadRepository _repo = DirectMessageThreadRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
   final Map<String, String> _displayNameByUserId = <String, String>{};
@@ -46,7 +46,7 @@ class _DirectMessageThreadsScreenState
   Future<String> _resolveName(String userId, String fallback) async {
     final data = await Supabase.instance.client
         .from('profiles')
-        .select('call_sign')
+        .select('call_sign, user_code')
         .eq('id', userId)
         .maybeSingle();
 
@@ -217,6 +217,11 @@ class _DirectMessageThreadsScreenState
             );
           },
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCompose,
+        icon: const Icon(Icons.edit_outlined),
+        label: const Text('Compose'),
       ),
     );
   }

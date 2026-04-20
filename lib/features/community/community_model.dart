@@ -9,6 +9,8 @@ class CommunityPostModel {
   final String? imageUrl;
   final List<String> imageUrls;
   final String? category;
+  final String? language;
+  final String? languageCode;
   final int commentCount;
   final int likeCount;
   final int viewCount;
@@ -28,6 +30,8 @@ class CommunityPostModel {
     required this.imageUrl,
     required this.imageUrls,
     required this.category,
+    required this.language,
+    required this.languageCode,
     required this.commentCount,
     required this.likeCount,
     required this.viewCount,
@@ -83,31 +87,71 @@ class CommunityPostModel {
     return null;
   }
 
+  bool get isProfilePost => postContext == 'profile';
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
+      'title': title,
+      'body_text': bodyText,
+      'plain_text': plainText,
+      'image_url': imageUrl,
+      'image_urls': imageUrls,
+      'category': category,
+      'language': language,
+      'language_code': languageCode,
+      'comment_count': commentCount,
+      'like_count': likeCount,
+      'view_count': viewCount,
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt?.toUtc().toIso8601String(),
+      'is_pinned': isPinned,
+      'is_liked_by_me': isLikedByMe,
+      'post_context': postContext,
+      'target_user_id': targetUserId,
+    };
+  }
+
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
-    final imageList = (json['image_urls'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .where((e) => e.trim().isNotEmpty)
-            .toList() ??
-        <String>[];
+    final dynamic rawImageUrls = json['image_urls'];
+    final List<String> parsedImageUrls;
+
+    if (rawImageUrls is List) {
+      parsedImageUrls = rawImageUrls
+          .map((dynamic e) => e.toString().trim())
+          .where((String e) => e.isNotEmpty)
+          .toList();
+    } else {
+      parsedImageUrls = <String>[];
+    }
+
+    final authorId = _readNullableString(json['author_id']) ??
+        _readNullableString(json['user_id']);
 
     return CommunityPostModel(
-      id: json['id'].toString(),
-      authorId: json['author_id']?.toString(),
-      authorName: (json['author_name'] ?? 'Unknown').toString(),
-      authorAvatarUrl: json['author_avatar_url']?.toString(),
-      title: (json['title'] ?? '').toString(),
-      bodyText: (json['body_text'] ?? '').toString(),
-      plainText: (json['plain_text'] ?? '').toString(),
-      imageUrl: json['image_url']?.toString(),
-      imageUrls: imageList,
-      category: json['category']?.toString(),
+      id: (json['id'] ?? '').toString(),
+      authorId: authorId,
+      authorName: _readNullableString(json['author_name']) ?? 'Unknown',
+      authorAvatarUrl: _readNullableString(json['author_avatar_url']),
+      title: _readNullableString(json['title']) ?? '',
+      bodyText: _readNullableString(json['body_text']) ?? '',
+      plainText: _readNullableString(json['plain_text']) ?? '',
+      imageUrl: _readNullableString(json['image_url']),
+      imageUrls: parsedImageUrls,
+      category: _readNullableString(json['category']),
+      language: _readNullableString(json['language']),
+      languageCode: _readNullableString(json['language_code']),
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
-      updatedAt: json['updated_at'] == null
-          ? null
-          : DateTime.parse(json['updated_at'].toString()).toLocal(),
+      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
+              ?.toLocal() ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse((json['updated_at'] ?? '').toString())
+          ?.toLocal(),
       isPinned: json['is_pinned'] == true,
       isLikedByMe: json['liked_by_me'] == true,
     );
@@ -124,6 +168,7 @@ class CommunityCommentModel {
   final int likeCount;
   final bool likedByMe;
   final DateTime createdAt;
+  final String? parentCommentId;
 
   const CommunityCommentModel({
     required this.id,
@@ -135,36 +180,81 @@ class CommunityCommentModel {
     required this.likeCount,
     required this.likedByMe,
     required this.createdAt,
+    this.parentCommentId,
   });
 
   CommunityCommentModel copyWith({
+    String? id,
+    String? postId,
+    String? authorId,
+    String? authorName,
+    String? authorAvatarUrl,
+    String? message,
     int? likeCount,
     bool? likedByMe,
+    DateTime? createdAt,
+    Object? parentCommentId = _communityCommentNoChange,
   }) {
     return CommunityCommentModel(
-      id: id,
-      postId: postId,
-      authorId: authorId,
-      authorName: authorName,
-      authorAvatarUrl: authorAvatarUrl,
-      message: message,
+      id: id ?? this.id,
+      postId: postId ?? this.postId,
+      authorId: authorId ?? this.authorId,
+      authorName: authorName ?? this.authorName,
+      authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      message: message ?? this.message,
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
+      parentCommentId: parentCommentId == _communityCommentNoChange
+          ? this.parentCommentId
+          : parentCommentId as String?,
     );
   }
 
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
+    final authorId = _readNullableString(json['author_id']) ??
+        _readNullableString(json['user_id']);
+
     return CommunityCommentModel(
-      id: json['id'].toString(),
-      postId: json['post_id'].toString(),
-      authorId: json['author_id']?.toString(),
-      authorName: (json['author_name'] ?? 'Unknown').toString(),
-      authorAvatarUrl: json['author_avatar_url']?.toString(),
-      message: (json['message'] ?? json['body'] ?? '').toString(),
+      id: (json['id'] ?? '').toString(),
+      postId: (json['post_id'] ?? '').toString(),
+      authorId: authorId,
+      authorName: _readNullableString(json['author_name']) ?? 'Unknown',
+      authorAvatarUrl: _readNullableString(json['author_avatar_url']),
+      message: _readNullableString(json['message']) ??
+          _readNullableString(json['body']) ??
+          '',
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       likedByMe: json['liked_by_me'] == true,
-      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
+      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
+              ?.toLocal() ??
+          DateTime.now(),
+      parentCommentId: _readNullableString(json['parent_comment_id']),
     );
   }
+}
+
+const Object _communityCommentNoChange = Object();
+
+String? _readNullableString(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  if (text.isEmpty || text.toLowerCase() == 'null') {
+    return null;
+  }
+  return text;
+}
+
+class CommunityPostsPage {
+  const CommunityPostsPage({
+    required this.items,
+    required this.nextOffset,
+    required this.hasMore,
+  });
+
+  final List<CommunityPostModel> items;
+  final int nextOffset;
+  final bool hasMore;
 }

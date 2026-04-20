@@ -25,7 +25,8 @@ class CommunityCommentModel {
       postId: _readRequiredUuid(json['post_id']),
       userId: _readRequiredUuid(json['user_id']),
       body: _readNullableString(json['body']) ?? '',
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
       callSign: _readNullableString(json['call_sign']),
       avatarUrl: _readNullableString(json['avatar_url']),
@@ -35,7 +36,7 @@ class CommunityCommentModel {
 
   String get displayName {
     final value = (callSign ?? '').trim();
-    return value.isEmpty ? 'Operator' : value;
+    return value.isEmpty ? 'Unknown user' : value;
   }
 
   bool get hasAvatar => (avatarUrl ?? '').trim().isNotEmpty;

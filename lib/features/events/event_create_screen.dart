@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import 'event_model.dart';
 import 'event_repository.dart';
 
 class EventCreateScreen extends StatefulWidget {
-  const EventCreateScreen({super.key});
+  const EventCreateScreen({
+    super.key,
+    this.isOfficial = false,
+    this.existingEvent,
+  });
+
+  final bool isOfficial;
+  final EventModel? existingEvent;
 
   @override
   State<EventCreateScreen> createState() => _EventCreateScreenState();
@@ -13,15 +21,15 @@ class EventCreateScreen extends StatefulWidget {
 class _EventCreateScreenState extends State<EventCreateScreen> {
   final EventRepository _repository = EventRepository();
 
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _prefectureController = TextEditingController();
-  final _organizerController = TextEditingController();
-  final _contactController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _maxPlayersController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _prefectureController = TextEditingController();
+  final TextEditingController _organizerController = TextEditingController();
+  final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _maxPlayersController = TextEditingController();
 
   DateTime _startAt = DateTime.now().add(const Duration(days: 7));
   DateTime _endAt = DateTime.now().add(const Duration(days: 7, hours: 6));
@@ -32,7 +40,9 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
   bool _isSaving = false;
 
-  static const List<String> _eventTypes = [
+  bool get _isEditing => widget.existingEvent != null;
+
+  static const List<String> _eventTypes = <String>[
     'Skirmish',
     'Milsim',
     'Training',
@@ -47,29 +57,56 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     'Japanese',
   ];
 
-  static const List<String> _skillLevels = [
+  static const List<String> _skillLevels = <String>[
     'All Levels',
     'Beginner Friendly',
     'Intermediate',
     'Experienced Only',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    final EventModel? event = widget.existingEvent;
+    if (event == null) {
+      return;
+    }
+    _titleController.text = event.title;
+    _descriptionController.text = event.description;
+    _locationController.text = event.location ?? '';
+    _prefectureController.text = event.prefecture ?? '';
+    _organizerController.text = event.organizerName ?? '';
+    _contactController.text = event.contactInfo ?? '';
+    _notesController.text = event.notes ?? '';
+    _priceController.text = event.priceYen?.toString() ?? '';
+    _maxPlayersController.text = event.maxPlayers?.toString() ?? '';
+    _startAt = event.startsAt;
+    _endAt = event.endsAt;
+    _eventType = event.eventType ?? _eventType;
+    _language = event.language ?? _language;
+    _skillLevel = event.skillLevel ?? _skillLevel;
+  }
+
   Future<void> _pickStartDateTime() async {
-    final pickedDate = await showDatePicker(
+    final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: _startAt,
       firstDate: DateTime.now().subtract(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
-    if (pickedDate == null || !mounted) return;
+    if (pickedDate == null || !mounted) {
+      return;
+    }
 
-    final pickedTime = await showTimePicker(
+    final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startAt),
     );
-    if (pickedTime == null) return;
+    if (pickedTime == null) {
+      return;
+    }
 
-    final newStart = DateTime(
+    final DateTime newStart = DateTime(
       pickedDate.year,
       pickedDate.month,
       pickedDate.day,
@@ -86,21 +123,25 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   }
 
   Future<void> _pickEndDateTime() async {
-    final pickedDate = await showDatePicker(
+    final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: _endAt,
       firstDate: _startAt,
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
-    if (pickedDate == null || !mounted) return;
+    if (pickedDate == null || !mounted) {
+      return;
+    }
 
-    final pickedTime = await showTimePicker(
+    final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_endAt),
     );
-    if (pickedTime == null) return;
+    if (pickedTime == null) {
+      return;
+    }
 
-    final newEnd = DateTime(
+    final DateTime newEnd = DateTime(
       pickedDate.year,
       pickedDate.month,
       pickedDate.day,
@@ -121,8 +162,8 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   }
 
   Future<void> _save() async {
-    final title = _titleController.text.trim();
-    final description = _descriptionController.text.trim();
+    final String title = _titleController.text.trim();
+    final String description = _descriptionController.text.trim();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -140,33 +181,61 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       return;
     }
 
-    final priceYen = int.tryParse(_priceController.text.trim());
-    final maxPlayers = int.tryParse(_maxPlayersController.text.trim());
+    final int? priceYen = int.tryParse(_priceController.text.trim());
+    final int? maxPlayers = int.tryParse(_maxPlayersController.text.trim());
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
-      await _repository.createEvent(
-        title: title,
-        description: description,
-        startsAt: _startAt,
-        endsAt: _endAt,
-        location: _locationController.text.trim(),
-        prefecture: _prefectureController.text.trim(),
-        eventType: _eventType,
-        language: _language,
-        skillLevel: _skillLevel,
-        organizerName: _organizerController.text.trim(),
-        contactInfo: _contactController.text.trim(),
-        notes: _notesController.text.trim(),
-        priceYen: priceYen,
-        maxPlayers: maxPlayers,
-      );
+      if (_isEditing) {
+        await _repository.updateEvent(
+          eventId: widget.existingEvent!.id,
+          title: title,
+          description: description,
+          startsAt: _startAt,
+          endsAt: _endAt,
+          isOfficial: widget.isOfficial,
+          location: _locationController.text.trim(),
+          prefecture: _prefectureController.text.trim(),
+          eventType: _eventType,
+          language: _language,
+          skillLevel: _skillLevel,
+          organizerName: _organizerController.text.trim(),
+          contactInfo: _contactController.text.trim(),
+          notes: _notesController.text.trim(),
+          priceYen: priceYen,
+          maxPlayers: maxPlayers,
+        );
+      } else {
+        await _repository.createEvent(
+          title: title,
+          description: description,
+          startsAt: _startAt,
+          endsAt: _endAt,
+          isOfficial: widget.isOfficial,
+          location: _locationController.text.trim(),
+          prefecture: _prefectureController.text.trim(),
+          eventType: _eventType,
+          language: _language,
+          skillLevel: _skillLevel,
+          organizerName: _organizerController.text.trim(),
+          contactInfo: _contactController.text.trim(),
+          notes: _notesController.text.trim(),
+          priceYen: priceYen,
+          maxPlayers: maxPlayers,
+        );
+      }
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop(true);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -178,17 +247,19 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
 
   String _formatDateTime(DateTime value) {
-    final yyyy = value.year.toString().padLeft(4, '0');
-    final mm = value.month.toString().padLeft(2, '0');
-    final dd = value.day.toString().padLeft(2, '0');
-    final hh = value.hour.toString().padLeft(2, '0');
-    final min = value.minute.toString().padLeft(2, '0');
+    final String yyyy = value.year.toString().padLeft(4, '0');
+    final String mm = value.month.toString().padLeft(2, '0');
+    final String dd = value.day.toString().padLeft(2, '0');
+    final String hh = value.hour.toString().padLeft(2, '0');
+    final String min = value.minute.toString().padLeft(2, '0');
     return '$yyyy-$mm-$dd $hh:$min';
   }
 
@@ -208,14 +279,20 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('createEvent'))),
+      appBar: AppBar(
+        title: Text(
+          _isEditing
+              ? (widget.isOfficial ? l10n.t('editEvent') : l10n.t('editEvent'))
+              : (widget.isOfficial ? l10n.t('createOfficialEvent') : l10n.t('createEvent')),
+        ),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
+          children: <Widget>[
             TextField(
               controller: _titleController,
               decoration: InputDecoration(labelText: l10n.title),
@@ -226,14 +303,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               initialValue: _eventType,
               items: _eventTypes
                   .map(
-                    (value) => DropdownMenuItem(
+                    (String value) => DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
-                if (value == null) return;
+              onChanged: (String? value) {
+                if (value == null) {
+                  return;
+                }
                 setState(() => _eventType = value);
               },
               decoration: InputDecoration(labelText: l10n.t('eventType')),
@@ -243,14 +322,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               initialValue: _language,
               items: _languages
                   .map(
-                    (value) => DropdownMenuItem(
+                    (String value) => DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
-                if (value == null) return;
+              onChanged: (String? value) {
+                if (value == null) {
+                  return;
+                }
                 setState(() => _language = value);
               },
               decoration: InputDecoration(labelText: l10n.language),
@@ -260,14 +341,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               initialValue: _skillLevel,
               items: _skillLevels
                   .map(
-                    (value) => DropdownMenuItem(
+                    (String value) => DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
-                if (value == null) return;
+              onChanged: (String? value) {
+                if (value == null) {
+                  return;
+                }
                 setState(() => _skillLevel = value);
               },
               decoration: InputDecoration(labelText: l10n.t('skillLevel')),
@@ -321,53 +404,49 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _organizerController,
-              decoration: InputDecoration(labelText: l10n.t('organizerName')),
+              decoration: InputDecoration(labelText: l10n.t('organizer')),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _contactController,
-              decoration: InputDecoration(
-                labelText: l10n.t('contactInfo'),
-                hintText: l10n.t('contactInfoHint'),
-              ),
+              decoration: InputDecoration(labelText: l10n.t('contact')),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
               minLines: 5,
-              maxLines: 10,
+              maxLines: 8,
               decoration: InputDecoration(labelText: l10n.t('description')),
-              textInputAction: TextInputAction.newline,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
               minLines: 3,
-              maxLines: 8,
-              decoration: InputDecoration(
-                labelText: l10n.t('rulesNotes'),
+              maxLines: 6,
+              decoration: InputDecoration(labelText: l10n.t('rules')), 
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _save,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(
+                  _isEditing
+                      ? (widget.isOfficial ? l10n.t('updateOfficialEvent') : l10n.t('updateEvent'))
+                      : (widget.isOfficial ? l10n.t('createOfficialEvent') : l10n.t('createEvent')),
+                ),
               ),
-              textInputAction: TextInputAction.newline,
             ),
           ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: FilledButton(
-            onPressed: _isSaving ? null : _save,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
-                  )
-                : Text(l10n.t('saveEvent')),
-          ),
         ),
       ),
     );

@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   area text,
   team_name text,
   loadout text,
+  loadout_cards jsonb not null default '[]'::jsonb,
   instagram text,
   facebook text,
   youtube text,
@@ -30,7 +31,12 @@ returns trigger
 language plpgsql
 as $$
 begin
-  new.updated_at = now();
+  if to_jsonb(new) ? 'updated_at' then
+    new := jsonb_populate_record(
+      new,
+      jsonb_set(to_jsonb(new), '{updated_at}', to_jsonb(now()))
+    );
+  end if;
   return new;
 end;
 $$;

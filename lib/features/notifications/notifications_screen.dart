@@ -2,19 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_post_details_screen.dart';
+import '../events/event_details_screen.dart';
+import '../events/event_repository.dart';
 import '../social/contacts_screen.dart';
+import '../social/direct_message_screen.dart';
 import 'notification_model.dart';
 import 'notification_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({
+    super.key,
+    NotificationRepository? repository,
+    EventRepository? eventRepository,
+    this.subscribeToRealtime = true,
+    this.onOpenNotification,
+  }) : _repository = repository,
+       _eventRepository = eventRepository;
+
+  final NotificationRepository? _repository;
+  final EventRepository? _eventRepository;
+  final bool subscribeToRealtime;
+  final Future<void> Function(BuildContext context, AppNotificationModel item)?
+      onOpenNotification;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final NotificationRepository _repository = NotificationRepository();
+  late final NotificationRepository _repository;
+  EventRepository? _eventRepository;
 
   late Future<List<AppNotificationModel>> _future;
   RealtimeChannel? _channel;
@@ -22,18 +40,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    _repository = widget._repository ?? NotificationRepository();
+    _eventRepository = widget._eventRepository;
     _future = _repository.getNotifications();
-    _channel = _repository.subscribeToNotifications(
-      onNotification: () async {
-        await _refresh();
-      },
-    );
-    _markAllReadSoon();
-  }
-
-  Future<void> _markAllReadSoon() async {
-    await _repository.markAllRead();
-    await _refresh();
+    if (widget.subscribeToRealtime) {
+      _channel = _repository.subscribeToNotifications(
+        onNotification: () async {
+          await _refresh();
+        },
+      );
+    }
   }
 
   Future<void> _refresh() async {
@@ -56,6 +72,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'direct_message':
         return Icons.chat_bubble_outline;
       case 'contact_request':
+      case 'contact_request_accepted':
         return Icons.person_add_alt_1;
       case 'community_post_comment':
         return Icons.comment_outlined;
@@ -70,17 +87,143 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openNotification(AppNotificationModel item) async {
-    await _repository.markRead(item.id);
+    try {
+      await _repository.markRead(item.id);
+    } catch (_) {
+      // Keep deep-link navigation working even when marking as read fails.
+    }
 
     if (!mounted) return;
 
-    if (item.type == 'contact_request' || item.type == 'direct_message') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ContactsScreen()),
-      );
+    if (widget.onOpenNotification != null) {
+      await widget.onOpenNotification!(context, item);
+      await _refresh();
+      return;
+    }
+
+    final String normalizedType = item.type.trim().toLowerCase();
+
+    if (normalizedType == 'contact_request' ||
+        normalizedType == 'friend_request' ||
+        normalizedType == 'contact_request_accepted') {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
+    } else if (normalizedType == 'direct_message') {
+      final String? otherUserId = item.entityId?.trim();
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DirectMessageScreen(
+              otherUserId: otherUserId,
+              otherDisplayName: item.title.trim().isNotEmpty
+                  ? item.title
+                  : 'Direct Message',
+            ),
+          ),
+        );
+      } else {
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ContactsScreen()));
+      }
+    } else if (normalizedType == 'community_post_comment' ||
+        normalizedType == 'community_post_like' ||
+        normalizedType == 'community_comment_reply' ||
+        normalizedType == 'community_comment_like') {
+      final String? postId = await _resolvePostIdForNotification(item);
+      if (postId != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CommunityPostDetailsScreen(postId: postId),
+          ),
+        );
+      }
+    } else if (normalizedType.contains('event')) {
+      final String? eventId = await _resolveEventIdForNotification(item);
+      if (eventId != null && eventId.isNotEmpty && mounted) {
+        try {
+          final EventRepository eventRepository =
+              _eventRepository ??= EventRepository();
+          final event = await eventRepository.getEventById(eventId);
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
+          );
+        } catch (_) {
+          // Ignore broken event links and just refresh the list.
+        }
+      }
     }
 
     await _refresh();
+  }
+
+  Future<void> _deleteNotification(AppNotificationModel item) async {
+    await _repository.deleteNotification(item.id);
+    await _refresh();
+  }
+
+  Future<String?> _resolvePostIdForNotification(
+    AppNotificationModel item,
+  ) async {
+    final String? entityId = item.entityId?.trim();
+    if (entityId == null || entityId.isEmpty) {
+      return null;
+    }
+
+    final String normalizedType = item.type.trim().toLowerCase();
+    if (normalizedType == 'community_post_comment' ||
+        normalizedType == 'community_post_like') {
+      return entityId;
+    }
+
+    if (normalizedType == 'community_comment_reply' ||
+        normalizedType == 'community_comment_like') {
+      try {
+        final response = await Supabase.instance.client
+            .from('community_comments')
+            .select('post_id')
+            .eq('id', entityId)
+            .maybeSingle();
+        return response?['post_id']?.toString();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> _resolveEventIdForNotification(
+    AppNotificationModel item,
+  ) async {
+    final String? entityId = item.entityId?.trim();
+    if (entityId == null || entityId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('id')
+          .eq('id', entityId)
+          .maybeSingle();
+      if (response != null) {
+        return entityId;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await Supabase.instance.client
+          .from('event_attendees')
+          .select('event_id')
+          .eq('id', entityId)
+          .maybeSingle();
+      return response?['event_id']?.toString();
+    } catch (_) {
+      return null;
+    }
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
@@ -89,7 +232,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (difference.inMinutes < 1) return l10n.t('justNow');
     if (difference.inMinutes < 60) {
-      return l10n.t('minutesAgoShort', args: {'value': '${difference.inMinutes}'});
+      return l10n.t(
+        'minutesAgoShort',
+        args: {'value': '${difference.inMinutes}'},
+      );
     }
     if (difference.inHours < 24) {
       return l10n.t('hoursAgoShort', args: {'value': '${difference.inHours}'});
@@ -159,29 +305,63 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               itemBuilder: (context, index) {
                 final item = items[index];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(_iconForType(item.type)),
+                return Dismissible(
+                  key: ValueKey<String>(item.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    alignment: Alignment.centerRight,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    title: Text(item.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text(item.body),
-                        const SizedBox(height: 6),
-                        Text(
-                          _timeLabel(l10n, item.createdAt),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
-                    trailing: item.isRead
-                        ? null
-                        : const Icon(Icons.fiber_manual_record, size: 12),
-                    onTap: () => _openNotification(item),
+                  ),
+                  onDismissed: (_) async {
+                    await _deleteNotification(item);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Notification removed')),
+                    );
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(child: Icon(_iconForType(item.type))),
+                      title: Text(item.title),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(item.body),
+                          const SizedBox(height: 6),
+                          Text(
+                            _timeLabel(l10n, item.createdAt),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          if (!item.isRead)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Icon(Icons.fiber_manual_record, size: 12),
+                            ),
+                          IconButton(
+                            tooltip: 'Delete notification',
+                            onPressed: () => _deleteNotification(item),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      onTap: () => _openNotification(item),
+                    ),
                   ),
                 );
               },

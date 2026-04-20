@@ -21,14 +21,14 @@ class ContactModel {
       requesterId: json['requester_id'].toString(),
       addresseeId: json['addressee_id'].toString(),
       status: (json['status'] ?? 'pending').toString(),
-      requesterCallSign: _readNestedCallSign(json['requester_profile']),
-      addresseeCallSign: _readNestedCallSign(json['addressee_profile']),
+      requesterCallSign: _readNestedDisplayName(json['requester_profile']),
+      addresseeCallSign: _readNestedDisplayName(json['addressee_profile']),
     );
   }
 
-  static String? _readNestedCallSign(dynamic value) {
+  static String? _readNestedDisplayName(dynamic value) {
     if (value is Map<String, dynamic>) {
-      final raw = value['call_sign'];
+      final raw = value['call_sign'] ?? value['user_code'];
       if (raw == null) return null;
       final text = raw.toString().trim();
       return text.isEmpty ? null : text;

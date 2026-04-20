@@ -28,6 +28,7 @@ class ProfileRepository {
         'area': null,
         'team_name': null,
         'loadout': null,
+        'loadout_cards': <Map<String, dynamic>>[],
         'instagram': null,
         'facebook': null,
         'youtube': null,
@@ -35,7 +36,15 @@ class ProfileRepository {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      await _client.from('profiles').insert(newProfile);
+      try {
+        await _client.from('profiles').insert(newProfile);
+      } on PostgrestException catch (error) {
+        if (!_isMissingColumnError(error, 'loadout_cards')) {
+          rethrow;
+        }
+        newProfile.remove('loadout_cards');
+        await _client.from('profiles').insert(newProfile);
+      }
       return ProfileModel.fromJson(newProfile);
     }
 
@@ -54,6 +63,9 @@ class ProfileRepository {
       'area': profile.area,
       'team_name': profile.teamName,
       'loadout': profile.loadout,
+        'loadout_cards': profile.loadoutCards
+          .map((ProfileLoadoutCard card) => card.toJson())
+          .toList(),
       'instagram': profile.instagram,
       'facebook': profile.facebook,
       'youtube': profile.youtube,
@@ -61,7 +73,15 @@ class ProfileRepository {
       'updated_at': DateTime.now().toIso8601String(),
     };
 
-    await _client.from('profiles').update(payload).eq('id', user.id);
+    try {
+      await _client.from('profiles').update(payload).eq('id', user.id);
+    } on PostgrestException catch (error) {
+      if (!_isMissingColumnError(error, 'loadout_cards')) {
+        rethrow;
+      }
+      payload.remove('loadout_cards');
+      await _client.from('profiles').update(payload).eq('id', user.id);
+    }
 
     final refreshed = await _client
         .from('profiles')
@@ -129,6 +149,9 @@ class ProfileRepository {
         profile.area ?? '',
         profile.teamName ?? '',
         profile.loadout ?? '',
+        ...profile.loadoutCards.map((ProfileLoadoutCard card) {
+          return '${card.title ?? ''} ${card.description ?? ''} ${card.imageUrl ?? ''}';
+        }),
       ].join(' ').toLowerCase();
 
       return haystack.contains(lower);
@@ -147,5 +170,16 @@ class ProfileRepository {
     }
 
     return localPart;
+  }
+
+  bool _isMissingColumnError(PostgrestException error, String columnName) {
+    if (error.code != 'PGRST204' && error.code != '42703') {
+      return false;
+    }
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    final String needle = columnName.toLowerCase();
+    return summary.contains(needle);
   }
 }

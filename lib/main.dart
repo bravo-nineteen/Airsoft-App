@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/notifications/push_notification_service.dart';
+import 'features/auth/reset_password_screen.dart';
 import 'firebase_options.dart';
 
 @pragma('vm:entry-point')
@@ -33,6 +35,9 @@ class _BootstrapAppState extends State<BootstrapApp> {
   bool _splashDone = false;
   bool _startupDone = false;
   String? _startupError;
+
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void initState() {
@@ -64,6 +69,20 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
       await PushNotificationService.init();
 
+      _authSubscription =
+          Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        if (data.event == AuthChangeEvent.passwordRecovery) {
+          final navigator = _navigatorKey.currentState;
+          if (navigator == null) return;
+
+          navigator.push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ResetPasswordScreen(),
+            ),
+          );
+        }
+      });
+
       if (!mounted) return;
       setState(() {
         _startupDone = true;
@@ -80,6 +99,12 @@ class _BootstrapAppState extends State<BootstrapApp> {
   }
 
   @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (_startupError != null) {
       return StartupErrorApp(message: _startupError!);
@@ -89,7 +114,9 @@ class _BootstrapAppState extends State<BootstrapApp> {
       return const SplashScreen();
     }
 
-    return const AirsoftApp();
+    return AirsoftApp(
+      navigatorKey: _navigatorKey,
+    );
   }
 }
 

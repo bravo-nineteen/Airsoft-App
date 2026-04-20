@@ -1,8 +1,11 @@
 import 'package:extended_image/extended_image.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
+import 'community_post_categories.dart';
 import 'community_post_details_screen.dart';
 import 'community_repository.dart';
 import 'community_user_profile_screen.dart';
@@ -17,25 +20,194 @@ class CommunityListScreen extends StatefulWidget {
 class _CommunityListScreenState extends State<CommunityListScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  RealtimeChannel? _postsChannel;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   bool _isInitialLoading = true;
   bool _isRefreshing = false;
   String _selectedCategory = 'All';
 
-  static const List<String> _categories = <String>[
-    'All',
-    'General',
-    'Question',
-    'Event',
-    'Review',
-    'Sale',
-    'Guide',
-  ];
+  static const List<String> _categories =
+      CommunityPostCategories.communityCategoriesWithAll;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+    _restoreCachedPosts();
+    _subscribeRealtime();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isLoadingMore || !_hasMore) {
+      return;
+    }
+    final double threshold = _scrollController.position.maxScrollExtent - 500;
+    if (_scrollController.position.pixels >= threshold) {
+      _loadMorePosts();
+    }
+  }
+
+  void _subscribeRealtime() {
+    _postsChannel = Supabase.instance.client.channel('community-feed-updates');
+
+    _postsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            _handleRealtimePost(payload.newRecord);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            _handleRealtimePost(payload.newRecord);
+          },
+        )
+        .subscribe();
+  }
+
+  void _handleRealtimePost(Map<String, dynamic> row) {
+    if (!mounted) {
+      return;
+    }
+
+    final CommunityPostModel incoming = CommunityPostModel.fromJson(row);
+    if (incoming.postContext != 'community') {
+      return;
+    }
+    if (!_matchesCurrentFilters(incoming)) {
+      return;
+    }
+    if (row['is_deleted'] == true) {
+      setState(() {
+        _posts = _posts
+            .where((CommunityPostModel post) => post.id != incoming.id)
+            .toList();
+        _pendingPosts.removeWhere(
+          (CommunityPostModel post) => post.id == incoming.id,
+        );
+      });
+      return;
+    }
+
+    final int index = _posts.indexWhere(
+      (CommunityPostModel post) => post.id == incoming.id,
+    );
+    final int pendingIndex = _pendingPosts.indexWhere(
+      (CommunityPostModel post) => post.id == incoming.id,
+    );
+
+    if (index == -1) {
+      if (pendingIndex != -1) {
+        setState(() {
+          _pendingPosts[pendingIndex] = incoming.copyWith(
+            category: CommunityPostCategories.normalizeCommunityCategory(
+              incoming.category,
+            ),
+          );
+        });
+        return;
+      }
+
+      // Do not jump the user's reading position. Queue new items and let the
+      // user reveal them from a lightweight banner.
+      setState(() {
+        _pendingPosts.insert(
+          0,
+          incoming.copyWith(
+            category: CommunityPostCategories.normalizeCommunityCategory(
+              incoming.category,
+            ),
+          ),
+        );
+      });
+      return;
+    }
+
+    final CommunityPostModel existing = _posts[index];
+    final CommunityPostModel merged = incoming.copyWith(
+      isLikedByMe: existing.isLikedByMe,
+      category: CommunityPostCategories.normalizeCommunityCategory(
+        incoming.category,
+      ),
+    );
+
+    setState(() {
+      _posts[index] = merged;
+    });
+    _cachePosts();
+  }
+
+  void _revealPendingPosts() {
+    if (_pendingPosts.isEmpty) {
+      return;
+    }
+    setState(() {
+      _posts = <CommunityPostModel>[..._pendingPosts, ..._posts];
+      _pendingPosts.clear();
+    });
+    _cachePosts();
+
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  bool _matchesCurrentFilters(CommunityPostModel post) {
+    final String normalizedCategory =
+        CommunityPostCategories.normalizeCommunityCategory(post.category);
+    if (_selectedCategory != CommunityPostCategories.all &&
+        normalizedCategory != _selectedCategory) {
+      return false;
+    }
+
+    final String language = (post.language ?? '').trim().toLowerCase();
+    if (_selectedLanguagePreference == 'english' &&
+        language != 'english' &&
+        language != 'bilingual') {
+      return false;
+    }
+    if (_selectedLanguagePreference == 'japanese' &&
+        language != 'japanese' &&
+        language != 'bilingual') {
+      return false;
+    }
+
+    final String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return true;
+    }
+    final String haystack = <String>[
+      post.title,
+      post.bodyText,
+      post.plainText,
+      post.authorName,
+      post.category ?? '',
+    ].join(' ').toLowerCase();
+    return haystack.contains(query);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitLanguagePreference) {
+      return;
+    }
+    _didInitLanguagePreference = true;
+    _selectedLanguagePreference =
+        AppLocalizations.of(context).locale.languageCode == 'ja'
+            ? 'japanese'
+            : 'english';
     _loadPosts();
   }
 
@@ -51,9 +223,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     }
 
     try {
-      final posts = await _repository.fetchPosts(
+      final CommunityPostsPage page = await _repository.fetchPostsPage(
         query: _searchController.text,
         category: _selectedCategory,
+        preferredLanguage: _selectedLanguagePreference,
+        offset: 0,
+        limit: _pageSize,
       );
 
       if (!mounted) {
@@ -65,6 +240,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         _isInitialLoading = false;
         _isRefreshing = false;
       });
+      _cachePosts();
     } catch (error) {
       if (!mounted) {
         return;
@@ -76,21 +252,126 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load posts: $error')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).t('failedLoadPosts', args: {'error': '$error'}),
+          ),
+        ),
       );
     }
   }
 
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMore || _isLoading) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final CommunityPostsPage page = await _repository.fetchPostsPage(
+        query: _searchController.text,
+        category: _selectedCategory,
+        preferredLanguage: _selectedLanguagePreference,
+        offset: _offset,
+        limit: _pageSize,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final Set<String> existingIds = _posts
+          .map((CommunityPostModel post) => post.id)
+          .toSet();
+      final List<CommunityPostModel> appended = page.items
+          .where((CommunityPostModel post) => !existingIds.contains(post.id))
+          .map(
+            (CommunityPostModel post) => post.copyWith(
+              category: CommunityPostCategories.normalizeCommunityCategory(
+                post.category,
+              ),
+            ),
+          )
+          .toList();
+
+      setState(() {
+        _posts = <CommunityPostModel>[..._posts, ...appended];
+        _offset = page.nextOffset;
+        _hasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+      _cachePosts();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  String get _cacheKey {
+    return 'community-feed-v1-${_selectedCategory.toLowerCase()}-${_selectedLanguagePreference.toLowerCase()}';
+  }
+
+  Future<void> _cachePosts() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> payload = _posts
+          .take(80)
+          .map((CommunityPostModel post) => post.toJson())
+          .toList();
+      await prefs.setString(_cacheKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreCachedPosts() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_cacheKey);
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return;
+      }
+
+      final List<CommunityPostModel> cached = decoded
+          .whereType<Map>()
+          .map(
+            (Map item) => CommunityPostModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+      if (!mounted || cached.isEmpty) {
+        return;
+      }
+
+      setState(() {
+        _posts = cached;
+        _isLoading = false;
+        _offset = cached.length;
+        _pendingPosts.clear();
+      });
+    } catch (_) {}
+  }
+
   Future<void> _openCreateScreen() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => const CommunityCreatePostScreen(),
       ),
     );
 
-    if (created == true) {
-      await _loadPosts();
-    }
+    await _loadPosts();
   }
 
   Future<void> _openPostDetails(CommunityPostModel post) async {
@@ -103,11 +384,54 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     await _loadPosts();
   }
 
+  Future<void> _toggleLikeFromFeed(CommunityPostModel post) async {
+    if (_busyLikePostIds.contains(post.id)) {
+      return;
+    }
+
+    final int index = _posts.indexWhere((CommunityPostModel p) => p.id == post.id);
+    if (index == -1) {
+      return;
+    }
+
+    final CommunityPostModel original = _posts[index];
+    final bool nextLiked = !original.isLikedByMe;
+    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+
+    setState(() {
+      _busyLikePostIds.add(post.id);
+      _posts[index] = original.copyWith(
+        isLikedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
+    });
+
+    try {
+      await _repository.toggleLikePost(post.id);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _posts[index] = original;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to like post: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyLikePostIds.remove(post.id);
+        });
+      }
+    }
+  }
+
   void _openProfile(String? userId, String fallbackName) {
     final _ = fallbackName;
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile not available')),
+        SnackBar(content: Text(AppLocalizations.of(context).t('profileNotAvailable'))),
       );
       return;
     }
@@ -123,24 +447,30 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   void dispose() {
+    if (_postsChannel != null) {
+      Supabase.instance.client.removeChannel(_postsChannel!);
+    }
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   String _timeAgo(DateTime dateTime) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final difference = DateTime.now().difference(dateTime);
 
     if (difference.inMinutes < 1) {
-      return 'now';
+      return l10n.t('now');
     }
     if (difference.inHours < 1) {
-      return '${difference.inMinutes}m';
+      return l10n.t('minutesShort', args: {'value': '${difference.inMinutes}'});
     }
     if (difference.inDays < 1) {
-      return '${difference.inHours}h';
+      return l10n.t('hoursShort', args: {'value': '${difference.inHours}'});
     }
     if (difference.inDays < 7) {
-      return '${difference.inDays}d';
+      return l10n.t('daysShort', args: {'value': '${difference.inDays}'});
     }
     final yyyy = dateTime.year.toString().padLeft(4, '0');
     final mm = dateTime.month.toString().padLeft(2, '0');
@@ -150,11 +480,25 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final Map<String, String> languageLabels = <String, String>{
+      'english': l10n.t('preferEnglishPosts'),
+      'japanese': l10n.t('preferJapanesePosts'),
+      'bilingual': l10n.t('preferBilingualPosts'),
+    };
+    final String languageSummary = switch (_selectedLanguagePreference) {
+      'english' => l10n.t('preferEnglishPosts'),
+      'japanese' => l10n.t('preferJapanesePosts'),
+      'bilingual' => l10n.t('preferBilingualPosts'),
+      _ => l10n.t('allLanguages'),
+    };
+
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateScreen,
         icon: const Icon(Icons.edit_outlined),
-        label: const Text('New post'),
+        label: Text(l10n.t('newPost')),
       ),
       body: RefreshIndicator(
         onRefresh: _loadPosts,
@@ -265,13 +609,19 @@ class _CompactPostCard extends StatelessWidget {
   const _CompactPostCard({
     required this.post,
     required this.timeAgo,
+    required this.languageLabel,
     required this.onTap,
+    required this.onLikeTap,
+    required this.isLiking,
     required this.onAuthorTap,
   });
 
   final CommunityPostModel post;
   final String timeAgo;
+  final String languageLabel;
   final VoidCallback onTap;
+  final VoidCallback onLikeTap;
+  final bool isLiking;
   final VoidCallback onAuthorTap;
 
   @override
@@ -403,16 +753,20 @@ class _CompactPostCard extends StatelessWidget {
                       children: <Widget>[
                         if (post.isPinned)
                           _MiniBadge(
-                            text: 'Pinned',
+                            text: AppLocalizations.of(context).t('pinned'),
                             color: theme.colorScheme.primary.withOpacity(0.14),
                             textColor: theme.colorScheme.primary,
                           ),
-                        if ((post.category ?? '').isNotEmpty)
-                          _MiniBadge(
-                            text: post.category!,
-                            color: theme.colorScheme.secondary.withOpacity(0.14),
-                            textColor: theme.colorScheme.secondary,
-                          ),
+                        _MiniBadge(
+                          text: normalizedCategory,
+                          color: theme.colorScheme.secondary.withOpacity(0.14),
+                          textColor: theme.colorScheme.secondary,
+                        ),
+                        _MiniBadge(
+                          text: languageLabel,
+                          color: theme.colorScheme.tertiary.withOpacity(0.14),
+                          textColor: theme.colorScheme.tertiary,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -427,7 +781,7 @@ class _CompactPostCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       post.excerpt.isEmpty
-                          ? 'No preview text available.'
+                          ? AppLocalizations.of(context).t('noPreviewTextAvailable')
                           : post.excerpt,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -456,6 +810,50 @@ class _CompactPostCard extends StatelessWidget {
                             label: post.imageUrls.length.toString(),
                           ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: isLiking ? null : onLikeTap,
+                              icon: isLiking
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      post.isLikedByMe
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                    ),
+                              label: Text('Like ${post.likeCount}'),
+                            ),
+                          ),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: onTap,
+                              icon: const Icon(Icons.mode_comment_outlined),
+                              label: Text('Comment ${post.commentCount}'),
+                            ),
+                          ),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: onTap,
+                              icon: const Icon(Icons.open_in_new_outlined),
+                              label: const Text('Open'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

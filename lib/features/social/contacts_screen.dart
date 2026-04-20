@@ -17,6 +17,7 @@ class ContactsScreen extends StatefulWidget {
 class _ContactsScreenState extends State<ContactsScreen> {
   final ContactRepository _repo = ContactRepository();
   late Future<List<ContactModel>> _future;
+  String? _actingContactId;
 
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
 
@@ -34,10 +35,89 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _openFindUsers() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const FindUsersScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const FindUsersScreen()));
     await _refresh();
+  }
+
+  Future<void> _acceptRequest(ContactModel contact) async {
+    setState(() {
+      _actingContactId = contact.id;
+    });
+
+    try {
+      await _repo.acceptRequest(contact);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Friend request accepted')),
+        );
+      }
+      await _refresh();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to accept request: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actingContactId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _rejectRequest(ContactModel contact) async {
+    setState(() {
+      _actingContactId = contact.id;
+    });
+
+    try {
+      await _repo.rejectRequest(contact);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Friend request declined')),
+        );
+      }
+      await _refresh();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to decline request: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actingContactId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _removeContact(ContactModel contact) async {
+    setState(() {
+      _actingContactId = contact.id;
+    });
+
+    try {
+      await _repo.removeContact(contact);
+      await _refresh();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove contact: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actingContactId = null;
+        });
+      }
+    }
   }
 
   String _otherUserId(ContactModel contact) {
@@ -47,15 +127,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   String _otherDisplayName(ContactModel contact) {
-      final l10n = AppLocalizations.of(context);
     if (contact.requesterId == _currentUserId) {
       return (contact.addresseeCallSign ?? '').trim().isEmpty
-        ? l10n.t('operator')
+          ? 'Unknown user'
           : contact.addresseeCallSign!;
     }
 
     return (contact.requesterCallSign ?? '').trim().isEmpty
-      ? l10n.t('operator')
+        ? 'Unknown user'
         : contact.requesterCallSign!;
   }
 
@@ -137,6 +216,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 final displayName = _otherDisplayName(contact);
                 final accepted = _isAccepted(contact);
                 final incomingPending = _isIncomingPending(contact);
+                final isActing = _actingContactId == contact.id;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -149,7 +229,35 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       ),
                     ),
                     title: Text(displayName),
-                    subtitle: Text(contact.status),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(contact.status),
+                        if (incomingPending) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: isActing
+                                    ? null
+                                    : () => _acceptRequest(contact),
+                                icon: const Icon(Icons.check),
+                                label: const Text('Accept'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: isActing
+                                    ? null
+                                    : () => _rejectRequest(contact),
+                                icon: const Icon(Icons.close),
+                                label: const Text('Decline'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
                     trailing: accepted
                         ? IconButton(
                             icon: const Icon(Icons.chat_bubble_outline),
@@ -165,32 +273,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             },
                           )
                         : incomingPending
-                            ? Wrap(
-                                spacing: 4,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.check),
-                                    onPressed: () async {
-                                      await _repo.acceptRequest(contact.id);
-                                      await _refresh();
-                                    },
+                        ? (isActing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () async {
-                                      await _repo.rejectRequest(contact.id);
-                                      await _refresh();
-                                    },
-                                  ),
-                                ],
-                              )
-                            : IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () async {
-                                  await _repo.removeContact(contact.id);
-                                  await _refresh();
-                                },
-                              ),
+                                )
+                              : null)
+                        : IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: isActing
+                                ? null
+                                : () => _removeContact(contact),
+                          ),
                   ),
                 );
               },

@@ -2,88 +2,58 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
-import '../../core/notifications/notification_settings_screen.dart';
-import '../auth/login_screen.dart';
-import '../social/contacts_screen.dart';
+import '../admin/admin_repository.dart';
+import '../admin/admin_screen.dart';
+import '../notifications/notifications_screen.dart';
+import 'account_settings_screen.dart';
+import 'notification_settings_screen.dart';
+import 'privacy_settings_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     this.currentLocale,
     this.onLocaleChanged,
+    this.currentThemeMode,
+    this.onThemeModeChanged,
   });
 
   final Locale? currentLocale;
-  final ValueChanged<Locale>? onLocaleChanged;
+  final ValueChanged<Locale?>? onLocaleChanged;
+  final ThemeMode? currentThemeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
-  Future<void> _showLanguagePicker(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    final selected = currentLocale ?? Localizations.localeOf(context);
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
 
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.language),
-                title: Text(l10n.t('english')),
-                trailing: selected.languageCode == 'en'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  onLocaleChanged?.call(const Locale('en'));
-                  Navigator.of(sheetContext).pop();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.language),
-                title: const Text('日本語'),
-                trailing: selected.languageCode == 'ja'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  onLocaleChanged?.call(const Locale('ja'));
-                  Navigator.of(sheetContext).pop();
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+class _SettingsScreenState extends State<SettingsScreen> {
+  final AdminRepository _adminRepository = AdminRepository();
+  late ThemeMode _selectedThemeMode;
+  String? _selectedLanguageCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedThemeMode = widget.currentThemeMode ?? ThemeMode.system;
+    _selectedLanguageCode = widget.currentLocale?.languageCode;
+  }
+
+  void _navigate(BuildContext context, Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   Future<void> _logout(BuildContext context) async {
-    try {
-      await Supabase.instance.client.auth.signOut();
+    await Supabase.instance.client.auth.signOut();
 
-      if (!context.mounted) return;
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).t('logoutFailed', args: {'error': '$e'}),
-          ),
-        ),
-      );
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
-  void _showLogoutConfirm(BuildContext context) {
+  Future<void> _confirmAndLogout(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    showDialog<void>(
+    final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
@@ -91,15 +61,91 @@ class SettingsScreen extends StatelessWidget {
           content: Text(l10n.t('logoutConfirmMessage')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: Text(l10n.t('cancel')),
             ),
             FilledButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                await _logout(context);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: Text(l10n.t('logout')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true && context.mounted) {
+      await _logout(context);
+    }
+  }
+
+  void _updateThemeMode(ThemeMode value) {
+    setState(() {
+      _selectedThemeMode = value;
+    });
+    widget.onThemeModeChanged?.call(value);
+  }
+
+  void _updateLanguageCode(String? languageCode) {
+    setState(() {
+      _selectedLanguageCode = languageCode;
+    });
+    widget.onLocaleChanged?.call(
+      languageCode == null ? null : Locale(languageCode),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+          color: Colors.white70,
+        ),
+      ),
+    );
+  }
+
+  Widget _tile({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+
+  Future<void> _showAdminSetupHelp(Object? error) async {
+    final String currentUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? 'Not logged in';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Admin setup help'),
+          content: SingleChildScrollView(
+            child: Text(
+              'Admin access is based on public.admin_roles.\n\n'
+              'Current user id:\n$currentUserId\n\n'
+              'If Admin Area does not open, ensure:\n'
+              '1) Admin migrations were run in Supabase SQL editor.\n'
+              '2) Your user id exists in public.admin_roles.\n'
+              '3) public.is_admin(uuid) returns true for your user id.\n\n'
+              'Error details:\n${error ?? 'No error details'}',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
             ),
           ],
         );
@@ -110,186 +156,134 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final selectedLanguageCode =
-        (currentLocale ?? Localizations.localeOf(context)).languageCode;
-    final selectedLanguageLabel =
-        selectedLanguageCode == 'ja' ? l10n.t('japanese') : l10n.t('english');
-
-    final items = [
-      _SettingsGroup(
-        title: l10n.t('display'),
-        tiles: [
-          _SettingsTileData(
-            icon: Icons.palette_outlined,
-            title: l10n.theme,
-            subtitle: l10n.t('lightDarkControls'),
-          ),
-          _SettingsTileData(
-            icon: Icons.language_outlined,
-            title: l10n.language,
-            subtitle: selectedLanguageLabel,
-            onTap: () => _showLanguagePicker(context),
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: l10n.t('notifications'),
-        tiles: [
-          _SettingsTileData(
-            icon: Icons.notifications_outlined,
-            title: l10n.t('pushNotifications'),
-            subtitle: l10n.t('manageAlerts'),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const NotificationSettingsScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: l10n.t('privacy'),
-        tiles: [
-          _SettingsTileData(
-            icon: Icons.lock_outline,
-            title: l10n.t('privacyControls'),
-            subtitle: l10n.t('profileVisibilityPermissions'),
-          ),
-          _SettingsTileData(
-            icon: Icons.block_outlined,
-            title: l10n.t('blockedUsers'),
-            subtitle: l10n.t('manageBlockedAccounts'),
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: l10n.t('account'),
-        tiles: [
-          _SettingsTileData(
-            icon: Icons.person_outline,
-            title: l10n.editProfile,
-            subtitle: l10n.t('profileAccountDetails'),
-          ),
-          _SettingsTileData(
-            icon: Icons.people_outline,
-            title: l10n.contacts,
-            subtitle: l10n.t('manageContactsRequests'),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ContactsScreen(),
-                ),
-              );
-            },
-          ),
-          _SettingsTileData(
-            icon: Icons.mail_outline,
-            title: l10n.t('email'),
-            subtitle: l10n.t('viewSignedInEmail'),
-          ),
-        ],
-      ),
-    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.settings),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                children: [
-                  for (final group in items) ...[
-                    _SectionHeader(title: group.title),
-                    ...group.tiles.map((tile) => _SettingsTile(data: tile)),
-                    const SizedBox(height: 20),
-                  ],
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _showLogoutConfirm(context),
-                  icon: const Icon(Icons.logout),
-                  label: Text(l10n.t('logout')),
+      appBar: AppBar(title: Text(l10n.t('settings'))),
+      body: ListView(
+        children: [
+          _sectionTitle(l10n.t('display')),
+          ListTile(
+            leading: const Icon(Icons.light_mode_outlined),
+            title: Text(l10n.t('theme')),
+            subtitle: Text(l10n.t('lightDarkControls')),
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('lightMode')),
+            value: ThemeMode.light,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('darkMode')),
+            value: ThemeMode.dark,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          RadioListTile<ThemeMode>(
+            title: Text(l10n.t('system')),
+            value: ThemeMode.system,
+            groupValue: _selectedThemeMode,
+            onChanged: (value) {
+              if (value != null) {
+                _updateThemeMode(value);
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.language_outlined),
+            title: Text(l10n.t('language')),
+            trailing: DropdownButton<String?>(
+              value: _selectedLanguageCode,
+              onChanged: _updateLanguageCode,
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.t('system')),
                 ),
-              ),
+                DropdownMenuItem<String?>(
+                  value: 'en',
+                  child: Text(l10n.t('english')),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'ja',
+                  child: Text(l10n.t('japanese')),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+          ),
 
-class _SettingsGroup {
-  const _SettingsGroup({
-    required this.title,
-    required this.tiles,
-  });
+          _sectionTitle(l10n.t('notifications')),
+          _tile(
+            context: context,
+            icon: Icons.notifications,
+            title: l10n.t('notifications'),
+            onTap: () => _navigate(context, const NotificationsScreen()),
+          ),
+          _tile(
+            context: context,
+            icon: Icons.notifications_outlined,
+            title: l10n.t('manageAlerts'),
+            onTap: () => _navigate(context, const NotificationSettingsScreen()),
+          ),
+          _sectionTitle(l10n.t('privacy')),
+          _tile(
+            context: context,
+            icon: Icons.privacy_tip_outlined,
+            title: l10n.t('privacyControls'),
+            onTap: () => _navigate(context, const PrivacySettingsScreen()),
+          ),
 
-  final String title;
-  final List<_SettingsTileData> tiles;
-}
+          _sectionTitle(l10n.t('account')),
+          _tile(
+            context: context,
+            icon: Icons.manage_accounts_outlined,
+            title: l10n.t('viewSignedInEmail'),
+            onTap: () => _navigate(context, const AccountSettingsScreen()),
+          ),
+          FutureBuilder<bool>(
+            future: _adminRepository.isCurrentUserAdmin(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return ListTile(
+                  leading: const Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: Colors.amber,
+                  ),
+                  title: const Text('Admin Area (setup issue)'),
+                  subtitle: const Text('Tap to view admin setup diagnostics.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showAdminSetupHelp(snapshot.error),
+                );
+              }
 
-class _SettingsTileData {
-  const _SettingsTileData({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
+              if (snapshot.data != true) {
+                return const SizedBox.shrink();
+              }
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-  });
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.data,
-  });
-
-  final _SettingsTileData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: Icon(data.icon),
-        title: Text(data.title),
-        subtitle: Text(data.subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: data.onTap,
+              return _tile(
+                context: context,
+                icon: Icons.admin_panel_settings_outlined,
+                title: 'Admin Area',
+                onTap: () => _navigate(context, const AdminScreen()),
+              );
+            },
+          ),
+          _tile(
+            context: context,
+            icon: Icons.logout,
+            title: l10n.t('logout'),
+            onTap: () => _confirmAndLogout(context),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

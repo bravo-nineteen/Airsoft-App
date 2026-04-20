@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -59,39 +60,42 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
         return;
       }
 
-      final CroppedFile? cropped = await ImageCropper().cropImage(
-        sourcePath: picked.path,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 88,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: AppLocalizations.of(context).t('cropAvatar'),
-            lockAspectRatio: true,
-            hideBottomControls: false,
-            initAspectRatio: CropAspectRatioPreset.square,
-            cropStyle: CropStyle.circle,
-          ),
-          IOSUiSettings(
-            title: AppLocalizations.of(context).t('cropAvatar'),
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
-            cropStyle: CropStyle.circle,
-          ),
-        ],
-      );
+      String uploadPath = picked.path;
+      final bool shouldCrop = !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.iOS;
 
-      if (cropped == null) {
-        if (!mounted) return;
-        setState(() {
-          _isBusy = false;
-        });
-        return;
+      if (shouldCrop) {
+        try {
+          final CroppedFile? cropped = await ImageCropper().cropImage(
+            sourcePath: picked.path,
+            compressFormat: ImageCompressFormat.jpg,
+            compressQuality: 88,
+            aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+            uiSettings: [
+              IOSUiSettings(
+                title: AppLocalizations.of(context).t('cropAvatar'),
+                aspectRatioLockEnabled: true,
+                resetAspectRatioEnabled: false,
+                cropStyle: CropStyle.circle,
+              ),
+            ],
+          );
+
+          if (cropped == null) {
+            if (!mounted) return;
+            setState(() {
+              _isBusy = false;
+            });
+            return;
+          }
+
+          uploadPath = cropped.path;
+        } catch (_) {
+          // If cropper fails, continue with the original image.
+        }
       }
 
-      final uploadedUrl = await _storageService.uploadAvatar(
-        File(cropped.path),
-      );
+      final uploadedUrl = await _storageService.uploadAvatar(File(uploadPath));
 
       await _profileRepository.updateAvatarUrl(uploadedUrl);
 

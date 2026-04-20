@@ -4,14 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
-import 'community_user_profile_screen.dart';
 import 'community_repository.dart';
+import 'community_user_profile_screen.dart';
 
 class CommunityPostDetailsScreen extends StatefulWidget {
-  const CommunityPostDetailsScreen({
-    super.key,
-    required this.postId,
-  });
+  const CommunityPostDetailsScreen({super.key, required this.postId});
 
   final String postId;
 
@@ -24,23 +21,199 @@ class _CommunityPostDetailsScreenState
     extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _commentController = TextEditingController();
+  RealtimeChannel? _postChannel;
+  RealtimeChannel? _commentsChannel;
 
   CommunityPostModel? _post;
   List<CommunityCommentModel> _comments = <CommunityCommentModel>[];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   bool _isSendingComment = false;
   bool _isTogglingPostLike = false;
+  bool _showAllComments = false;
   final Set<String> _togglingCommentLikes = <String>{};
+  String? _replyToCommentId;
+  String? _replyToCommentAuthor;
+
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  bool _isPostOwner(CommunityPostModel post) {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      return false;
+    }
+    return post.authorId == currentUserId;
+  }
+
+  bool _isCommentOwner(CommunityCommentModel comment) {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      return false;
+    }
+    return comment.authorId == currentUserId;
+  }
+
+  List<CommunityCommentModel> get _topLevelComments {
+    return _comments
+        .where(
+          (CommunityCommentModel comment) =>
+              comment.parentCommentId == null ||
+              comment.parentCommentId!.trim().isEmpty,
+        )
+        .toList();
+  }
+
+  List<CommunityCommentModel> get _latestComments {
+    final List<CommunityCommentModel> sorted = List<CommunityCommentModel>.from(
+      _comments,
+    )..sort(
+        (CommunityCommentModel a, CommunityCommentModel b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return sorted.take(10).toList();
+  }
+
+  List<CommunityCommentModel> _childRepliesFor(String parentCommentId) {
+    return _comments
+        .where((CommunityCommentModel comment) {
+          final String? parentId = comment.parentCommentId?.trim();
+          return parentId != null && parentId == parentCommentId;
+        })
+        .toList();
+  }
 
   @override
   void initState() {
     super.initState();
+    _subscribeRealtime();
     _load(incrementView: true);
   }
 
-  Future<void> _load({bool incrementView = false}) async {
+  void _subscribeRealtime() {
+    _postChannel = Supabase.instance.client.channel(
+      'community-post-${widget.postId}',
+    );
+    _commentsChannel = Supabase.instance.client.channel(
+      'community-comments-${widget.postId}',
+    );
+
+    _postChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_posts',
+          callback: (payload) {
+            final String id = payload.newRecord['id']?.toString() ?? '';
+            if (id == widget.postId) {
+              _applyRealtimePost(payload.newRecord);
+            }
+          },
+        )
+        .subscribe();
+
+    _commentsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'community_comments',
+          callback: (payload) {
+            _applyRealtimeComment(payload.newRecord, isInsert: true);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'community_comments',
+          callback: (payload) {
+            _applyRealtimeComment(payload.newRecord, isInsert: false);
+          },
+        )
+        .subscribe();
+  }
+
+  void _applyRealtimePost(Map<String, dynamic> row) {
+    if (!mounted || _post == null) {
+      return;
+    }
+
+    final CommunityPostModel parsed = CommunityPostModel.fromJson(row);
     setState(() {
-      _isLoading = true;
+      _post = _post!.copyWith(
+        title: parsed.title,
+        bodyText: parsed.bodyText,
+        plainText: parsed.plainText,
+        imageUrl: parsed.imageUrl,
+        imageUrls: parsed.imageUrls,
+        category: parsed.category,
+        likeCount: parsed.likeCount,
+        commentCount: parsed.commentCount,
+        viewCount: parsed.viewCount,
+        updatedAt: parsed.updatedAt,
+      );
+    });
+  }
+
+  void _applyRealtimeComment(Map<String, dynamic> row, {required bool isInsert}) {
+    if (!mounted) {
+      return;
+    }
+
+    final String postId = row['post_id']?.toString() ?? '';
+    if (postId != widget.postId) {
+      return;
+    }
+
+    final CommunityCommentModel incoming = CommunityCommentModel.fromJson(row);
+    final bool isDeleted = row['is_deleted'] == true;
+
+    setState(() {
+      final int existingIndex = _comments.indexWhere(
+        (CommunityCommentModel c) => c.id == incoming.id,
+      );
+
+      if (isDeleted) {
+        _comments = _comments
+            .where((CommunityCommentModel c) => c.id != incoming.id)
+            .toList();
+        return;
+      }
+
+      if (existingIndex != -1) {
+        _comments[existingIndex] = _comments[existingIndex].copyWith(
+          message: incoming.message,
+          likeCount: incoming.likeCount,
+          likedByMe: _comments[existingIndex].likedByMe,
+          parentCommentId: incoming.parentCommentId,
+        );
+        return;
+      }
+
+      if (!isInsert) {
+        return;
+      }
+
+      final int tempIndex = _comments.indexWhere(
+        (CommunityCommentModel c) =>
+            c.id.startsWith('temp-') &&
+            c.parentCommentId == incoming.parentCommentId &&
+            c.message.trim() == incoming.message.trim(),
+      );
+
+      if (tempIndex != -1) {
+        _comments[tempIndex] = incoming;
+      } else {
+        _comments = <CommunityCommentModel>[..._comments, incoming];
+      }
+    });
+  }
+
+  Future<void> _load({bool incrementView = false, bool preserveContent = true}) async {
+    setState(() {
+      if (_post == null || !preserveContent) {
+        _isLoading = true;
+      } else {
+        _isRefreshing = true;
+      }
     });
 
     try {
@@ -59,6 +232,7 @@ class _CommunityPostDetailsScreenState
         _post = post;
         _comments = comments;
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -67,11 +241,12 @@ class _CommunityPostDetailsScreenState
 
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load post: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load post: $error')));
     }
   }
 
@@ -89,22 +264,60 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final String tempId = 'temp-${DateTime.now().microsecondsSinceEpoch}';
+    final CommunityCommentModel optimistic = CommunityCommentModel(
+      id: tempId,
+      postId: _post!.id,
+      authorId: user.id,
+      authorName: 'You',
+      authorAvatarUrl: null,
+      message: message,
+      likeCount: 0,
+      likedByMe: false,
+      createdAt: DateTime.now(),
+      parentCommentId: _replyToCommentId,
+    );
+
     setState(() {
       _isSendingComment = true;
+      _comments = <CommunityCommentModel>[..._comments, optimistic];
+      _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
+      _commentController.clear();
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
     });
 
     try {
       await _repository.addComment(
         postId: _post!.id,
         message: message,
+        parentCommentId: optimistic.parentCommentId,
       );
 
-      _commentController.clear();
-      await _load();
+      if (!mounted) {
+        return;
+      }
+
+      // Background reconcile to pick up canonical author/ids without blocking UI.
+      _load(preserveContent: true);
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post comment: $error')),
-      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _comments = _comments
+            .where((CommunityCommentModel c) => c.id != tempId)
+            .toList();
+        final int currentCount = _post?.commentCount ?? 1;
+        _post = _post?.copyWith(
+          commentCount: currentCount > 0 ? currentCount - 1 : 0,
+        );
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to post comment: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -120,17 +333,30 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final bool nextLiked = !post.isLikedByMe;
+    final int nextCount = post.likeCount + (nextLiked ? 1 : -1);
+
     setState(() {
       _isTogglingPostLike = true;
+      _post = post.copyWith(
+        isLikedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
     });
 
     try {
       await _repository.toggleLikePost(post.id);
-      await _load();
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update like: $error')),
-      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _post = post;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update like: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -145,14 +371,34 @@ class _CommunityPostDetailsScreenState
       return;
     }
 
+    final int index = _comments.indexWhere(
+      (CommunityCommentModel comment) => comment.id == commentId,
+    );
+    if (index == -1) {
+      return;
+    }
+    final CommunityCommentModel original = _comments[index];
+    final bool nextLiked = !original.likedByMe;
+    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+
     setState(() {
       _togglingCommentLikes.add(commentId);
+      _comments[index] = original.copyWith(
+        likedByMe: nextLiked,
+        likeCount: nextCount < 0 ? 0 : nextCount,
+      );
     });
 
     try {
       await _repository.toggleLikeComment(commentId);
-      await _load();
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _comments[index] = original;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update comment like: $error')),
       );
@@ -165,12 +411,236 @@ class _CommunityPostDetailsScreenState
     }
   }
 
+  Future<void> _editPost(CommunityPostModel post) async {
+    final titleController = TextEditingController(text: post.title);
+    final bodyController = TextEditingController(text: post.bodyText);
+
+    try {
+      final bool? shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Edit post'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: bodyController,
+                    minLines: 5,
+                    maxLines: 10,
+                    decoration: const InputDecoration(labelText: 'Content'),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+
+      await _repository.updatePost(
+        postId: post.id,
+        title: titleController.text,
+        bodyText: bodyController.text,
+        language: post.language,
+        category: post.category,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update post: $error')));
+    } finally {
+      titleController.dispose();
+      bodyController.dispose();
+    }
+  }
+
+  Future<void> _deletePost(CommunityPostModel post) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete post?'),
+          content: const Text('This will remove your post from the feed.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.softDeletePost(post.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete post: $error')));
+    }
+  }
+
+  Future<void> _editComment(CommunityCommentModel comment) async {
+    final controller = TextEditingController(text: comment.message);
+
+    try {
+      final bool? shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Edit comment'),
+            content: TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Comment'),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+
+      await _repository.updateComment(
+        commentId: comment.id,
+        message: controller.text,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update comment: $error')),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _deleteComment(CommunityCommentModel comment) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete comment?'),
+          content: const Text('This will remove your comment.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.softDeleteComment(
+        commentId: comment.id,
+        postId: comment.postId,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete comment: $error')),
+      );
+    }
+  }
+
+  Future<void> _copyToClipboard(String value, String successMessage) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(successMessage)));
+  }
+
+  void _setReplyTarget(CommunityCommentModel comment) {
+    setState(() {
+      _replyToCommentId = comment.id;
+      _replyToCommentAuthor = comment.authorName;
+    });
+  }
+
+  void _clearReplyTarget() {
+    setState(() {
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
+    });
+  }
+
   void _openProfile(String? userId, String fallbackName) {
     final _ = fallbackName;
     if (userId == null || userId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile not available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile not available')));
       return;
     }
 
@@ -183,8 +653,171 @@ class _CommunityPostDetailsScreenState
     );
   }
 
+  void _openImageLightbox(String imageUrl) {
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: <Widget>[
+              InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: ExtendedImage.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    cache: true,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton.filled(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return DateFormat('dd MMM yyyy • HH:mm').format(dateTime);
+  }
+
+  Widget _buildAvatar({
+    required String name,
+    String? avatarUrl,
+    double radius = 22,
+  }) {
+    if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(avatarUrl),
+      );
+    }
+
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    return CircleAvatar(radius: radius, child: Text(initial));
+  }
+
+  Widget _buildCommentCard(
+    BuildContext context,
+    ThemeData theme,
+    CommunityCommentModel comment, {
+    bool isReply = false,
+  }) {
+    final bool isBusy = _togglingCommentLikes.contains(comment.id);
+    final bool isOwner = _isCommentOwner(comment);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InkWell(
+            onTap: () => _openProfile(comment.authorId, comment.authorName),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Row(
+                children: <Widget>[
+                  _buildAvatar(
+                    name: comment.authorName,
+                    avatarUrl: comment.authorAvatarUrl,
+                    radius: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          comment.authorName,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          _formatTime(comment.createdAt),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isOwner)
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _editComment(comment);
+                        } else if (value == 'delete') {
+                          _deleteComment(comment);
+                        }
+                      },
+                      itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  IconButton(
+                    tooltip: 'Copy comment',
+                    onPressed: () =>
+                        _copyToClipboard(comment.message, 'Comment copied'),
+                    icon: const Icon(Icons.copy_outlined),
+                  ),
+                  IconButton(
+                    onPressed: isBusy ? null : () => _toggleCommentLike(comment.id),
+                    icon: Icon(
+                      comment.likedByMe ? Icons.favorite : Icons.favorite_border,
+                    ),
+                  ),
+                  Text('${comment.likeCount}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SelectableText(comment.message, style: theme.textTheme.bodyMedium),
+          if (!isReply) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _setReplyTarget(comment),
+                icon: const Icon(Icons.reply_outlined),
+                label: const Text('Reply'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    if (_postChannel != null) {
+      Supabase.instance.client.removeChannel(_postChannel!);
+    }
+    if (_commentsChannel != null) {
+      Supabase.instance.client.removeChannel(_commentsChannel!);
+    }
     _commentController.dispose();
     super.dispose();
   }
@@ -192,6 +825,7 @@ class _CommunityPostDetailsScreenState
   @override
   Widget build(BuildContext context) {
     final post = _post;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(

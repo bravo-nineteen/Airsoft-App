@@ -6,6 +6,7 @@ class ProfileModel {
     this.area,
     this.teamName,
     this.loadout,
+    this.loadoutCards = const <ProfileLoadoutCard>[],
     this.instagram,
     this.facebook,
     this.youtube,
@@ -18,6 +19,7 @@ class ProfileModel {
   final String? area;
   final String? teamName;
   final String? loadout;
+  final List<ProfileLoadoutCard> loadoutCards;
   final String? instagram;
   final String? facebook;
   final String? youtube;
@@ -31,6 +33,7 @@ class ProfileModel {
       area: _readNullableString(json['area']),
       teamName: _readNullableString(json['team_name']),
       loadout: _readNullableString(json['loadout']),
+      loadoutCards: ProfileLoadoutCard.parseList(json['loadout_cards']),
       instagram: _readNullableString(json['instagram']),
       facebook: _readNullableString(json['facebook']),
       youtube: _readNullableString(json['youtube']),
@@ -46,6 +49,7 @@ class ProfileModel {
       'area': area,
       'team_name': teamName,
       'loadout': loadout,
+      'loadout_cards': loadoutCards.map((card) => card.toJson()).toList(),
       'instagram': instagram,
       'facebook': facebook,
       'youtube': youtube,
@@ -60,6 +64,7 @@ class ProfileModel {
     String? area,
     String? teamName,
     String? loadout,
+    List<ProfileLoadoutCard>? loadoutCards,
     String? instagram,
     String? facebook,
     String? youtube,
@@ -72,6 +77,7 @@ class ProfileModel {
       area: area ?? this.area,
       teamName: teamName ?? this.teamName,
       loadout: loadout ?? this.loadout,
+      loadoutCards: loadoutCards ?? this.loadoutCards,
       instagram: instagram ?? this.instagram,
       facebook: facebook ?? this.facebook,
       youtube: youtube ?? this.youtube,
@@ -87,6 +93,16 @@ class ProfileModel {
       (facebook?.trim().isNotEmpty ?? false) ||
       (youtube?.trim().isNotEmpty ?? false);
 
+  List<ProfileLoadoutCard> get normalizedLoadoutCards {
+    final List<ProfileLoadoutCard> items = List<ProfileLoadoutCard>.from(
+      loadoutCards,
+    );
+    while (items.length < 3) {
+      items.add(const ProfileLoadoutCard());
+    }
+    return items.take(3).toList();
+  }
+
   static String _readString(dynamic value, {String fallback = ''}) {
     if (value == null) return fallback;
     final text = value.toString().trim();
@@ -98,4 +114,75 @@ class ProfileModel {
     final text = value.toString().trim();
     return text.isEmpty ? null : text;
   }
+}
+
+class ProfileLoadoutCard {
+  const ProfileLoadoutCard({
+    this.title,
+    this.description,
+    this.imageUrl,
+  });
+
+  final String? title;
+  final String? description;
+  final String? imageUrl;
+
+  bool get isEmpty {
+    return (title ?? '').trim().isEmpty &&
+        (description ?? '').trim().isEmpty &&
+        (imageUrl ?? '').trim().isEmpty;
+  }
+
+  ProfileLoadoutCard copyWith({
+    String? title,
+    String? description,
+    String? imageUrl,
+  }) {
+    return ProfileLoadoutCard(
+      title: title ?? this.title,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'title': _nullIfEmpty(title),
+      'description': _nullIfEmpty(description),
+      'image_url': _nullIfEmpty(imageUrl),
+    };
+  }
+
+  static List<ProfileLoadoutCard> parseList(dynamic value) {
+    if (value is! List) {
+      return const <ProfileLoadoutCard>[];
+    }
+
+    return value
+        .whereType<Map>()
+        .map((Map item) {
+          return ProfileLoadoutCard(
+            title: _readNullableItem(item['title']),
+            description: _readNullableItem(item['description']),
+            imageUrl: _readNullableItem(item['image_url']),
+          );
+        })
+        .toList();
+  }
+
+  static String? _readNullableItem(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    final String text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
+String? _nullIfEmpty(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final String trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }
