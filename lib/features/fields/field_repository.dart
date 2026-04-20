@@ -18,7 +18,27 @@ class FieldRepository {
         .select()
         .order('name', ascending: true);
 
-    var fields = response.map<FieldModel>((e) => FieldModel.fromJson(e)).toList();
+    final List<FieldModel> fields = response
+        .map<FieldModel>((e) => FieldModel.fromJson(e))
+        .toList();
+
+    return applyFilters(
+      fields,
+      search: search,
+      location: location,
+      fieldType: fieldType,
+      minRating: minRating,
+    );
+  }
+
+  List<FieldModel> applyFilters(
+    List<FieldModel> source, {
+    String search = '',
+    String location = 'All',
+    String fieldType = 'All',
+    double minRating = 0,
+  }) {
+    var fields = List<FieldModel>.from(source);
 
     final trimmedSearch = search.trim().toLowerCase();
     if (trimmedSearch.isNotEmpty) {

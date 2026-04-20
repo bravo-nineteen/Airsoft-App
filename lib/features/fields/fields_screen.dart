@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/content/app_content_preloader.dart';
 
 import 'field_details_screen.dart';
 import 'field_map_screen.dart';
@@ -15,6 +18,7 @@ class FieldsScreen extends StatefulWidget {
 }
 
 class _FieldsScreenState extends State<FieldsScreen> {
+  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final FieldRepository _repository = FieldRepository();
   final TextEditingController _searchController = TextEditingController();
 
@@ -46,17 +50,23 @@ class _FieldsScreenState extends State<FieldsScreen> {
   @override
   void initState() {
     super.initState();
+    _contentPreloader.fieldsRevision.addListener(_handleSharedFieldsUpdated);
     _fieldsFuture = _loadFields();
   }
 
   @override
   void dispose() {
+    _contentPreloader.fieldsRevision.removeListener(_handleSharedFieldsUpdated);
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<List<FieldModel>> _loadFields() {
-    return _repository.getFields(
+  Future<List<FieldModel>> _loadFields({bool preferCache = true}) async {
+    final List<FieldModel> source = await _contentPreloader.loadFields(
+      preferCache: preferCache,
+    );
+    return _repository.applyFilters(
+      source,
       search: _searchController.text,
       location: _selectedLocation,
       fieldType: _selectedFieldType,
@@ -64,18 +74,34 @@ class _FieldsScreenState extends State<FieldsScreen> {
     );
   }
 
+  void _handleSharedFieldsUpdated() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _fieldsFuture = Future<List<FieldModel>>.value(
+        _repository.applyFilters(
+          _contentPreloader.fields,
+          search: _searchController.text,
+          location: _selectedLocation,
+          fieldType: _selectedFieldType,
+          minRating: _minRating,
+        ),
+      );
+    });
+  }
+
   void _refreshFields() {
     setState(() {
-      _fieldsFuture = _loadFields();
+      _fieldsFuture = _loadFields(preferCache: false);
     });
   }
 
   void _openField(FieldModel field) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => FieldDetailsScreen(field: field),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => FieldDetailsScreen(field: field)));
   }
 
   @override
@@ -108,10 +134,12 @@ class _FieldsScreenState extends State<FieldsScreen> {
                       initialValue: _selectedLocation,
                       decoration: InputDecoration(labelText: l10n.location),
                       items: _locations
-                          .map((value) => DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              ))
+                          .map(
+                            (value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) {
                         setState(() {
@@ -125,12 +153,16 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedFieldType,
-                      decoration: InputDecoration(labelText: l10n.t('fieldType')),
+                      decoration: InputDecoration(
+                        labelText: l10n.t('fieldType'),
+                      ),
                       items: _fieldTypes
-                          .map((value) => DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              ))
+                          .map(
+                            (value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) {
                         setState(() {
@@ -148,7 +180,9 @@ class _FieldsScreenState extends State<FieldsScreen> {
                   Expanded(
                     child: DropdownButtonFormField<double>(
                       initialValue: _minRating,
-                      decoration: InputDecoration(labelText: l10n.t('minRating')),
+                      decoration: InputDecoration(
+                        labelText: l10n.t('minRating'),
+                      ),
                       items: [
                         DropdownMenuItem(value: 0, child: Text(l10n.t('any'))),
                         const DropdownMenuItem(value: 3, child: Text('3.0+')),
@@ -247,8 +281,8 @@ class _FieldsScreenState extends State<FieldsScreen> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, _, _) =>
                                         _FieldListThumbnailPlaceholder(
-                                      name: field.name,
-                                    ),
+                                          name: field.name,
+                                        ),
                                   )
                                 : _FieldListThumbnailPlaceholder(
                                     name: field.name,
@@ -289,9 +323,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
 }
 
 class _FieldListThumbnailPlaceholder extends StatelessWidget {
-  const _FieldListThumbnailPlaceholder({
-    required this.name,
-  });
+  const _FieldListThumbnailPlaceholder({required this.name});
 
   final String name;
 

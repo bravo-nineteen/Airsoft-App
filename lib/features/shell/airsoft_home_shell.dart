@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/content/app_content_preloader.dart';
 import '../../core/notifications/app_badge_service.dart';
 import '../community/community_list_screen.dart';
 import '../events/events_screen.dart';
@@ -34,8 +35,10 @@ class AirsoftHomeShell extends StatefulWidget {
 
 class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   int _index = 0;
-  final NotificationRepository _notificationRepository = NotificationRepository();
-  final DirectMessageRepository _directMessageRepository = DirectMessageRepository();
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
+  final DirectMessageRepository _directMessageRepository =
+      DirectMessageRepository();
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _notificationsChannel;
   RealtimeChannel? _messagesChannel;
@@ -48,31 +51,34 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   Timer? _unreadRefreshDebounce;
 
   List<Widget> get _screens => <Widget>[
-        HomeScreen(
-          onOpenEventsTab: () => _selectTab(2),
-          onOpenBoardsTab: () => _selectTab(3),
-        ),
-        const FieldsScreen(),
-        const EventsScreen(),
-        const CommunityListScreen(),
-        const DirectMessageThreadsScreen(),
-        ProfileScreen(
-          currentLocale: widget.currentLocale,
-          onLocaleChanged: widget.onLocaleChanged,
-          currentThemeMode: widget.currentThemeMode,
-          onThemeModeChanged: widget.onThemeModeChanged,
-        ),
-      ];
+    HomeScreen(
+      onOpenEventsTab: () => _selectTab(2),
+      onOpenBoardsTab: () => _selectTab(3),
+    ),
+    const FieldsScreen(),
+    const EventsScreen(),
+    const CommunityListScreen(),
+    const DirectMessageThreadsScreen(),
+    ProfileScreen(
+      currentLocale: widget.currentLocale,
+      onLocaleChanged: widget.onLocaleChanged,
+      currentThemeMode: widget.currentThemeMode,
+      onThemeModeChanged: widget.onThemeModeChanged,
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
+    unawaited(AppContentPreloader.instance.ensureStarted());
     _restartRealtimeBadgeListeners(
       nextUserId: Supabase.instance.client.auth.currentUser?.id,
     );
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((authState) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      authState,
+    ) {
       final nextUserId = authState.session?.user.id;
+      unawaited(AppContentPreloader.instance.ensureStarted());
       if (nextUserId == _listenerUserId) {
         return;
       }
@@ -130,8 +136,10 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           schema: 'public',
           table: 'direct_messages',
           callback: (payload) {
-            final newRecipientId = payload.newRecord['recipient_id']?.toString();
-            final oldRecipientId = payload.oldRecord['recipient_id']?.toString();
+            final newRecipientId = payload.newRecord['recipient_id']
+                ?.toString();
+            final oldRecipientId = payload.oldRecord['recipient_id']
+                ?.toString();
             if (newRecipientId == userId || oldRecipientId == userId) {
               _requestUnreadRefresh();
             }
@@ -221,17 +229,14 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   }
 
   Future<void> _openNotifications() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
 
     await _loadUnreadCounts();
   }
 
-  Widget _badgeIcon({
-    required IconData icon,
-    required int count,
-  }) {
+  Widget _badgeIcon({required IconData icon, required int count}) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -277,10 +282,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _index,
@@ -294,16 +296,16 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Fields'),
-          const BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.event),
+            label: 'Events',
+          ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.campaign),
             label: 'Community',
           ),
           BottomNavigationBarItem(
-            icon: _badgeIcon(
-              icon: Icons.mail_outline,
-              count: _unreadMessages,
-            ),
+            icon: _badgeIcon(icon: Icons.mail_outline, count: _unreadMessages),
             label: 'Messages',
           ),
           const BottomNavigationBarItem(

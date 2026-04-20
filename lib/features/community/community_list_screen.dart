@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/content/app_content_preloader.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_categories.dart';
@@ -21,6 +22,7 @@ class CommunityListScreen extends StatefulWidget {
 }
 
 class _CommunityListScreenState extends State<CommunityListScreen> {
+  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -49,9 +51,33 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _primeFromSharedFeed();
+    _contentPreloader.communityRevision.addListener(_handleSharedFeedUpdated);
     _restoreCachedPosts();
     _subscribeRealtime();
     _startBackgroundSync();
+  }
+
+  void _primeFromSharedFeed() {
+    final List<CommunityPostModel> sharedPosts =
+        _contentPreloader.communityPosts;
+    if (sharedPosts.isEmpty) {
+      return;
+    }
+
+    _posts = sharedPosts
+        .map(
+          (CommunityPostModel post) => post.copyWith(
+            category: CommunityPostCategories.normalizeCommunityCategory(
+              post.category,
+            ),
+          ),
+        )
+        .toList();
+    _offset = _posts.length;
+    _isInitialLoading = false;
+    _isLoading = false;
+    _hasMore = sharedPosts.length >= _pageSize;
   }
 
   void _startBackgroundSync() {
@@ -95,6 +121,43 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
           },
         )
         .subscribe();
+  }
+
+  bool get _canUseSharedFeed {
+    return _selectedCategory == CommunityPostCategories.all &&
+        _selectedLanguagePreference == 'all' &&
+        _searchController.text.trim().isEmpty;
+  }
+
+  void _handleSharedFeedUpdated() {
+    if (!mounted || !_canUseSharedFeed) {
+      return;
+    }
+
+    final List<CommunityPostModel> sharedPosts =
+        _contentPreloader.communityPosts;
+    if (sharedPosts.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _posts = sharedPosts
+          .map(
+            (CommunityPostModel post) => post.copyWith(
+              category: CommunityPostCategories.normalizeCommunityCategory(
+                post.category,
+              ),
+            ),
+          )
+          .toList();
+      _offset = _posts.length;
+      _isInitialLoading = false;
+      _isLoading = false;
+      _isRefreshing = false;
+      _hasMore = sharedPosts.length >= _pageSize;
+      _pendingPosts.clear();
+    });
+    _cachePosts();
   }
 
   void _handleRealtimePost(Map<String, dynamic> row) {
@@ -374,6 +437,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   Future<void> _restoreCachedPosts() async {
     try {
+      if (_posts.isNotEmpty) {
+        return;
+      }
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String? raw = prefs.getString(_cacheKey);
       if (raw == null || raw.isEmpty) {
@@ -387,9 +453,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       final List<CommunityPostModel> cached = decoded
           .whereType<Map>()
           .map(
-            (Map item) => CommunityPostModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (Map item) =>
+                CommunityPostModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
       if (!mounted || cached.isEmpty) {
@@ -469,7 +534,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       barrierColor: Colors.black.withValues(alpha: 0.92),
       builder: (BuildContext dialogContext) {
         final int startIndex = initialIndex.clamp(0, imageUrls.length - 1);
-        final PageController controller = PageController(initialPage: startIndex);
+        final PageController controller = PageController(
+          initialPage: startIndex,
+        );
 
         return Dialog.fullscreen(
           backgroundColor: Colors.transparent,
@@ -526,7 +593,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       return;
     }
 
-    final int index = _posts.indexWhere((CommunityPostModel p) => p.id == post.id);
+    final int index = _posts.indexWhere(
+      (CommunityPostModel p) => p.id == post.id,
+    );
     if (index == -1) {
       return;
     }
@@ -571,22 +640,25 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     final _ = fallbackName;
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).t('profileNotAvailable'))),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).t('profileNotAvailable')),
+        ),
       );
       return;
     }
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CommunityUserProfileScreen(
-          userId: userId,
-        ),
+        builder: (_) => CommunityUserProfileScreen(userId: userId),
       ),
     );
   }
 
   @override
   void dispose() {
+    _contentPreloader.communityRevision.removeListener(
+      _handleSharedFeedUpdated,
+    );
     if (_postsChannel != null) {
       Supabase.instance.client.removeChannel(_postsChannel!);
     }
@@ -652,7 +724,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
               expandedHeight: 162,
               title: Text(
                 l10n.t('boards'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: SafeArea(
@@ -697,8 +772,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                               }
 
                               final category = _categories[index - 1];
-                              final isSelected =
-                                  category == _selectedCategory;
+                              final isSelected = category == _selectedCategory;
 
                               return ChoiceChip(
                                 label: Text(category),
@@ -769,14 +843,14 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                           languageLabels[(post.language ?? '').toLowerCase()] ??
                           l10n.t('allLanguages'),
                       onTap: () => _openPostDetails(post),
-                        onImageTap: () {
+                      onImageTap: () {
                         final List<String> images = post.imageUrls.isNotEmpty
-                          ? post.imageUrls
-                          : (post.primaryImageUrl == null
-                            ? <String>[]
-                            : <String>[post.primaryImageUrl!]);
+                            ? post.imageUrls
+                            : (post.primaryImageUrl == null
+                                  ? <String>[]
+                                  : <String>[post.primaryImageUrl!]);
                         _openImageLightbox(images);
-                        },
+                      },
                       onLikeTap: () => _toggleLikeFromFeed(post),
                       isLiking: _busyLikePostIds.contains(post.id),
                       onAuthorTap: () =>
@@ -827,9 +901,7 @@ class _CompactPostCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: theme.dividerColor.withValues(alpha: 0.18),
-        ),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.18)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -848,38 +920,44 @@ class _CompactPostCard extends StatelessWidget {
                     onTap: hasImage ? onImageTap : null,
                     child: hasImage
                         ? ExtendedImage.network(
-                      resolvedImageUrl,
-                        fit: BoxFit.cover,
-                        cache: true,
-                        loadStateChanged: (state) {
-                          if (state.extendedImageLoadState ==
-                              LoadState.completed) {
-                            return ExtendedRawImage(
-                              image: state.extendedImageInfo?.image,
-                              fit: BoxFit.cover,
-                            );
-                          }
+                            resolvedImageUrl,
+                            fit: BoxFit.cover,
+                            cache: true,
+                            loadStateChanged: (state) {
+                              if (state.extendedImageLoadState ==
+                                  LoadState.completed) {
+                                return ExtendedRawImage(
+                                  image: state.extendedImageInfo?.image,
+                                  fit: BoxFit.cover,
+                                );
+                              }
 
-                          if (state.extendedImageLoadState ==
-                              LoadState.failed) {
-                            return Container(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              alignment: Alignment.center,
-                              child: const Icon(Icons.broken_image_outlined),
-                            );
-                          }
+                              if (state.extendedImageLoadState ==
+                                  LoadState.failed) {
+                                return Container(
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.broken_image_outlined,
+                                  ),
+                                );
+                              }
 
-                          return Container(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            alignment: Alignment.center,
-                            child: const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          );
-                        },
-                      )
+                              return Container(
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                alignment: Alignment.center,
+                                child: const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
                         : Container(
                             color: theme.colorScheme.surfaceContainerHighest,
                             alignment: Alignment.center,
@@ -906,18 +984,20 @@ class _CompactPostCard extends StatelessWidget {
                           children: <Widget>[
                             CircleAvatar(
                               radius: 12,
-                              backgroundImage: post.authorAvatarUrl != null &&
+                              backgroundImage:
+                                  post.authorAvatarUrl != null &&
                                       post.authorAvatarUrl!.trim().isNotEmpty
                                   ? NetworkImage(post.authorAvatarUrl!)
                                   : null,
-                              child: post.authorAvatarUrl == null ||
+                              child:
+                                  post.authorAvatarUrl == null ||
                                       post.authorAvatarUrl!.trim().isEmpty
                                   ? Text(
                                       post.authorName.isEmpty
                                           ? '?'
                                           : post.authorName
-                                              .substring(0, 1)
-                                              .toUpperCase(),
+                                                .substring(0, 1)
+                                                .toUpperCase(),
                                     )
                                   : null,
                             ),
@@ -933,10 +1013,7 @@ class _CompactPostCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Text(
-                              timeAgo,
-                              style: theme.textTheme.bodySmall,
-                            ),
+                            Text(timeAgo, style: theme.textTheme.bodySmall),
                           ],
                         ),
                       ),
@@ -949,17 +1026,23 @@ class _CompactPostCard extends StatelessWidget {
                         if (post.isPinned)
                           _MiniBadge(
                             text: l10n.t('pinned'),
-                            color: theme.colorScheme.primary.withValues(alpha: 0.14),
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.14,
+                            ),
                             textColor: theme.colorScheme.primary,
                           ),
                         _MiniBadge(
                           text: normalizedCategory,
-                          color: theme.colorScheme.secondary.withValues(alpha: 0.14),
+                          color: theme.colorScheme.secondary.withValues(
+                            alpha: 0.14,
+                          ),
                           textColor: theme.colorScheme.secondary,
                         ),
                         _MiniBadge(
                           text: languageLabel,
-                          color: theme.colorScheme.tertiary.withValues(alpha: 0.14),
+                          color: theme.colorScheme.tertiary.withValues(
+                            alpha: 0.14,
+                          ),
                           textColor: theme.colorScheme.tertiary,
                         ),
                       ],
@@ -1093,19 +1176,16 @@ class _MiniBadge extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
+          fontWeight: FontWeight.w700,
+          color: textColor,
+        ),
       ),
     );
   }
 }
 
 class _MetaPill extends StatelessWidget {
-  const _MetaPill({
-    required this.icon,
-    required this.label,
-  });
+  const _MetaPill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -1115,10 +1195,9 @@ class _MetaPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-          .withValues(alpha: 0.65),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1128,9 +1207,9 @@ class _MetaPill extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),

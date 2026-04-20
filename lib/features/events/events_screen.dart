@@ -1,9 +1,10 @@
-app launchimport 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/content/app_content_preloader.dart';
 import 'event_create_screen.dart';
 import 'event_details_screen.dart';
 import 'event_model.dart';
@@ -17,6 +18,7 @@ class EventsScreen extends StatefulWidget {
 }
 
 class _EventsScreenState extends State<EventsScreen> {
+  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final EventRepository _repository = EventRepository();
   final TextEditingController _searchController = TextEditingController();
   late Future<List<EventModel>> _future;
@@ -30,7 +32,9 @@ class _EventsScreenState extends State<EventsScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _repository.getEvents();
+    _cachedEvents = _contentPreloader.events;
+    _contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
+    _future = _contentPreloader.loadEvents();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
         return;
@@ -44,9 +48,20 @@ class _EventsScreenState extends State<EventsScreen> {
       return;
     }
     setState(() {
-      _future = _repository.getEvents();
+      _future = _contentPreloader.refreshEvents();
     });
     await _future;
+  }
+
+  void _handleSharedEventsUpdated() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _cachedEvents = _contentPreloader.events;
+      _future = Future<List<EventModel>>.value(_cachedEvents);
+    });
   }
 
   Future<void> _openCreate() async {
@@ -289,6 +304,7 @@ class _EventsScreenState extends State<EventsScreen> {
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
+    _contentPreloader.eventsRevision.removeListener(_handleSharedEventsUpdated);
     _searchController.dispose();
     super.dispose();
   }

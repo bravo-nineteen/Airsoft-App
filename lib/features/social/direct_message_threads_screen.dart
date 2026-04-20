@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/content/app_content_preloader.dart';
 import 'contacts_screen.dart';
 import 'direct_message_screen.dart';
 import 'direct_message_thread_model.dart';
@@ -19,15 +20,19 @@ class DirectMessageThreadsScreen extends StatefulWidget {
 
 class _DirectMessageThreadsScreenState
     extends State<DirectMessageThreadsScreen> {
+  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final DirectMessageThreadRepository _repo = DirectMessageThreadRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
+  List<DirectMessageThreadModel> _cachedThreads = <DirectMessageThreadModel>[];
   final Map<String, String> _displayNameByUserId = <String, String>{};
   Timer? _backgroundSyncTimer;
 
   @override
   void initState() {
     super.initState();
+    _cachedThreads = _contentPreloader.threads;
+    _contentPreloader.threadsRevision.addListener(_handleSharedThreadsUpdated);
     _future = _loadThreads();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) {
@@ -42,16 +47,14 @@ class _DirectMessageThreadsScreenState
       return;
     }
     setState(() {
-      _future = _loadThreads();
+      _future = _contentPreloader.refreshThreads();
     });
     await _future;
   }
 
   Future<void> _openCompose() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const ContactsScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
     );
 
     if (!mounted) {
@@ -62,9 +65,22 @@ class _DirectMessageThreadsScreenState
   }
 
   Future<List<DirectMessageThreadModel>> _loadThreads() async {
-    final threads = await _repo.getThreads();
+    final threads = await _contentPreloader.loadThreads();
     unawaited(_warmDisplayNames(threads));
     return threads;
+  }
+
+  void _handleSharedThreadsUpdated() {
+    if (!mounted) {
+      return;
+    }
+
+    final List<DirectMessageThreadModel> threads = _contentPreloader.threads;
+    unawaited(_warmDisplayNames(threads));
+    setState(() {
+      _cachedThreads = threads;
+      _future = Future<List<DirectMessageThreadModel>>.value(threads);
+    });
   }
 
   Future<String> _resolveName(String userId, String fallback) async {
@@ -100,10 +116,8 @@ class _DirectMessageThreadsScreenState
 
     final entries = await Future.wait(
       missingUserIds.map(
-        (userId) async => MapEntry(
-          userId,
-          await _resolveName(userId, fallback),
-        ),
+        (userId) async =>
+            MapEntry(userId, await _resolveName(userId, fallback)),
       ),
     );
 
@@ -135,6 +149,9 @@ class _DirectMessageThreadsScreenState
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
+    _contentPreloader.threadsRevision.removeListener(
+      _handleSharedThreadsUpdated,
+    );
     super.dispose();
   }
 
@@ -147,7 +164,9 @@ class _DirectMessageThreadsScreenState
         child: FutureBuilder<List<DirectMessageThreadModel>>(
           future: _future,
           builder: (context, snapshot) {
-            if (!snapshot.hasData &&
+            final threads = snapshot.data ?? _cachedThreads;
+
+            if (threads.isEmpty &&
                 snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -171,9 +190,6 @@ class _DirectMessageThreadsScreenState
                 ],
               );
             }
-
-            final threads = snapshot.data ?? [];
-
             if (threads.isEmpty) {
               return ListView(
                 children: [
@@ -188,7 +204,8 @@ class _DirectMessageThreadsScreenState
               itemCount: threads.length,
               itemBuilder: (context, index) {
                 final thread = threads[index];
-                final name = _displayNameByUserId[thread.otherUserId] ??
+                final name =
+                    _displayNameByUserId[thread.otherUserId] ??
                     l10n.t('operator');
 
                 return Card(

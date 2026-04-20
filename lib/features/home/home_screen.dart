@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/content/app_content_preloader.dart';
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
@@ -36,6 +37,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   CommunityRepository? _communityRepository;
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
@@ -49,6 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _latestPosts = _contentPreloader.communityPosts.take(6).toList();
+    _contentPreloader.communityRevision.addListener(_handleSharedPostsUpdated);
     _loadHomeData();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
@@ -102,7 +106,28 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
+    _contentPreloader.communityRevision.removeListener(
+      _handleSharedPostsUpdated,
+    );
     super.dispose();
+  }
+
+  void _handleSharedPostsUpdated() {
+    if (!mounted) {
+      return;
+    }
+
+    final List<CommunityPostModel> latest = _contentPreloader.communityPosts
+        .take(6)
+        .toList();
+    if (latest.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _latestPosts = latest;
+      _isLoading = _blogPosts.isEmpty && _latestPosts.isEmpty;
+    });
   }
 
   Future<List<CommunityPostModel>> _fetchLatestPosts() {
@@ -111,8 +136,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return loader();
     }
 
-    final CommunityRepository repository =
-        _communityRepository ??= CommunityRepository();
+    final List<CommunityPostModel> preloaded = _contentPreloader.communityPosts;
+    if (preloaded.isNotEmpty) {
+      return Future<List<CommunityPostModel>>.value(preloaded);
+    }
+
+    final CommunityRepository repository = _communityRepository ??=
+        CommunityRepository();
     return repository.fetchPosts();
   }
 

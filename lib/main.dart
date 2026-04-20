@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
+import 'core/content/app_content_preloader.dart';
 import 'core/config/app_config.dart';
 import 'core/notifications/push_notification_service.dart';
 import 'features/auth/reset_password_screen.dart';
@@ -13,9 +14,7 @@ import 'firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('Background message: ${message.messageId}');
 }
 
@@ -63,25 +62,27 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
       await AppConfig.initializeSupabase();
 
-      FirebaseMessaging.onBackgroundMessage(
-        firebaseMessagingBackgroundHandler,
-      );
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       await PushNotificationService.init();
 
-      _authSubscription =
-          Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-        if (data.event == AuthChangeEvent.passwordRecovery) {
-          final navigator = _navigatorKey.currentState;
-          if (navigator == null) return;
+      if (Supabase.instance.client.auth.currentSession != null) {
+        unawaited(AppContentPreloader.instance.ensureStarted());
+      }
 
-          navigator.push(
-            MaterialPageRoute<void>(
-              builder: (_) => const ResetPasswordScreen(),
-            ),
-          );
-        }
-      });
+      _authSubscription = Supabase.instance.client.auth.onAuthStateChange
+          .listen((data) {
+            if (data.event == AuthChangeEvent.passwordRecovery) {
+              final navigator = _navigatorKey.currentState;
+              if (navigator == null) return;
+
+              navigator.push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ResetPasswordScreen(),
+                ),
+              );
+            }
+          });
 
       if (!mounted) return;
       setState(() {
@@ -114,9 +115,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
       return const SplashScreen();
     }
 
-    return AirsoftApp(
-      navigatorKey: _navigatorKey,
-    );
+    return AirsoftApp(navigatorKey: _navigatorKey);
   }
 }
 
@@ -159,24 +158,12 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeOutCubic,
     );
 
-    _logoScaleAnimation = Tween<double>(
-      begin: 0.92,
-      end: 1.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _fadeController,
-        curve: Curves.easeOutCubic,
-      ),
+    _logoScaleAnimation = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic),
     );
 
-    _pulseAnimation = Tween<double>(
-      begin: 0.985,
-      end: 1.015,
-    ).animate(
-      CurvedAnimation(
-        parent: _pulseController,
-        curve: Curves.easeInOut,
-      ),
+    _pulseAnimation = Tween<double>(begin: 0.985, end: 1.015).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     _fadeController.forward();
@@ -204,10 +191,7 @@ class _SplashScreenState extends State<SplashScreen>
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      _surface,
-                      _bg,
-                    ],
+                    colors: [_surface, _bg],
                   ),
                 ),
               ),
@@ -237,10 +221,7 @@ class _SplashScreenState extends State<SplashScreen>
                           final scale =
                               _logoScaleAnimation.value * _pulseAnimation.value;
 
-                          return Transform.scale(
-                            scale: scale,
-                            child: child,
-                          );
+                          return Transform.scale(scale: scale, child: child);
                         },
                         child: Container(
                           width: 132,
@@ -352,9 +333,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 class _GridPainter extends CustomPainter {
-  const _GridPainter({
-    required this.lineColor,
-  });
+  const _GridPainter({required this.lineColor});
 
   final Color lineColor;
 
@@ -367,19 +346,11 @@ class _GridPainter extends CustomPainter {
     const double gap = 36;
 
     for (double x = 0; x <= size.width; x += gap) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
 
     for (double y = 0; y <= size.height; y += gap) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
 
@@ -390,10 +361,7 @@ class _GridPainter extends CustomPainter {
 }
 
 class StartupErrorApp extends StatelessWidget {
-  const StartupErrorApp({
-    super.key,
-    required this.message,
-  });
+  const StartupErrorApp({super.key, required this.message});
 
   final String message;
 
