@@ -181,35 +181,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(l10n.t('theme')),
             subtitle: Text(l10n.t('lightDarkControls')),
           ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('lightMode')),
-            value: ThemeMode.light,
+          RadioGroup<ThemeMode>(
             groupValue: _selectedThemeMode,
             onChanged: (value) {
               if (value != null) {
                 _updateThemeMode(value);
               }
             },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('darkMode')),
-            value: ThemeMode.dark,
-            groupValue: _selectedThemeMode,
-            onChanged: (value) {
-              if (value != null) {
-                _updateThemeMode(value);
-              }
-            },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('system')),
-            value: ThemeMode.system,
-            groupValue: _selectedThemeMode,
-            onChanged: (value) {
-              if (value != null) {
-                _updateThemeMode(value);
-              }
-            },
+            child: Column(
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('lightMode')),
+                  value: ThemeMode.light,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('darkMode')),
+                  value: ThemeMode.dark,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('system')),
+                  value: ThemeMode.system,
+                ),
+              ],
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.language_outlined),

@@ -35,41 +35,32 @@ class DisplaySettingsScreen extends StatelessWidget {
             title: Text(l10n.t('theme')),
             subtitle: Text(l10n.t('lightDarkControls')),
           ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('system')),
-            value: ThemeMode.system,
+          RadioGroup<ThemeMode>(
             groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged == null
-                ? null
-                : (value) {
-                    if (value != null) {
-                      onThemeModeChanged!(value);
-                    }
-                  },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('lightMode')),
-            value: ThemeMode.light,
-            groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged == null
-                ? null
-                : (value) {
-                    if (value != null) {
-                      onThemeModeChanged!(value);
-                    }
-                  },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(l10n.t('darkMode')),
-            value: ThemeMode.dark,
-            groupValue: selectedThemeMode,
-            onChanged: onThemeModeChanged == null
-                ? null
-                : (value) {
-                    if (value != null) {
-                      onThemeModeChanged!(value);
-                    }
-                  },
+            onChanged: (value) {
+              if (value != null) {
+                onThemeModeChanged?.call(value);
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('system')),
+                  value: ThemeMode.system,
+                  enabled: onThemeModeChanged != null,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('lightMode')),
+                  value: ThemeMode.light,
+                  enabled: onThemeModeChanged != null,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(l10n.t('darkMode')),
+                  value: ThemeMode.dark,
+                  enabled: onThemeModeChanged != null,
+                ),
+              ],
+            ),
           ),
           const Divider(height: 1),
           ListTile(
