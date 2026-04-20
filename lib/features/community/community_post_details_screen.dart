@@ -927,7 +927,7 @@ class _CommunityPostDetailsScreenState
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: post.imageUrls.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (_, index) => const SizedBox(width: 8),
                         itemBuilder: (BuildContext context, int index) {
                           final String imageUrl = post.imageUrls[index];
                           return InkWell(

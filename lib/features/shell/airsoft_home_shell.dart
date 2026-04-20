@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/notifications/app_badge_service.dart';
 import '../community/community_list_screen.dart';
 import '../events/events_screen.dart';
 import '../fields/fields_screen.dart';
@@ -91,6 +92,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           _unreadMessages = 0;
         });
       }
+      unawaited(AppBadgeService.setBadgeCount(0));
       return;
     }
 
@@ -189,6 +191,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
         _unreadNotifications = results[0];
         _unreadMessages = results[1];
       });
+      unawaited(AppBadgeService.setBadgeCount(_unreadNotifications));
     } catch (_) {
       if (!mounted) {
         return;
@@ -198,6 +201,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
         _unreadNotifications = 0;
         _unreadMessages = 0;
       });
+      unawaited(AppBadgeService.setBadgeCount(0));
     } finally {
       _isLoadingUnreadCounts = false;
 

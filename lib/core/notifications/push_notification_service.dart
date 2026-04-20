@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'push_token_repository.dart';
@@ -12,6 +13,16 @@ class PushNotificationService {
 
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final PushTokenRepository _tokenRepository = PushTokenRepository();
+  static final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  static const AndroidNotificationChannel _foregroundChannel =
+      AndroidNotificationChannel(
+        'fieldops_push_foreground',
+        'FieldOps Push Notifications',
+        description: 'Notifications shown while app is in foreground',
+        importance: Importance.high,
+      );
 
   static StreamSubscription<String>? _tokenRefreshSubscription;
   static bool _initialized = false;
@@ -26,6 +37,14 @@ class PushNotificationService {
       sound: true,
       provisional: false,
     );
+
+    await _messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    await _initLocalNotifications();
 
     debugPrint('Push permission status: ${permission.authorizationStatus}');
 
@@ -42,11 +61,12 @@ class PushNotificationService {
       },
     );
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint('Foreground push received: ${message.messageId}');
       debugPrint('Title: ${message.notification?.title}');
       debugPrint('Body: ${message.notification?.body}');
       debugPrint('Data: ${message.data}');
+      await _showForegroundNotification(message);
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -64,6 +84,47 @@ class PushNotificationService {
 
     debugPrint('FCM token acquired.');
     await _saveToken(token);
+  }
+
+  static Future<void> _initLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+
+    await _localNotificationsPlugin.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+    );
+
+    final androidImplementation = _localNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidImplementation?.createNotificationChannel(_foregroundChannel);
+  }
+
+  static Future<void> _showForegroundNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) {
+      return;
+    }
+
+    await _localNotificationsPlugin.show(
+      message.messageId.hashCode,
+      notification.title,
+      notification.body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'fieldops_push_foreground',
+          'FieldOps Push Notifications',
+          channelDescription: 'Notifications shown while app is in foreground',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
   }
 
   static Future<void> _saveToken(String token) async {

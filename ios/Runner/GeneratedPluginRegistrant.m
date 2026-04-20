@@ -24,6 +24,18 @@
 @import firebase_messaging;
 #endif
 
+#if __has_include(<flutter_app_badger/FlutterAppBadgerPlugin.h>)
+#import <flutter_app_badger/FlutterAppBadgerPlugin.h>
+#else
+@import flutter_app_badger;
+#endif
+
+#if __has_include(<flutter_local_notifications/FlutterLocalNotificationsPlugin.h>)
+#import <flutter_local_notifications/FlutterLocalNotificationsPlugin.h>
+#else
+@import flutter_local_notifications;
+#endif
+
 #if __has_include(<image_cropper/FLTImageCropperPlugin.h>)
 #import <image_cropper/FLTImageCropperPlugin.h>
 #else
@@ -60,6 +72,8 @@
   [AppLinksIosPlugin registerWithRegistrar:[registry registrarForPlugin:@"AppLinksIosPlugin"]];
   [FLTFirebaseCorePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseCorePlugin"]];
   [FLTFirebaseMessagingPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseMessagingPlugin"]];
+  [FlutterAppBadgerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterAppBadgerPlugin"]];
+  [FlutterLocalNotificationsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterLocalNotificationsPlugin"]];
   [FLTImageCropperPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImageCropperPlugin"]];
   [FLTImagePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImagePickerPlugin"]];
   [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
