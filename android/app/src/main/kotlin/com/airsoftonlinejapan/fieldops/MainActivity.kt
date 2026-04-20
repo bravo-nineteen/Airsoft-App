@@ -1,4 +1,4 @@
-package com.example.airsoft_app
+package com.airsoftonlinejapan.fieldops
 
 import io.flutter.embedding.android.FlutterActivity
 

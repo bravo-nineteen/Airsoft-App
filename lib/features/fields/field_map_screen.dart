@@ -36,7 +36,7 @@ class FieldMapScreen extends StatelessWidget {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.airsoft_app',
+              userAgentPackageName: 'com.airsoftonlinejapan.fieldops',
             ),
             MarkerLayer(
               markers: validFields.map((field) {
