@@ -277,7 +277,10 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           ),
         ],
       ),
-      body: _screens[_index],
+      body: IndexedStack(
+        index: _index,
+        children: _screens,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _index,
