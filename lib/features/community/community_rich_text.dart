@@ -268,7 +268,7 @@ class CommunityRichText extends StatelessWidget {
 
       final matchedText = nextMatch.group(0)!;
 
-      if (nextMatch.pattern == _urlRegex.pattern) {
+      if (nextMatch.pattern == _urlRegex) {
         spans.add(
           TextSpan(
             text: matchedText,
@@ -279,7 +279,7 @@ class CommunityRichText extends StatelessWidget {
               },
           ),
         );
-      } else if (nextMatch.pattern == _boldRegex.pattern) {
+      } else if (nextMatch.pattern == _boldRegex) {
         final inner = nextMatch.group(1) ?? '';
         spans.add(
           TextSpan(
@@ -292,7 +292,7 @@ class CommunityRichText extends StatelessWidget {
             ),
           ),
         );
-      } else if (nextMatch.pattern == _underlineRegex.pattern) {
+      } else if (nextMatch.pattern == _underlineRegex) {
         final inner = nextMatch.group(1) ?? '';
         spans.add(
           TextSpan(
@@ -311,7 +311,7 @@ class CommunityRichText extends StatelessWidget {
             ),
           ),
         );
-      } else if (nextMatch.pattern == _italicRegex.pattern) {
+      } else if (nextMatch.pattern == _italicRegex) {
         final inner = nextMatch.group(1) ?? '';
         spans.add(
           TextSpan(

@@ -80,10 +80,11 @@ class _LoginScreenState extends State<LoginScreen> {
               try {
                 await Supabase.instance.client.auth.resetPasswordForEmail(email);
 
-                if (!mounted) return;
+                if (!dialogContext.mounted) return;
 
                 Navigator.of(dialogContext).pop();
 
+                if (!mounted) return;
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(

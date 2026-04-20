@@ -62,10 +62,11 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
         ),
       );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isBusy = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
     }
   }
 
