@@ -8,7 +8,6 @@ import '../../core/content/app_content_preloader.dart';
 import 'contacts_screen.dart';
 import 'direct_message_screen.dart';
 import 'direct_message_thread_model.dart';
-import 'direct_message_thread_repository.dart';
 
 class DirectMessageThreadsScreen extends StatefulWidget {
   const DirectMessageThreadsScreen({super.key});
@@ -21,7 +20,6 @@ class DirectMessageThreadsScreen extends StatefulWidget {
 class _DirectMessageThreadsScreenState
     extends State<DirectMessageThreadsScreen> {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
-  final DirectMessageThreadRepository _repo = DirectMessageThreadRepository();
 
   late Future<List<DirectMessageThreadModel>> _future;
   List<DirectMessageThreadModel> _cachedThreads = <DirectMessageThreadModel>[];
