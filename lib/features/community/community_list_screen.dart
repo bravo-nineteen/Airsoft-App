@@ -552,9 +552,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       setState(() {
         _posts[index] = original;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to like post: $error')));
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('failedLikePost', args: {'error': '$error'})),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -728,11 +731,14 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                     child: ListTile(
                       leading: const Icon(Icons.fiber_new_outlined),
                       title: Text(
-                        '${_pendingPosts.length} new posts available',
+                        l10n.t(
+                          'pendingNewPosts',
+                          args: {'count': '${_pendingPosts.length}'},
+                        ),
                       ),
                       trailing: TextButton(
                         onPressed: _revealPendingPosts,
-                        child: const Text('Show'),
+                        child: Text(l10n.t('show')),
                       ),
                     ),
                   ),
@@ -744,9 +750,9 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_posts.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text('No posts found')),
+                child: Center(child: Text(l10n.t('noPostsFound'))),
               )
             else
               SliverPadding(
@@ -810,6 +816,7 @@ class _CompactPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final String normalizedCategory =
         CommunityPostCategories.normalizeCommunityCategory(post.category);
     final resolvedImageUrl = post.primaryImageUrl?.trim() ?? '';
@@ -941,7 +948,7 @@ class _CompactPostCard extends StatelessWidget {
                       children: <Widget>[
                         if (post.isPinned)
                           _MiniBadge(
-                            text: AppLocalizations.of(context).t('pinned'),
+                            text: l10n.t('pinned'),
                             color: theme.colorScheme.primary.withValues(alpha: 0.14),
                             textColor: theme.colorScheme.primary,
                           ),
@@ -969,7 +976,7 @@ class _CompactPostCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       post.excerpt.isEmpty
-                          ? AppLocalizations.of(context).t('noPreviewTextAvailable')
+                          ? l10n.t('noPreviewTextAvailable')
                           : post.excerpt,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -1023,21 +1030,31 @@ class _CompactPostCard extends StatelessWidget {
                                           ? Icons.favorite
                                           : Icons.favorite_border,
                                     ),
-                              label: Text('Like ${post.likeCount}'),
+                              label: Text(
+                                l10n.t(
+                                  'likeWithCount',
+                                  args: {'count': '${post.likeCount}'},
+                                ),
+                              ),
                             ),
                           ),
                           Expanded(
                             child: TextButton.icon(
                               onPressed: onTap,
                               icon: const Icon(Icons.mode_comment_outlined),
-                              label: Text('Comment ${post.commentCount}'),
+                              label: Text(
+                                l10n.t(
+                                  'commentWithCount',
+                                  args: {'count': '${post.commentCount}'},
+                                ),
+                              ),
                             ),
                           ),
                           Expanded(
                             child: TextButton.icon(
                               onPressed: onTap,
                               icon: const Icon(Icons.open_in_new_outlined),
-                              label: const Text('Open'),
+                              label: Text(l10n.t('open')),
                             ),
                           ),
                         ],
