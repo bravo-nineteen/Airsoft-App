@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
@@ -133,6 +134,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _logoScaleAnimation;
   late final Animation<double> _pulseAnimation;
+  String _versionLabel = '';
 
   static const Color _bg = Color(0xFF101513);
   static const Color _surface = Color(0xFF17201C);
@@ -168,6 +170,15 @@ class _SplashScreenState extends State<SplashScreen>
 
     _fadeController.forward();
     _pulseController.repeat(reverse: true);
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _versionLabel = 'v${info.version} (${info.buildNumber})';
+    });
   }
 
   @override
@@ -311,15 +322,16 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'v1.1.9',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _olive.withValues(alpha: 0.95),
-                          letterSpacing: 0.8,
-                          fontWeight: FontWeight.w600,
+                      if (_versionLabel.isNotEmpty)
+                        Text(
+                          _versionLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _olive.withValues(alpha: 0.95),
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
