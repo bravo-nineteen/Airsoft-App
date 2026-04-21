@@ -156,9 +156,9 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     }
   }
 
-  Future<void> _submitClaimRequest() async {
+  Future<bool> _submitClaimRequest() async {
     if (_submittingClaim) {
-      return;
+      return false;
     }
     final String staffName = _claimStaffNameController.text.trim();
     final String idNumber = _claimIdController.text.trim();
@@ -168,7 +168,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Fill in all claim verification fields.')),
       );
-      return;
+      return false;
     }
 
     setState(() {
@@ -185,7 +185,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
         paymentReference: _claimPaymentRefController.text,
       );
       if (!mounted) {
-        return;
+        return false;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -194,13 +194,15 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
           ),
         ),
       );
+      return true;
     } catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed claim request: $error')));
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -208,6 +210,78 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
         });
       }
     }
+  }
+
+  Future<void> _openClaimFieldDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Claim field'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  controller: _claimStaffNameController,
+                  decoration: const InputDecoration(labelText: 'Staff name'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _claimIdController,
+                  decoration: const InputDecoration(
+                    labelText: 'Official ID / employee ID',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _claimPhoneController,
+                  decoration: const InputDecoration(labelText: 'Official phone'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _claimEmailController,
+                  decoration: const InputDecoration(labelText: 'Official email'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _claimPaymentRefController,
+                  decoration: const InputDecoration(
+                    labelText: 'Google Play payment reference (optional)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: _submittingClaim
+                  ? null
+                  : () async {
+                      final bool success = await _submitClaimRequest();
+                      if (!mounted || !success) {
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop();
+                    },
+              child: _submittingClaim
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Submit claim'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _submitBookingRequest() async {
@@ -659,6 +733,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   Widget _buildClaimCard() {
     final bool isVerified = field.claimStatus == 'verified';
     final bool isPending = field.claimStatus == 'pending';
+    final bool canClaim = !isVerified && !isPending && !_isFieldManager;
 
     return Card(
       child: Padding(
@@ -683,51 +758,26 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               const Text(
                 'Staff can claim this field by submitting official ID, phone, email, then paying ¥5000 for verification/unlock.',
               ),
-            if (!isVerified && !_isFieldManager) ...<Widget>[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _claimStaffNameController,
-                decoration: const InputDecoration(labelText: 'Staff name'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _claimIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Official ID / employee ID',
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: canClaim ? _openClaimFieldDialog : null,
+                    icon: const Icon(Icons.verified_user_outlined),
+                    label: const Text('Claim field'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _claimPhoneController,
-                decoration: const InputDecoration(labelText: 'Official phone'),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _claimEmailController,
-                decoration: const InputDecoration(labelText: 'Official email'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _claimPaymentRefController,
-                decoration: const InputDecoration(
-                  labelText: 'Google Play payment reference (optional)',
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: FilledButton.icon(
+                    onPressed: null,
+                    icon: Icon(Icons.chat_bubble_outline),
+                    label: Text('Message field'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: _submittingClaim ? null : _submitClaimRequest,
-                icon: _submittingClaim
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.verified_user_outlined),
-                label: const Text('Submit claim (¥5000 unlock)'),
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
