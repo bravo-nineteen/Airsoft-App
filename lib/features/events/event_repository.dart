@@ -87,7 +87,7 @@ class EventRepository {
       'location': _nullIfEmpty(location),
       'prefecture': _nullIfEmpty(prefecture),
       'event_type': _nullIfEmpty(eventType),
-      'language': _nullIfEmpty(language),
+      'language': _nullIfEmpty(_normalizeEventLanguage(language)),
       'skill_level': _nullIfEmpty(skillLevel),
       'organizer_name': _nullIfEmpty(organizerName),
       'contact_info': _nullIfEmpty(contactInfo),
@@ -151,7 +151,7 @@ class EventRepository {
       'location': _nullIfEmpty(location),
       'prefecture': _nullIfEmpty(prefecture),
       'event_type': _nullIfEmpty(eventType),
-      'language': _nullIfEmpty(language),
+      'language': _nullIfEmpty(_normalizeEventLanguage(language)),
       'skill_level': _nullIfEmpty(skillLevel),
       'organizer_name': _nullIfEmpty(organizerName),
       'contact_info': _nullIfEmpty(contactInfo),
@@ -614,5 +614,21 @@ class EventRepository {
     }
     final String trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String? _normalizeEventLanguage(String? value) {
+    final String normalized = (value ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    switch (normalized) {
+      case 'english':
+      case 'japanese':
+      case 'bilingual':
+        return normalized;
+      default:
+        return 'bilingual';
+    }
   }
 }

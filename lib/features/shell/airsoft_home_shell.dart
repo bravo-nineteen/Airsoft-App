@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/content/app_content_preloader.dart';
 import '../../core/notifications/app_badge_service.dart';
+import '../../app/localization/app_localizations.dart';
 import '../community/community_list_screen.dart';
 import '../events/events_screen.dart';
 import '../fields/fields_screen.dart';
@@ -270,6 +271,8 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -294,23 +297,29 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           }
         },
         items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Fields'),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.event),
-            label: 'Events',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.campaign),
-            label: 'Community',
+          BottomNavigationBarItem(icon: const Icon(Icons.home), label: l10n.home),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.map),
+            label: l10n.fieldFinder,
           ),
           BottomNavigationBarItem(
-            icon: _badgeIcon(icon: Icons.mail_outline, count: _unreadMessages),
-            label: 'Messages',
+            icon: const Icon(Icons.event),
+            label: l10n.events,
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
+          BottomNavigationBarItem(
+            icon: Icon(Icons.campaign),
+            label: l10n.boards,
+          ),
+          BottomNavigationBarItem(
+            icon: _badgeIcon(
+              icon: Icons.mail_outline,
+              count: _unreadMessages,
+            ),
+            label: l10n.messages,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.person_outline),
+            label: l10n.profile,
           ),
         ],
       ),

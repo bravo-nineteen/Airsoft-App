@@ -260,14 +260,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     }
 
     final String language = (post.language ?? '').trim().toLowerCase();
-    if (_selectedLanguagePreference == 'english' &&
-        language != 'english' &&
-        language != 'bilingual') {
+    if (_selectedLanguagePreference == 'english' && language != 'english') {
       return false;
     }
-    if (_selectedLanguagePreference == 'japanese' &&
-        language != 'japanese' &&
-        language != 'bilingual') {
+    if (_selectedLanguagePreference == 'japanese' && language != 'japanese') {
       return false;
     }
 
@@ -495,17 +491,17 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.public),
-                title: Text(l10n.t('allLanguages')),
+                title: Text(l10n.t('allPosts')),
                 onTap: () => Navigator.of(sheetContext).pop('all'),
               ),
               ListTile(
                 leading: const Icon(Icons.translate),
-                title: Text(l10n.t('english')),
+                title: Text(l10n.t('preferEnglishPosts')),
                 onTap: () => Navigator.of(sheetContext).pop('english'),
               ),
               ListTile(
                 leading: const Icon(Icons.translate),
-                title: Text(l10n.t('japanese')),
+                title: Text(l10n.t('preferJapanesePosts')),
                 onTap: () => Navigator.of(sheetContext).pop('japanese'),
               ),
             ],
@@ -694,17 +690,16 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final Map<String, String> languageLabels = <String, String>{
-      'all': l10n.t('allLanguages'),
-      'english': l10n.t('preferEnglishPosts'),
-      'japanese': l10n.t('preferJapanesePosts'),
+    final Map<String, String> postLanguageLabels = <String, String>{
+      'english': l10n.english,
+      'japanese': l10n.japanese,
       'bilingual': l10n.t('bilingual'),
     };
     final String languageSummary = switch (_selectedLanguagePreference) {
-      'all' => l10n.t('allLanguages'),
+      'all' => l10n.t('allPosts'),
       'english' => l10n.t('preferEnglishPosts'),
       'japanese' => l10n.t('preferJapanesePosts'),
-      _ => l10n.t('allLanguages'),
+      _ => l10n.t('allPosts'),
     };
 
     return Scaffold(
@@ -840,7 +835,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       post: post,
                       timeAgo: _timeAgo(post.createdAt),
                       languageLabel:
-                          languageLabels[(post.language ?? '').toLowerCase()] ??
+                          postLanguageLabels[(post.language ?? '').toLowerCase()] ??
                           l10n.t('allLanguages'),
                       onTap: () => _openPostDetails(post),
                       onImageTap: () {

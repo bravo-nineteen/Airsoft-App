@@ -149,9 +149,9 @@ class CommunityRepository {
 
     final String normalizedLanguage = _normalizePostLanguage(preferredLanguage);
     if (normalizedLanguage == 'english') {
-      request = request.inFilter('language', <String>['english', 'bilingual']);
+      request = request.eq('language', 'english');
     } else if (normalizedLanguage == 'japanese') {
-      request = request.inFilter('language', <String>['japanese', 'bilingual']);
+      request = request.eq('language', 'japanese');
     }
 
     final dynamic response = await _withTransientRetry(

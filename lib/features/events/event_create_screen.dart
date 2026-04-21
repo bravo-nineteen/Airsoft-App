@@ -35,7 +35,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   DateTime _endAt = DateTime.now().add(const Duration(days: 7, hours: 6));
 
   String _eventType = 'Skirmish';
-  String _language = 'Bilingual';
+  String _language = 'bilingual';
   String _skillLevel = 'All Levels';
 
   bool _isSaving = false;
@@ -52,9 +52,9 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   ];
 
   static const List<String> _languages = [
-    'Bilingual',
-    'English',
-    'Japanese',
+    'bilingual',
+    'english',
+    'japanese',
   ];
 
   static const List<String> _skillLevels = <String>[
@@ -83,7 +83,10 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     _startAt = event.startsAt;
     _endAt = event.endsAt;
     _eventType = event.eventType ?? _eventType;
-    _language = event.language ?? _language;
+    final String normalizedLanguage = (event.language ?? '').trim().toLowerCase();
+    _language = _languages.contains(normalizedLanguage)
+      ? normalizedLanguage
+      : _language;
     _skillLevel = event.skillLevel ?? _skillLevel;
   }
 
@@ -263,6 +266,18 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     return '$yyyy-$mm-$dd $hh:$min';
   }
 
+  String _languageLabel(BuildContext context, String value) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    switch (value) {
+      case 'english':
+        return l10n.english;
+      case 'japanese':
+        return l10n.japanese;
+      default:
+        return l10n.t('bilingual');
+    }
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -324,7 +339,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                   .map(
                     (String value) => DropdownMenuItem<String>(
                       value: value,
-                      child: Text(value),
+                      child: Text(_languageLabel(context, value)),
                     ),
                   )
                   .toList(),

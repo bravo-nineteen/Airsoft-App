@@ -229,10 +229,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 10),
           ...List<Widget>.generate(3, (int index) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -240,11 +240,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         'Loadout ${index + 1}',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: AspectRatio(
-                          aspectRatio: 4 / 3,
+                        child: SizedBox(
+                          height: 110,
+                          width: double.infinity,
                           child: _loadoutImageControllers[index].text.trim().isEmpty
                               ? Container(
                                   color: Theme.of(context)
@@ -266,7 +267,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       OutlinedButton.icon(
                         onPressed: _uploadingLoadoutIndices.contains(index)
                             ? null
@@ -284,20 +285,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               : 'Upload image',
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _loadoutTitleControllers[index],
                         decoration: const InputDecoration(
                           labelText: 'Loadout title',
+                          isDense: true,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _loadoutDescriptionControllers[index],
-                        minLines: 2,
-                        maxLines: 4,
+                        minLines: 1,
+                        maxLines: 2,
                         decoration: const InputDecoration(
                           labelText: 'Loadout details',
+                          isDense: true,
                         ),
                       ),
                     ],
