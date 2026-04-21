@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text(
-                'AIRSOFT APP',
+                'FieldOps',
                 style: TextStyle(
                   fontSize: 28,
                   color: Colors.white,
