@@ -62,6 +62,7 @@ class EventRepository {
     String? notes,
     int? priceYen,
     int? maxPlayers,
+    String? imageUrl,
   }) async {
     final User? user = currentUser;
     if (user == null) {
@@ -94,6 +95,7 @@ class EventRepository {
       'notes': _nullIfEmpty(notes),
       'price_yen': priceYen,
       'max_players': maxPlayers,
+      'image_url': _nullIfEmpty(imageUrl),
       'host_user_id': user.id,
       'is_official': isOfficial,
     };
@@ -126,6 +128,7 @@ class EventRepository {
     String? notes,
     int? priceYen,
     int? maxPlayers,
+    String? imageUrl,
   }) async {
     final User? user = currentUser;
     if (user == null) {
@@ -158,6 +161,7 @@ class EventRepository {
       'notes': _nullIfEmpty(notes),
       'price_yen': priceYen,
       'max_players': maxPlayers,
+      'image_url': _nullIfEmpty(imageUrl),
       'is_official': isOfficial,
     };
 

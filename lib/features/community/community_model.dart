@@ -204,6 +204,7 @@ class CommunityCommentModel {
   final String authorName;
   final String? authorAvatarUrl;
   final String message;
+  final String? imageUrl;
   final int likeCount;
   final bool likedByMe;
   final DateTime createdAt;
@@ -216,6 +217,7 @@ class CommunityCommentModel {
     required this.authorName,
     required this.authorAvatarUrl,
     required this.message,
+    required this.imageUrl,
     required this.likeCount,
     required this.likedByMe,
     required this.createdAt,
@@ -229,6 +231,7 @@ class CommunityCommentModel {
     String? authorName,
     String? authorAvatarUrl,
     String? message,
+    Object? imageUrl = _communityCommentNoChange,
     int? likeCount,
     bool? likedByMe,
     DateTime? createdAt,
@@ -241,6 +244,9 @@ class CommunityCommentModel {
       authorName: authorName ?? this.authorName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       message: message ?? this.message,
+        imageUrl: imageUrl == _communityCommentNoChange
+          ? this.imageUrl
+          : imageUrl as String?,
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
       createdAt: createdAt ?? this.createdAt,
@@ -263,6 +269,7 @@ class CommunityCommentModel {
       message: _readNullableString(json['message']) ??
           _readNullableString(json['body']) ??
           '',
+        imageUrl: _readNullableString(json['image_url']),
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       likedByMe: json['liked_by_me'] == true,
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())

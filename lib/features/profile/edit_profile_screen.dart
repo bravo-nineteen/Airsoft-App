@@ -243,28 +243,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: SizedBox(
-                          height: 110,
-                          width: double.infinity,
-                          child: _loadoutImageControllers[index].text.trim().isEmpty
-                              ? Container(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.image_outlined),
-                                )
-                              : Image.network(
-                                  _loadoutImageControllers[index].text.trim(),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Container(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            height: 110,
+                            width: 110,
+                            child: _loadoutImageControllers[index].text.trim().isEmpty
+                                ? Container(
                                     color: Theme.of(context)
                                         .colorScheme
                                         .surfaceContainerHighest,
                                     alignment: Alignment.center,
-                                    child: const Icon(Icons.broken_image_outlined),
+                                    child: const Icon(Icons.image_outlined),
+                                  )
+                                : Image.network(
+                                    _loadoutImageControllers[index].text.trim(),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.broken_image_outlined),
+                                    ),
                                   ),
-                                ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),

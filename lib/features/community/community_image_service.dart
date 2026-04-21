@@ -14,7 +14,9 @@ class CommunityImageService {
   final ImagePicker _imagePicker;
   final SupabaseClient _client;
 
-  Future<String?> pickCropAndUploadCommunityImage() async {
+  Future<String?> pickCropAndUploadCommunityImage({
+    String folder = 'community',
+  }) async {
     final XFile? pickedFile = await _imagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 90,
@@ -62,7 +64,8 @@ class CommunityImageService {
     final String fileExt = _safeExtension(uploadSourcePath);
     final String fileName =
         '${DateTime.now().millisecondsSinceEpoch}_${user.id}.$fileExt';
-    final String filePath = 'community/${user.id}/$fileName';
+    final String safeFolder = folder.trim().isEmpty ? 'community' : folder.trim();
+    final String filePath = '$safeFolder/${user.id}/$fileName';
 
     await _client.storage.from('community-images').uploadBinary(
           filePath,
@@ -77,6 +80,34 @@ class CommunityImageService {
         _client.storage.from('community-images').getPublicUrl(filePath);
 
     return publicUrl;
+  }
+
+  Future<void> deleteUploadedImageByPublicUrl(String? imageUrl) async {
+    final String url = (imageUrl ?? '').trim();
+    if (url.isEmpty) {
+      return;
+    }
+
+    const String marker = '/storage/v1/object/public/community-images/';
+    final int markerIndex = url.indexOf(marker);
+    if (markerIndex == -1) {
+      return;
+    }
+
+    String objectPath = url.substring(markerIndex + marker.length);
+    final int queryIndex = objectPath.indexOf('?');
+    if (queryIndex != -1) {
+      objectPath = objectPath.substring(0, queryIndex);
+    }
+    if (objectPath.isEmpty) {
+      return;
+    }
+
+    try {
+      await _client.storage.from('community-images').remove(<String>[objectPath]);
+    } catch (_) {
+      // Ignore cleanup failures so delete flows continue.
+    }
   }
 
   String _safeExtension(String path) {

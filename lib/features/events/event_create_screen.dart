@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_image_service.dart';
 import 'event_model.dart';
 import 'event_repository.dart';
 
@@ -20,6 +21,7 @@ class EventCreateScreen extends StatefulWidget {
 
 class _EventCreateScreenState extends State<EventCreateScreen> {
   final EventRepository _repository = EventRepository();
+  final CommunityImageService _imageService = CommunityImageService();
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
@@ -37,8 +39,10 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   String _eventType = 'Skirmish';
   String _language = 'bilingual';
   String _skillLevel = 'All Levels';
+  String? _eventImageUrl;
 
   bool _isSaving = false;
+  bool _isUploadingImage = false;
 
   bool get _isEditing => widget.existingEvent != null;
 
@@ -88,6 +92,51 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       ? normalizedLanguage
       : _language;
     _skillLevel = event.skillLevel ?? _skillLevel;
+    _eventImageUrl = (event.imageUrl ?? '').trim().isEmpty ? null : event.imageUrl;
+  }
+
+  Future<void> _pickAndUploadEventImage() async {
+    if (_isUploadingImage || _isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      final String? uploadedUrl = await _imageService.pickCropAndUploadCommunityImage(
+        folder: 'events',
+      );
+      if (!mounted || uploadedUrl == null || uploadedUrl.trim().isEmpty) {
+        return;
+      }
+
+      setState(() {
+        _eventImageUrl = uploadedUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
+  void _removeEventImage() {
+    final String? imageUrl = _eventImageUrl;
+    setState(() {
+      _eventImageUrl = null;
+    });
+    _imageService.deleteUploadedImageByPublicUrl(imageUrl);
   }
 
   Future<void> _pickStartDateTime() async {
@@ -210,6 +259,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           notes: _notesController.text.trim(),
           priceYen: priceYen,
           maxPlayers: maxPlayers,
+          imageUrl: _eventImageUrl,
         );
       } else {
         await _repository.createEvent(
@@ -228,6 +278,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           notes: _notesController.text.trim(),
           priceYen: priceYen,
           maxPlayers: maxPlayers,
+          imageUrl: _eventImageUrl,
         );
       }
 
@@ -415,6 +466,61 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(labelText: l10n.t('maxPlayers')),
               textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Event image',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: (_eventImageUrl ?? '').trim().isEmpty
+                    ? Container(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image_outlined),
+                      )
+                    : Image.network(
+                        _eventImageUrl!.trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: (_isUploadingImage || _isSaving)
+                      ? null
+                      : _pickAndUploadEventImage,
+                  icon: _isUploadingImage
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.upload_outlined),
+                  label: Text(_isUploadingImage ? 'Uploading...' : 'Upload image'),
+                ),
+                if ((_eventImageUrl ?? '').trim().isNotEmpty)
+                  TextButton.icon(
+                    onPressed: (_isUploadingImage || _isSaving)
+                        ? null
+                        : _removeEventImage,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Remove'),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(

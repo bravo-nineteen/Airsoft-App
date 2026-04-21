@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
+import 'community_image_service.dart';
 import 'community_repository.dart';
 import 'community_user_profile_screen.dart';
 
@@ -20,6 +21,7 @@ class CommunityPostDetailsScreen extends StatefulWidget {
 class _CommunityPostDetailsScreenState
     extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
+  final CommunityImageService _imageService = CommunityImageService();
   final TextEditingController _commentController = TextEditingController();
   RealtimeChannel? _postChannel;
   RealtimeChannel? _commentsChannel;
@@ -34,6 +36,7 @@ class _CommunityPostDetailsScreenState
   final Set<String> _togglingCommentLikes = <String>{};
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
+  String? _pendingCommentImageUrl;
 
   String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -171,6 +174,7 @@ class _CommunityPostDetailsScreenState
       if (existingIndex != -1) {
         _comments[existingIndex] = _comments[existingIndex].copyWith(
           message: incoming.message,
+          imageUrl: incoming.imageUrl,
           likeCount: incoming.likeCount,
           likedByMe: _comments[existingIndex].likedByMe,
           parentCommentId: incoming.parentCommentId,
@@ -242,7 +246,10 @@ class _CommunityPostDetailsScreenState
 
   Future<void> _submitComment() async {
     final message = _commentController.text.trim();
-    if (message.isEmpty || _post == null || _isSendingComment) {
+    final String? pendingImageUrl = _pendingCommentImageUrl?.trim();
+    if ((message.isEmpty && (pendingImageUrl == null || pendingImageUrl.isEmpty)) ||
+        _post == null ||
+        _isSendingComment) {
       return;
     }
 
@@ -262,6 +269,7 @@ class _CommunityPostDetailsScreenState
       authorName: 'You',
       authorAvatarUrl: null,
       message: message,
+      imageUrl: pendingImageUrl,
       likeCount: 0,
       likedByMe: false,
       createdAt: DateTime.now(),
@@ -273,6 +281,7 @@ class _CommunityPostDetailsScreenState
       _comments = <CommunityCommentModel>[..._comments, optimistic];
       _post = _post?.copyWith(commentCount: (_post?.commentCount ?? 0) + 1);
       _commentController.clear();
+      _pendingCommentImageUrl = null;
       _replyToCommentId = null;
       _replyToCommentAuthor = null;
     });
@@ -282,6 +291,7 @@ class _CommunityPostDetailsScreenState
         postId: _post!.id,
         message: message,
         parentCommentId: optimistic.parentCommentId,
+        imageUrl: pendingImageUrl,
       );
 
       if (!mounted) {
@@ -303,6 +313,7 @@ class _CommunityPostDetailsScreenState
         _post = _post?.copyWith(
           commentCount: currentCount > 0 ? currentCount - 1 : 0,
         );
+        _pendingCommentImageUrl = pendingImageUrl;
       });
 
       ScaffoldMessenger.of(
@@ -315,6 +326,40 @@ class _CommunityPostDetailsScreenState
         });
       }
     }
+  }
+
+  Future<void> _pickAndUploadCommentImage() async {
+    if (_isSendingComment) {
+      return;
+    }
+
+    try {
+      final String? imageUrl = await _imageService.pickCropAndUploadCommunityImage(
+        folder: 'comments',
+      );
+      if (!mounted || imageUrl == null || imageUrl.trim().isEmpty) {
+        return;
+      }
+
+      setState(() {
+        _pendingCommentImageUrl = imageUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to upload image: $error')));
+    }
+  }
+
+  void _removePendingCommentImage() {
+    final String? imageUrl = _pendingCommentImageUrl;
+    setState(() {
+      _pendingCommentImageUrl = null;
+    });
+    _imageService.deleteUploadedImageByPublicUrl(imageUrl);
   }
 
   Future<void> _togglePostLike() async {
@@ -780,6 +825,25 @@ class _CommunityPostDetailsScreenState
           ),
           const SizedBox(height: 10),
           SelectableText(comment.message, style: theme.textTheme.bodyMedium),
+          if ((comment.imageUrl ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () => _openImageLightbox(comment.imageUrl!.trim()),
+              borderRadius: BorderRadius.circular(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: ExtendedImage.network(
+                    comment.imageUrl!.trim(),
+                    fit: BoxFit.cover,
+                    cache: true,
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (!isReply) ...[
             const SizedBox(height: 8),
             Align(
@@ -1144,8 +1208,40 @@ class _CommunityPostDetailsScreenState
                   ],
                 ),
               ),
+            if ((_pendingCommentImageUrl ?? '').trim().isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: ExtendedImage.network(
+                          _pendingCommentImageUrl!.trim(),
+                          fit: BoxFit.cover,
+                          cache: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: _isSendingComment ? null : _removePendingCommentImage,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Remove image'),
+                    ),
+                  ],
+                ),
+              ),
             Row(
               children: <Widget>[
+                IconButton(
+                  onPressed: _isSendingComment ? null : _pickAndUploadCommentImage,
+                  tooltip: 'Upload image',
+                  icon: const Icon(Icons.image_outlined),
+                ),
                 Expanded(
                   child: TextField(
                     controller: _commentController,

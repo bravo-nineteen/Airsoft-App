@@ -3,15 +3,18 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_model.dart';
+import 'community_image_service.dart';
 import '../notifications/notification_writer.dart';
 
 class CommunityRepository {
   CommunityRepository({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client,
-      _notificationWriter = NotificationWriter(client: client);
+      _notificationWriter = NotificationWriter(client: client),
+      _imageService = CommunityImageService(client: client);
 
   final SupabaseClient _client;
   final NotificationWriter _notificationWriter;
+  final CommunityImageService _imageService;
 
   bool _isTransient(Object error) {
     final String text = error.toString().toLowerCase();
@@ -294,7 +297,7 @@ class CommunityRepository {
       () => _client
           .from('community_comments')
           .select(
-            'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, like_count, parent_comment_id',
+            'id, created_at, post_id, author_id, user_id, author_name, author_avatar_url, message, body, image_url, like_count, parent_comment_id',
           )
           .eq('post_id', postId)
           .eq('is_deleted', false)
@@ -446,6 +449,7 @@ class CommunityRepository {
     required String postId,
     required String message,
     String? parentCommentId,
+    String? imageUrl,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -479,6 +483,7 @@ class CommunityRepository {
       'author_avatar_url': authorAvatarUrl ?? '',
       'message': message,
       'body': message,
+      'image_url': _nullIfEmpty(imageUrl),
       'language': 'english',
       'is_deleted': false,
       'is_locked': false,
@@ -579,13 +584,31 @@ class CommunityRepository {
       throw Exception('User not logged in');
     }
 
+    final Map<String, dynamic>? existingPost = await _client
+        .from('community_posts')
+        .select('image_url, image_urls')
+        .eq('id', postId)
+        .maybeSingle();
+
+    final List<String> imageUrls = <String>[
+      _nullIfEmpty(existingPost?['image_url']?.toString()) ?? '',
+      ...((existingPost?['image_urls'] as List<dynamic>? ?? <dynamic>[])
+          .map((dynamic e) => _nullIfEmpty(e.toString()) ?? '')),
+    ].where((String value) => value.isNotEmpty).toSet().toList();
+
     await _client
         .from('community_posts')
         .update({
           'is_deleted': true,
+          'image_url': null,
+          'image_urls': <String>[],
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', postId);
+
+    for (final String imageUrl in imageUrls) {
+      await _imageService.deleteUploadedImageByPublicUrl(imageUrl);
+    }
   }
 
   Future<void> toggleLikePost(String postId) async {
@@ -745,11 +768,26 @@ class CommunityRepository {
       throw Exception('User not logged in');
     }
 
+    final Map<String, dynamic>? existingComment = await _client
+        .from('community_comments')
+        .select('image_url')
+        .eq('id', commentId)
+        .maybeSingle();
+    final String? commentImageUrl = _nullIfEmpty(
+      existingComment?['image_url']?.toString(),
+    );
+
     final String now = DateTime.now().toUtc().toIso8601String();
     await _client
         .from('community_comments')
-        .update({'is_deleted': true, 'updated_at': now})
+        .update({
+          'is_deleted': true,
+          'image_url': null,
+          'updated_at': now,
+        })
         .eq('id', commentId);
+
+    await _imageService.deleteUploadedImageByPublicUrl(commentImageUrl);
 
     final commentsResponse = await _client
         .from('community_comments')
