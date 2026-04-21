@@ -87,6 +87,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return user != null && user.id == comment.userId;
   }
 
+  bool get _isLoggedIn => Supabase.instance.client.auth.currentUser != null;
+
   List<EventCommentModel> get _topLevelComments {
     return _comments
         .where(
@@ -739,6 +741,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       _formatDateTime(comment.createdAt),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    if (comment.updatedAt != null &&
+                        comment.updatedAt!.isAfter(comment.createdAt))
+                      Text(
+                        'Edited',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
@@ -815,6 +823,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 );
               }),
             const SizedBox(height: 8),
+            if (!_isLoggedIn)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Log in to join the conversation.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             if (_replyToCommentId != null)
               Container(
                 width: double.infinity,
@@ -846,6 +862,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 Expanded(
                   child: TextField(
                     controller: _commentController,
+                    enabled: _isLoggedIn && !_isSendingComment,
                     minLines: 1,
                     maxLines: 4,
                     decoration: const InputDecoration(
@@ -855,7 +872,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: _isSendingComment ? null : _submitComment,
+                  onPressed: (!_isLoggedIn || _isSendingComment)
+                    ? null
+                    : _submitComment,
                   child: _isSendingComment
                       ? const SizedBox(
                           width: 16,
@@ -1039,8 +1058,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           subtitle: Text(_event.notes!),
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    _buildHostSection(),
+                    if (_isCurrentUserHost(_event)) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _buildHostSection(),
+                    ],
                     const SizedBox(height: 12),
                     _buildCommentsSection(),
                   ],
