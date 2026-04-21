@@ -397,6 +397,22 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                         itemBuilder: (context, index) {
                           final message = _messages[index];
                           final isMine = message.senderId == _currentUserId;
+                          final ThemeData theme = Theme.of(context);
+                          final ColorScheme colors = theme.colorScheme;
+                          final bool isLightTheme =
+                            theme.brightness == Brightness.light;
+                          final Color bubbleColor = isMine
+                            ? (isLightTheme
+                              ? colors.primary.withValues(alpha: 0.18)
+                              : colors.primaryContainer)
+                            : colors.surfaceContainerHighest;
+                          final Color messageTextColor = isMine
+                            ? (isLightTheme
+                              ? const Color(0xFF1C231B)
+                              : colors.onPrimaryContainer)
+                            : colors.onSurface;
+                          final Color timestampColor = messageTextColor
+                            .withValues(alpha: 0.72);
 
                           return Align(
                             alignment: isMine
@@ -415,13 +431,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                                       MediaQuery.of(context).size.width * 0.72,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: isMine
-                                      ? Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest,
+                                  color: bubbleColor,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Column(
@@ -446,11 +456,16 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                                       message.isUnsent
                                           ? '[Message unsent]'
                                           : message.body,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: messageTextColor,
+                                      ),
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
                                       _formatTime(message.createdAt),
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: timestampColor,
+                                      ),
                                     ),
                                   ],
                                 ),

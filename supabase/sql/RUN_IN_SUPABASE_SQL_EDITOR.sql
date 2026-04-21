@@ -123,6 +123,10 @@ create table if not exists public.direct_messages (
   read_at timestamptz
 );
 
+alter table public.direct_messages add column if not exists image_url text;
+alter table public.direct_messages add column if not exists expires_at timestamptz;
+alter table public.direct_messages add column if not exists unsent_at timestamptz;
+
 create index if not exists idx_direct_messages_sender_id
   on public.direct_messages (sender_id, created_at desc);
 create index if not exists idx_direct_messages_recipient_id
@@ -130,6 +134,9 @@ create index if not exists idx_direct_messages_recipient_id
 create index if not exists idx_direct_messages_unread
   on public.direct_messages (recipient_id, read_at)
   where read_at is null;
+create index if not exists idx_direct_messages_expires_at
+  on public.direct_messages (expires_at)
+  where expires_at is not null;
 
 drop view if exists public.direct_message_threads cascade;
 create view public.direct_message_threads as
@@ -200,10 +207,82 @@ create table if not exists public.events (
   price_yen integer,
   max_players integer,
   image_url text,
+  book_tickets_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at >= starts_at)
 );
+
+alter table public.events add column if not exists pinned_until timestamptz;
+alter table public.events add column if not exists image_uploaded_at timestamptz;
+alter table public.events add column if not exists book_tickets_url text;
+
+update public.events
+set image_uploaded_at = coalesce(updated_at, created_at, now())
+where image_url is not null
+  and image_uploaded_at is null;
+
+create or replace function public.set_events_image_uploaded_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.image_url is null then
+    new.image_uploaded_at := null;
+  elsif tg_op = 'INSERT'
+     or old.image_url is distinct from new.image_url
+     or new.image_uploaded_at is null then
+    new.image_uploaded_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_events_set_image_uploaded_at on public.events;
+create trigger trg_events_set_image_uploaded_at
+before insert or update on public.events
+for each row execute function public.set_events_image_uploaded_at();
+
+create or replace function public.cleanup_expired_event_images()
+returns integer
+language plpgsql
+as $$
+declare
+  affected_count integer := 0;
+begin
+  update public.events
+  set image_url = null,
+      image_uploaded_at = null
+  where image_url is not null
+    and coalesce(image_uploaded_at, updated_at, created_at) <= now() - interval '6 months';
+
+  get diagnostics affected_count = row_count;
+  return affected_count;
+end;
+$$;
+
+do $$
+begin
+  begin
+    execute 'create extension if not exists pg_cron';
+  exception
+    when others then
+      null;
+  end;
+
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid)
+    from cron.job
+    where jobname = 'cleanup-expired-event-images';
+
+    perform cron.schedule(
+      'cleanup-expired-event-images',
+      '0 3 * * *',
+      'select public.cleanup_expired_event_images();'
+    );
+  end if;
+end;
+$$;
 
 create index if not exists idx_events_starts_at on public.events (starts_at asc);
 create index if not exists idx_events_host_user_id on public.events (host_user_id);
@@ -304,7 +383,23 @@ create policy direct_messages_select_participant on public.direct_messages for s
 drop policy if exists direct_messages_insert_sender on public.direct_messages;
 create policy direct_messages_insert_sender on public.direct_messages for insert with check (auth.uid() = sender_id);
 drop policy if exists direct_messages_update_recipient on public.direct_messages;
-create policy direct_messages_update_recipient on public.direct_messages for update using (auth.uid() = recipient_id) with check (auth.uid() = recipient_id);
+drop policy if exists direct_messages_update_participant on public.direct_messages;
+create policy direct_messages_update_participant on public.direct_messages for update to authenticated using (auth.uid() = sender_id or auth.uid() = recipient_id) with check (auth.uid() = sender_id or auth.uid() = recipient_id);
+drop policy if exists direct_messages_delete_participant on public.direct_messages;
+create policy direct_messages_delete_participant on public.direct_messages for delete to authenticated using (auth.uid() = sender_id or auth.uid() = recipient_id);
+
+insert into storage.buckets (id, name, public)
+values ('community-images', 'community-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists community_images_public_read on storage.objects;
+create policy community_images_public_read on storage.objects for select using (bucket_id = 'community-images');
+drop policy if exists community_images_auth_insert_own on storage.objects;
+create policy community_images_auth_insert_own on storage.objects for insert to authenticated with check (bucket_id = 'community-images' and split_part(name, '/', 2) = auth.uid()::text);
+drop policy if exists community_images_auth_update_own on storage.objects;
+create policy community_images_auth_update_own on storage.objects for update to authenticated using (bucket_id = 'community-images' and split_part(name, '/', 2) = auth.uid()::text) with check (bucket_id = 'community-images' and split_part(name, '/', 2) = auth.uid()::text);
+drop policy if exists community_images_auth_delete_own on storage.objects;
+create policy community_images_auth_delete_own on storage.objects for delete to authenticated using (bucket_id = 'community-images' and split_part(name, '/', 2) = auth.uid()::text);
 
 drop policy if exists notifications_select_own on public.notifications;
 create policy notifications_select_own on public.notifications for select using (auth.uid() = user_id);

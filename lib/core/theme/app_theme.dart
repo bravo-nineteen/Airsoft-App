@@ -122,7 +122,13 @@ class AppTheme {
 
   static ThemeData light({double fontScale = 1.0}) {
     final TextTheme base = Typography.material2021().black;
-    final TextTheme textTheme = _scaledTextTheme(base, fontScale);
+    final TextTheme textTheme = _scaledTextTheme(
+      base,
+      fontScale,
+    ).apply(
+      bodyColor: const Color(0xFF1C231B),
+      displayColor: const Color(0xFF1C231B),
+    );
 
     return ThemeData(
       useMaterial3: true,
@@ -132,6 +138,9 @@ class AppTheme {
         primary: olive,
         secondary: sand,
         surface: lightSurface,
+        onPrimary: Colors.white,
+        onSecondary: Color(0xFF1C231B),
+        onSurface: Color(0xFF1C231B),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -178,6 +187,7 @@ class AppTheme {
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: lightBackground,
+        foregroundColor: Color(0xFF1C231B),
         elevation: 0,
         centerTitle: false,
         toolbarHeight: 52,

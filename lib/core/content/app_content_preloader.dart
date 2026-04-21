@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/community/community_model.dart';
@@ -16,6 +18,22 @@ enum _PreloadedArea { community, events, fields, threads }
 
 class AppContentPreloader {
   AppContentPreloader._();
+
+  static const int _cacheSchemaVersion = 2;
+  static const Duration _communityCacheTtl = Duration(minutes: 30);
+  static const Duration _eventsCacheTtl = Duration(minutes: 15);
+  static const Duration _fieldsCacheTtl = Duration(hours: 24);
+  static const Duration _threadsCacheTtl = Duration(minutes: 10);
+  static const String _communityCacheBaseKey = 'preload.community_posts';
+  static const String _eventsCacheBaseKey = 'preload.events';
+  static const String _fieldsCacheBaseKey = 'preload.fields';
+
+  static String get _communityCacheKey =>
+    '$_communityCacheBaseKey.v$_cacheSchemaVersion';
+  static String get _eventsCacheKey =>
+    '$_eventsCacheBaseKey.v$_cacheSchemaVersion';
+  static String get _fieldsCacheKey =>
+    '$_fieldsCacheBaseKey.v$_cacheSchemaVersion';
 
   static final AppContentPreloader instance = AppContentPreloader._();
 
@@ -39,6 +57,7 @@ class AppContentPreloader {
   RealtimeChannel? _messagesChannel;
   Timer? _refreshDebounce;
   Future<void>? _warmupFuture;
+  Future<void>? _diskHydrationFuture;
   String? _activeUserId;
   final Set<_PreloadedArea> _pendingAreas = <_PreloadedArea>{};
 
@@ -55,6 +74,8 @@ class AppContentPreloader {
       _restartRealtime(currentUserId);
     }
 
+    await _ensureDiskHydrated();
+
     _warmupFuture ??= _warmUpAll();
     try {
       await _warmupFuture;
@@ -66,6 +87,7 @@ class AppContentPreloader {
   Future<List<CommunityPostModel>> loadCommunityPosts({
     bool preferCache = true,
   }) async {
+    await _ensureDiskHydrated();
     if (preferCache && _communityPosts.isNotEmpty) {
       return communityPosts;
     }
@@ -73,6 +95,7 @@ class AppContentPreloader {
   }
 
   Future<List<EventModel>> loadEvents({bool preferCache = true}) async {
+    await _ensureDiskHydrated();
     if (preferCache && _events.isNotEmpty) {
       return events;
     }
@@ -80,6 +103,7 @@ class AppContentPreloader {
   }
 
   Future<List<FieldModel>> loadFields({bool preferCache = true}) async {
+    await _ensureDiskHydrated();
     if (preferCache && _fields.isNotEmpty) {
       return fields;
     }
@@ -89,6 +113,7 @@ class AppContentPreloader {
   Future<List<DirectMessageThreadModel>> loadThreads({
     bool preferCache = true,
   }) async {
+    await _ensureDiskHydrated();
     if (preferCache && _threads.isNotEmpty) {
       return threads;
     }
@@ -104,18 +129,21 @@ class AppContentPreloader {
     );
     _communityPosts = page.items;
     communityRevision.value++;
+    unawaited(_saveCommunityCache(_communityPosts));
     return communityPosts;
   }
 
   Future<List<EventModel>> refreshEvents() async {
     _events = await _eventRepository.getEvents();
     eventsRevision.value++;
+    unawaited(_saveEventsCache(_events));
     return events;
   }
 
   Future<List<FieldModel>> refreshFields() async {
     _fields = await _fieldRepository.getFields();
     fieldsRevision.value++;
+    unawaited(_saveFieldsCache(_fields));
     return fields;
   }
 
@@ -129,6 +157,7 @@ class AppContentPreloader {
 
     _threads = await _threadRepository.getThreads();
     threadsRevision.value++;
+    unawaited(_saveThreadsCache(_threads, _activeUserId));
     return threads;
   }
 
@@ -144,6 +173,10 @@ class AppContentPreloader {
   void _restartRealtime(String? userId) {
     _disposeRealtime();
     _activeUserId = userId;
+    _diskHydrationFuture = null;
+
+    _threads = const <DirectMessageThreadModel>[];
+    threadsRevision.value++;
 
     final SupabaseClient client = Supabase.instance.client;
 
@@ -221,6 +254,246 @@ class AppContentPreloader {
       _threads = const <DirectMessageThreadModel>[];
       threadsRevision.value++;
     }
+  }
+
+  Future<void> _ensureDiskHydrated() async {
+    _diskHydrationFuture ??= _hydrateFromDisk();
+    try {
+      await _diskHydrationFuture;
+    } finally {
+      _diskHydrationFuture = null;
+    }
+  }
+
+  Future<void> _hydrateFromDisk() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      final String? communityRaw = prefs.getString(_communityCacheKey);
+        if (_isCacheFresh(prefs, _communityCacheKey, _communityCacheTtl) &&
+          communityRaw != null &&
+          _communityPosts.isEmpty) {
+        final List<dynamic> decoded = jsonDecode(communityRaw) as List<dynamic>;
+        _communityPosts = decoded
+            .map(
+              (dynamic row) => CommunityPostModel.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+        if (_communityPosts.isNotEmpty) {
+          communityRevision.value++;
+        }
+      }
+
+      final String? eventsRaw = prefs.getString(_eventsCacheKey);
+        if (_isCacheFresh(prefs, _eventsCacheKey, _eventsCacheTtl) &&
+          eventsRaw != null &&
+          _events.isEmpty) {
+        final List<dynamic> decoded = jsonDecode(eventsRaw) as List<dynamic>;
+        _events = decoded
+            .map(
+              (dynamic row) => EventModel.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+        if (_events.isNotEmpty) {
+          eventsRevision.value++;
+        }
+      }
+
+      final String? fieldsRaw = prefs.getString(_fieldsCacheKey);
+        if (_isCacheFresh(prefs, _fieldsCacheKey, _fieldsCacheTtl) &&
+          fieldsRaw != null &&
+          _fields.isEmpty) {
+        final List<dynamic> decoded = jsonDecode(fieldsRaw) as List<dynamic>;
+        _fields = decoded
+            .map(
+              (dynamic row) => FieldModel.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+        if (_fields.isNotEmpty) {
+          fieldsRevision.value++;
+        }
+      }
+
+      final String threadsKey = _threadsCacheKey(_activeUserId);
+      final String? threadsRaw = prefs.getString(threadsKey);
+        if (_isCacheFresh(prefs, threadsKey, _threadsCacheTtl) &&
+          threadsRaw != null &&
+          _threads.isEmpty) {
+        final List<dynamic> decoded = jsonDecode(threadsRaw) as List<dynamic>;
+        _threads = decoded
+            .map(
+              (dynamic row) => DirectMessageThreadModel.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+        if (_threads.isNotEmpty) {
+          threadsRevision.value++;
+        }
+      }
+    } catch (_) {
+      // Hydration is best-effort and should never block network refresh.
+    }
+  }
+
+  Future<void> _saveCommunityCache(List<CommunityPostModel> posts) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String encoded = jsonEncode(
+        posts.map((CommunityPostModel post) => post.toJson()).toList(),
+      );
+      await prefs.setString(_communityCacheKey, encoded);
+      await prefs.setInt(
+        _cacheSavedAtKey(_communityCacheKey),
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveEventsCache(List<EventModel> events) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String encoded = jsonEncode(
+        events.map((EventModel event) => _eventToJson(event)).toList(),
+      );
+      await prefs.setString(_eventsCacheKey, encoded);
+      await prefs.setInt(
+        _cacheSavedAtKey(_eventsCacheKey),
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveFieldsCache(List<FieldModel> fields) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String encoded = jsonEncode(
+        fields.map((FieldModel field) => _fieldToJson(field)).toList(),
+      );
+      await prefs.setString(_fieldsCacheKey, encoded);
+      await prefs.setInt(
+        _cacheSavedAtKey(_fieldsCacheKey),
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveThreadsCache(
+    List<DirectMessageThreadModel> threads,
+    String? userId,
+  ) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String key = _threadsCacheKey(userId);
+      final String encoded = jsonEncode(
+        threads
+            .map((DirectMessageThreadModel thread) => _threadToJson(thread))
+            .toList(),
+      );
+      await prefs.setString(key, encoded);
+      await prefs.setInt(
+        _cacheSavedAtKey(key),
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
+  String _threadsCacheKey(String? userId) {
+    return 'preload.threads.${userId ?? 'guest'}.v$_cacheSchemaVersion';
+  }
+
+  String _cacheSavedAtKey(String dataKey) => '$dataKey.saved_at_ms';
+
+  bool _isCacheFresh(
+    SharedPreferences prefs,
+    String dataKey,
+    Duration ttl,
+  ) {
+    final int? savedAtMs = prefs.getInt(_cacheSavedAtKey(dataKey));
+    if (savedAtMs == null) {
+      return false;
+    }
+
+    final int ageMs = DateTime.now().millisecondsSinceEpoch - savedAtMs;
+    if (ageMs <= ttl.inMilliseconds) {
+      return true;
+    }
+
+    unawaited(prefs.remove(dataKey));
+    unawaited(prefs.remove(_cacheSavedAtKey(dataKey)));
+    return false;
+  }
+
+  Map<String, dynamic> _eventToJson(EventModel event) {
+    return <String, dynamic>{
+      'id': event.id,
+      'title': event.title,
+      'description': event.description,
+      'starts_at': event.startsAt.toUtc().toIso8601String(),
+      'ends_at': event.endsAt.toUtc().toIso8601String(),
+      'location': event.location,
+      'prefecture': event.prefecture,
+      'event_type': event.eventType,
+      'language': event.language,
+      'skill_level': event.skillLevel,
+      'organizer_name': event.organizerName,
+      'contact_info': event.contactInfo,
+      'notes': event.notes,
+      'price_yen': event.priceYen,
+      'max_players': event.maxPlayers,
+      'image_url': event.imageUrl,
+      'book_tickets_url': event.bookTicketsUrl,
+      'pinned_until': event.pinnedUntil?.toUtc().toIso8601String(),
+      'host_user_id': event.hostUserId,
+      'current_user_attendance_status': event.currentUserAttendanceStatus,
+      'attending_count': event.attendingCount,
+      'attended_count': event.attendedCount,
+      'cancelled_count': event.cancelledCount,
+      'no_show_count': event.noShowCount,
+      'is_official': event.isOfficial,
+    };
+  }
+
+  Map<String, dynamic> _fieldToJson(FieldModel field) {
+    return <String, dynamic>{
+      'id': field.id,
+      'name': field.name,
+      'location_name': field.locationName,
+      'description': field.description,
+      'latitude': field.latitude,
+      'longitude': field.longitude,
+      'prefecture': field.prefecture,
+      'city': field.city,
+      'field_type': field.fieldType,
+      'image_url': field.imageUrl,
+      'rating': field.rating,
+      'review_count': field.reviewCount,
+      'feature_list': field.featuresText,
+      'pros_list': field.prosText,
+      'cons_list': field.consText,
+      'is_official': field.isOfficial,
+      'claim_status': field.claimStatus,
+      'claimed_by_user_id': field.claimedByUserId,
+      'booking_enabled': field.bookingEnabled,
+      'booking_contact_name': field.bookingContactName,
+      'booking_phone': field.bookingPhone,
+      'booking_email': field.bookingEmail,
+    };
+  }
+
+  Map<String, dynamic> _threadToJson(DirectMessageThreadModel thread) {
+    return <String, dynamic>{
+      'other_user_id': thread.otherUserId,
+      'last_message_body': thread.lastMessage,
+      'last_message_at': thread.lastMessageAt.toUtc().toIso8601String(),
+      'unread_count': thread.unreadCount,
+    };
   }
 
   void _scheduleRefresh(_PreloadedArea area) {

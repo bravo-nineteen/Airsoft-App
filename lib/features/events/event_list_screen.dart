@@ -145,44 +145,88 @@ class _EventListScreenState extends State<EventListScreen> {
                 final String? statusLabel = _statusLabel(event);
 
                 return Card(
-                  child: ListTile(
-                    title: Text(event.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const SizedBox(height: 4),
-                        Text(_buildSubtitle(event)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: <Widget>[
-                            _MiniInfoChip(
-                              icon: Icons.event_available,
-                              label: 'Going ${event.attendingCount}',
-                            ),
-                            _MiniInfoChip(
-                              icon: Icons.verified,
-                              label: 'Attended ${event.attendedCount}',
-                            ),
-                            if (statusLabel != null)
-                              _MiniInfoChip(
-                                icon: Icons.person,
-                                label: statusLabel,
+                  child: Column(
+                    children: <Widget>[
+                      if (event.isOfficial)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSecondaryContainer,
                               ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Official Event',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSecondaryContainer,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ListTile(
+                        title: Text(event.title),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            const SizedBox(height: 4),
+                            Text(_buildSubtitle(event)),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: <Widget>[
+                                _MiniInfoChip(
+                                  icon: Icons.event_available,
+                                  label: 'Going ${event.attendingCount}',
+                                ),
+                                _MiniInfoChip(
+                                  icon: Icons.verified,
+                                  label: 'Attended ${event.attendedCount}',
+                                ),
+                                if (statusLabel != null)
+                                  _MiniInfoChip(
+                                    icon: Icons.person,
+                                    label: statusLabel,
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => EventDetailsScreen(event: event),
-                        ),
-                      );
-                      await _refresh();
-                    },
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EventDetailsScreen(event: event),
+                            ),
+                          );
+                          await _refresh();
+                        },
+                      ),
+                    ],
                   ),
                 );
               },

@@ -495,6 +495,46 @@ class _EventsScreenState extends State<EventsScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Column(
                               children: <Widget>[
+                                if (event.isOfficial)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .secondaryContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.verified,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSecondaryContainer,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Official Event',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[

@@ -34,7 +34,8 @@ class AirsoftHomeShell extends StatefulWidget {
   State<AirsoftHomeShell> createState() => _AirsoftHomeShellState();
 }
 
-class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
+class _AirsoftHomeShellState extends State<AirsoftHomeShell>
+  with WidgetsBindingObserver {
   int _index = 0;
   final NotificationRepository _notificationRepository =
       NotificationRepository();
@@ -50,6 +51,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   bool _isLoadingUnreadCounts = false;
   bool _pendingUnreadRefresh = false;
   Timer? _unreadRefreshDebounce;
+  DateTime? _lastBackgroundContentRefreshAt;
 
   List<Widget> get _screens => <Widget>[
     HomeScreen(
@@ -71,6 +73,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(AppContentPreloader.instance.ensureStarted());
     _restartRealtimeBadgeListeners(
       nextUserId: Supabase.instance.client.auth.currentUser?.id,
@@ -86,6 +89,36 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
       _restartRealtimeBadgeListeners(nextUserId: nextUserId);
     });
     _loadUnreadCounts();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _requestUnreadRefresh();
+      unawaited(_refreshBackgroundContentIfStale());
+    }
+  }
+
+  Future<void> _refreshBackgroundContentIfStale() async {
+    final DateTime now = DateTime.now();
+    final DateTime? lastRefresh = _lastBackgroundContentRefreshAt;
+    if (lastRefresh != null && now.difference(lastRefresh) < const Duration(seconds: 60)) {
+      return;
+    }
+
+    _lastBackgroundContentRefreshAt = now;
+
+    try {
+      final AppContentPreloader preloader = AppContentPreloader.instance;
+      await Future.wait<void>(<Future<void>>[
+        preloader.refreshCommunityPosts().then((_) {}),
+        preloader.refreshEvents().then((_) {}),
+        preloader.refreshFields().then((_) {}),
+        preloader.refreshThreads().then((_) {}),
+      ]);
+    } catch (_) {
+      // Best-effort background refresh.
+    }
   }
 
   void _restartRealtimeBadgeListeners({required String? nextUserId}) {
@@ -223,6 +256,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _unreadRefreshDebounce?.cancel();
     _disposeRealtimeBadgeListeners();

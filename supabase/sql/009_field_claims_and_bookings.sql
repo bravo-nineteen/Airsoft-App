@@ -15,6 +15,92 @@ alter table public.fields
 alter table public.fields
   add column if not exists booking_email text;
 
+-- Backfill columns introduced in app code after initial social/events schema.
+alter table public.direct_messages
+  add column if not exists image_url text;
+alter table public.direct_messages
+  add column if not exists expires_at timestamptz;
+alter table public.direct_messages
+  add column if not exists unsent_at timestamptz;
+alter table public.events
+  add column if not exists pinned_until timestamptz;
+alter table public.events
+  add column if not exists image_uploaded_at timestamptz;
+alter table public.events
+  add column if not exists book_tickets_url text;
+
+create index if not exists idx_direct_messages_expires_at
+  on public.direct_messages (expires_at)
+  where expires_at is not null;
+
+-- Backfill missing image upload timestamps for existing event images.
+update public.events
+set image_uploaded_at = coalesce(updated_at, created_at, now())
+where image_url is not null
+  and image_uploaded_at is null;
+
+create or replace function public.set_events_image_uploaded_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.image_url is null then
+    new.image_uploaded_at := null;
+  elsif tg_op = 'INSERT'
+     or old.image_url is distinct from new.image_url
+     or new.image_uploaded_at is null then
+    new.image_uploaded_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_events_set_image_uploaded_at on public.events;
+create trigger trg_events_set_image_uploaded_at
+before insert or update on public.events
+for each row execute function public.set_events_image_uploaded_at();
+
+create or replace function public.cleanup_expired_event_images()
+returns integer
+language plpgsql
+as $$
+declare
+  affected_count integer := 0;
+begin
+  update public.events
+  set image_url = null,
+      image_uploaded_at = null
+  where image_url is not null
+    and coalesce(image_uploaded_at, updated_at, created_at) <= now() - interval '6 months';
+
+  get diagnostics affected_count = row_count;
+  return affected_count;
+end;
+$$;
+
+do $$
+begin
+  begin
+    execute 'create extension if not exists pg_cron';
+  exception
+    when others then
+      null;
+  end;
+
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid)
+    from cron.job
+    where jobname = 'cleanup-expired-event-images';
+
+    perform cron.schedule(
+      'cleanup-expired-event-images',
+      '0 3 * * *',
+      'select public.cleanup_expired_event_images();'
+    );
+  end if;
+end;
+$$;
+
 alter table public.fields
   drop constraint if exists fields_claim_status_check;
 alter table public.fields
@@ -223,6 +309,68 @@ create policy field_bookings_update_owner_admin
         and f.claimed_by_user_id = auth.uid()
         and f.claim_status = 'verified'
     )
+  );
+
+-- Direct messages: sender/recipient can update or delete (unsend/delete flows).
+drop policy if exists direct_messages_update_recipient on public.direct_messages;
+drop policy if exists direct_messages_update_participant on public.direct_messages;
+create policy direct_messages_update_participant
+  on public.direct_messages
+  for update
+  to authenticated
+  using (auth.uid() = sender_id or auth.uid() = recipient_id)
+  with check (auth.uid() = sender_id or auth.uid() = recipient_id);
+
+drop policy if exists direct_messages_delete_participant on public.direct_messages;
+create policy direct_messages_delete_participant
+  on public.direct_messages
+  for delete
+  to authenticated
+  using (auth.uid() = sender_id or auth.uid() = recipient_id);
+
+-- Storage policies for DM/community image uploads by authenticated users.
+insert into storage.buckets (id, name, public)
+values ('community-images', 'community-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists community_images_public_read on storage.objects;
+create policy community_images_public_read
+  on storage.objects
+  for select
+  using (bucket_id = 'community-images');
+
+drop policy if exists community_images_auth_insert_own on storage.objects;
+create policy community_images_auth_insert_own
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'community-images'
+    and split_part(name, '/', 2) = auth.uid()::text
+  );
+
+drop policy if exists community_images_auth_update_own on storage.objects;
+create policy community_images_auth_update_own
+  on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'community-images'
+    and split_part(name, '/', 2) = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'community-images'
+    and split_part(name, '/', 2) = auth.uid()::text
+  );
+
+drop policy if exists community_images_auth_delete_own on storage.objects;
+create policy community_images_auth_delete_own
+  on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'community-images'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 
 -- Keep timestamps in sync.

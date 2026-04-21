@@ -11,6 +11,8 @@ import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
 import '../community/community_repository.dart';
+import '../events/event_details_screen.dart';
+import '../events/event_model.dart';
 import '../events/events_screen.dart';
 
 enum HomeInterestFilter { all, posts, events, blog }
@@ -43,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
   List<CommunityPostModel> _friendsTimelinePosts = <CommunityPostModel>[];
   List<AojBlogPost> _blogPosts = <AojBlogPost>[];
+  List<EventModel> _upcomingEvents = <EventModel>[];
 
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -53,7 +56,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _latestPosts = _contentPreloader.communityPosts.take(6).toList();
+    _upcomingEvents = _nearestUpcomingEvents(_contentPreloader.events);
     _contentPreloader.communityRevision.addListener(_handleSharedPostsUpdated);
+    _contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
     _loadHomeData();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
@@ -78,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final results = await Future.wait<dynamic>([
         _fetchLatestPosts(),
         _fetchFriendsTimelinePosts(),
+        _fetchUpcomingEvents(),
         _fetchBlogPosts(),
       ]);
 
@@ -91,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
         _friendsTimelinePosts =
           (results[1] as List<CommunityPostModel>).take(6).toList();
-        _blogPosts = results[2] as List<AojBlogPost>;
+        _upcomingEvents = (results[2] as List<EventModel>).take(3).toList();
+        _blogPosts = results[3] as List<AojBlogPost>;
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -113,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _contentPreloader.communityRevision.removeListener(
       _handleSharedPostsUpdated,
     );
+    _contentPreloader.eventsRevision.removeListener(_handleSharedEventsUpdated);
     super.dispose();
   }
 
@@ -131,6 +139,16 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _latestPosts = latest;
       _isLoading = _blogPosts.isEmpty && _latestPosts.isEmpty;
+    });
+  }
+
+  void _handleSharedEventsUpdated() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _upcomingEvents = _nearestUpcomingEvents(_contentPreloader.events);
     });
   }
 
@@ -180,6 +198,29 @@ class _HomeScreenState extends State<HomeScreen> {
     return repository.fetchFriendsTimelinePosts(limit: 6);
   }
 
+  Future<List<EventModel>> _fetchUpcomingEvents() async {
+    final List<EventModel> preloaded = _contentPreloader.events;
+    if (preloaded.isNotEmpty) {
+      return _nearestUpcomingEvents(preloaded);
+    }
+
+    final List<EventModel> refreshed = await _contentPreloader.refreshEvents();
+    return _nearestUpcomingEvents(refreshed);
+  }
+
+  List<EventModel> _nearestUpcomingEvents(List<EventModel> source) {
+    final DateTime now = DateTime.now();
+    final List<EventModel> upcoming = source.where((EventModel event) {
+      return !event.startsAt.isBefore(now);
+    }).toList();
+
+    upcoming.sort((EventModel a, EventModel b) {
+      return a.startsAt.compareTo(b.startsAt);
+    });
+
+    return upcoming.take(3).toList();
+  }
+
   void _openPost(CommunityPostModel post) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -208,6 +249,14 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const EventsScreen()));
+  }
+
+  void _openEventDetails(EventModel event) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EventDetailsScreen(event: event),
+      ),
+    );
   }
 
   Future<void> _openBlogPost(AojBlogPost post) async {
@@ -291,7 +340,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     _SectionHeader(
                       title: 'Friends Timeline',
                       subtitle: 'Latest timeline posts from your friends',
-                      onViewAll: _openBoards,
                     ),
                     const SizedBox(height: 12),
                     if (_friendsTimelinePosts.isEmpty)
@@ -312,18 +360,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       _selectedFilter == HomeInterestFilter.events) ...[
                     _SectionHeader(
                       title: 'Events',
-                      subtitle: 'Open your posted events page',
+                      subtitle: 'Closest events happening soon',
                       onViewAll: _openEventsPage,
                     ),
                     const SizedBox(height: 12),
-                    _InfoFeedCard(
-                      title: 'See Posted Events',
-                      subtitle:
-                          'Open the in-app events page to view current event listings.',
-                      meta: 'Events',
-                      icon: Icons.event_available,
-                      onTap: _openEventsPage,
-                    ),
+                    if (_upcomingEvents.isEmpty)
+                      const _EmptyBlock(
+                        icon: Icons.event_busy_outlined,
+                        text: 'No upcoming events',
+                      )
+                    else
+                      ..._upcomingEvents.map((EventModel event) {
+                        return _HomeEventCard(
+                          event: event,
+                          onTap: () => _openEventDetails(event),
+                        );
+                      }),
                     const SizedBox(height: 20),
                   ],
                   if (_selectedFilter == HomeInterestFilter.all ||
@@ -452,12 +504,12 @@ class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
     required this.subtitle,
-    required this.onViewAll,
+    this.onViewAll,
   });
 
   final String title;
   final String subtitle;
-  final VoidCallback onViewAll;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -481,8 +533,94 @@ class _SectionHeader extends StatelessWidget {
             ],
           ),
         ),
-        TextButton(onPressed: onViewAll, child: const Text('View all')),
+        if (onViewAll != null)
+          TextButton(onPressed: onViewAll, child: const Text('View all')),
       ],
+    );
+  }
+}
+
+class _HomeEventCard extends StatelessWidget {
+  const _HomeEventCard({required this.event, required this.onTap});
+
+  final EventModel event;
+  final VoidCallback onTap;
+
+  String _formatStartsAt(DateTime value) {
+    final String yyyy = value.year.toString().padLeft(4, '0');
+    final String mm = value.month.toString().padLeft(2, '0');
+    final String dd = value.day.toString().padLeft(2, '0');
+    final String hh = value.hour.toString().padLeft(2, '0');
+    final String min = value.minute.toString().padLeft(2, '0');
+    return '$yyyy-$mm-$dd $hh:$min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String where = [
+      if ((event.location ?? '').trim().isNotEmpty) event.location!.trim(),
+      if ((event.prefecture ?? '').trim().isNotEmpty) event.prefecture!.trim(),
+    ].join(' • ');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.14)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+                child: const Icon(Icons.event_available_outlined),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _MiniBadge(
+                      text: _formatStartsAt(event.startsAt),
+                      color: theme.colorScheme.tertiaryContainer,
+                      textColor: theme.colorScheme.onTertiaryContainer,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      event.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      where.isEmpty ? 'Location TBD' : where,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
