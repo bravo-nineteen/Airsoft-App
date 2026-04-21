@@ -405,55 +405,58 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                             child: InkWell(
                               onLongPress: () => _openMessageMenu(message),
                               child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width * 0.72,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isMine
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if ((message.imageUrl ?? '').trim().isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: SizedBox(
-                                          width: 140,
-                                          height: 140,
-                                          child: Image.network(
-                                            message.imageUrl!,
-                                            fit: BoxFit.cover,
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.72,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMine
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if ((message.imageUrl ?? '').trim().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: SizedBox(
+                                            width: 140,
+                                            height: 140,
+                                            child: Image.network(
+                                              message.imageUrl!,
+                                              fit: BoxFit.cover,
+                                            ),
                                           ),
                                         ),
                                       ),
+                                    Text(
+                                      message.isUnsent
+                                          ? '[Message unsent]'
+                                          : message.body,
                                     ),
-                                  Text(message.isUnsent ? '[Message unsent]' : message.body),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    _formatTime(message.createdAt),
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _formatTime(message.createdAt),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
-                            ),
                         },
                       ),
           ),
@@ -490,33 +493,33 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                       ),
                     ),
                   Row(
-                    children: [
+                    children: <Widget>[
                       IconButton(
                         onPressed: _isSending ? null : _pickAndUploadPhoto,
                         icon: const Icon(Icons.image_outlined),
                         tooltip: 'Add photo',
                       ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: l10n.t('writeMessage'),
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          minLines: 1,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            hintText: l10n.t('writeMessage'),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _isSending ? null : _send,
-                    child: _isSending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2.2),
-                          )
-                        : Text(l10n.t('send')),
-                  ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _isSending ? null : _send,
+                        child: _isSending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2.2),
+                              )
+                            : Text(l10n.t('send')),
+                      ),
                     ],
                   ),
                 ],
