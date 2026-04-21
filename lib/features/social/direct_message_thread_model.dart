@@ -1,3 +1,5 @@
+import '../../core/time/japan_time.dart';
+
 class DirectMessageThreadModel {
   const DirectMessageThreadModel({
     required this.otherUserId,
@@ -15,9 +17,8 @@ class DirectMessageThreadModel {
     return DirectMessageThreadModel(
       otherUserId: json['other_user_id'].toString(),
       lastMessage: (json['last_message_body'] ?? '').toString(),
-      lastMessageAt: DateTime.tryParse(
-            (json['last_message_at'] ?? '').toString(),
-          ) ??
+      lastMessageAt:
+          JapanTime.parseServerTimestamp(json['last_message_at']) ??
           DateTime.now(),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
     );

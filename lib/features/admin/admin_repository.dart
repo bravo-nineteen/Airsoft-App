@@ -328,6 +328,83 @@ class AdminRepository {
     }
   }
 
+  Future<List<FieldClaimRequestRecord>> getPendingFieldClaimRequests({
+    int limit = 50,
+  }) async {
+    final response = await _client
+        .from('field_claim_requests')
+        .select('*, fields:field_id(name)')
+        .eq('verification_status', 'pending')
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => FieldClaimRequestRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<FieldClaimRequestRecord>> getReviewedFieldClaimRequests({
+    int limit = 100,
+  }) async {
+    final response = await _client
+        .from('field_claim_requests')
+        .select('*, fields:field_id(name)')
+        .inFilter('verification_status', <String>['approved', 'rejected'])
+        .order('reviewed_at', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => FieldClaimRequestRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> approveFieldClaimRequest(FieldClaimRequestRecord request) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+
+    await _client
+        .from('field_claim_requests')
+        .update({
+          'verification_status': 'approved',
+          'payment_status': 'paid',
+          'reviewed_by': _currentUserId,
+          'reviewed_at': now,
+        })
+        .eq('id', request.id);
+
+    await _client
+        .from('fields')
+        .update({
+          'claim_status': 'verified',
+          'claimed_by_user_id': request.requesterUserId,
+          'claim_verified_at': now,
+          'booking_enabled': true,
+          'booking_contact_name': request.staffName,
+          'booking_phone': request.officialPhone,
+          'booking_email': request.officialEmail,
+        })
+        .eq('id', request.fieldId);
+  }
+
+  Future<void> rejectFieldClaimRequest(String claimRequestId) async {
+    await _client
+        .from('field_claim_requests')
+        .update({
+          'verification_status': 'rejected',
+          'reviewed_by': _currentUserId,
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', claimRequestId);
+  }
+
   String? _nullIfEmpty(String? value) {
     if (value == null) {
       return null;
@@ -391,6 +468,64 @@ class AdminBanRecord {
           ? null
           : DateTime.tryParse(json['revoked_at'].toString())?.toUtc(),
       revokedBy: json['revoked_by']?.toString(),
+    );
+  }
+}
+
+class FieldClaimRequestRecord {
+  const FieldClaimRequestRecord({
+    required this.id,
+    required this.fieldId,
+    required this.requesterUserId,
+    required this.staffName,
+    this.fieldName,
+    required this.officialIdNumber,
+    required this.officialPhone,
+    required this.officialEmail,
+    required this.verificationStatus,
+    required this.paymentStatus,
+    this.reviewedBy,
+    this.reviewedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String fieldId;
+  final String requesterUserId;
+  final String staffName;
+  final String? fieldName;
+  final String officialIdNumber;
+  final String officialPhone;
+  final String officialEmail;
+  final String verificationStatus;
+  final String paymentStatus;
+  final String? reviewedBy;
+  final DateTime? reviewedAt;
+  final DateTime createdAt;
+
+  factory FieldClaimRequestRecord.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? fieldJson = json['fields'] is Map
+        ? Map<String, dynamic>.from(json['fields'] as Map)
+        : null;
+
+    return FieldClaimRequestRecord(
+      id: (json['id'] ?? '').toString(),
+      fieldId: (json['field_id'] ?? '').toString(),
+      requesterUserId: (json['requester_user_id'] ?? '').toString(),
+      staffName: (json['staff_name'] ?? '').toString(),
+      fieldName: fieldJson?['name']?.toString(),
+      officialIdNumber: (json['official_id_number'] ?? '').toString(),
+      officialPhone: (json['official_phone'] ?? '').toString(),
+      officialEmail: (json['official_email'] ?? '').toString(),
+      verificationStatus: (json['verification_status'] ?? '').toString(),
+      paymentStatus: (json['payment_status'] ?? '').toString(),
+        reviewedBy: json['reviewed_by']?.toString(),
+        reviewedAt: json['reviewed_at'] == null
+          ? null
+          : DateTime.tryParse(json['reviewed_at'].toString())?.toUtc(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
     );
   }
 }

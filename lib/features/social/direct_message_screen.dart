@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_image_service.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
 import 'direct_message_repository.dart';
@@ -24,6 +26,7 @@ class DirectMessageScreen extends StatefulWidget {
 
 class _DirectMessageScreenState extends State<DirectMessageScreen> {
   final DirectMessageRepository _repository = DirectMessageRepository();
+  final CommunityImageService _imageService = CommunityImageService();
   final ContactRepository _contactRepository = ContactRepository();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -36,18 +39,57 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   bool _loadingPermission = true;
   bool _isLoadingMessages = false;
   bool _isRefreshingMessages = false;
+  bool _readReceiptsEnabled = true;
+  bool _expiringPhotosEnabled = true;
+  String? _pendingPhotoUrl;
 
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
 
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     _initialize();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       if (!mounted || !_isAllowed || _isLoadingMessages || _isSending) {
         return;
       }
       _refresh();
+    });
+  }
+
+  Future<void> _loadSettings() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _readReceiptsEnabled = prefs.getBool('dm.read_receipts') ?? true;
+      _expiringPhotosEnabled = prefs.getBool('dm.expiring_photos') ?? true;
+    });
+  }
+
+  Future<void> _toggleReadReceipts() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final bool next = !_readReceiptsEnabled;
+    await prefs.setBool('dm.read_receipts', next);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _readReceiptsEnabled = next;
+    });
+  }
+
+  Future<void> _toggleExpiringPhotos() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final bool next = !_expiringPhotosEnabled;
+    await prefs.setBool('dm.expiring_photos', next);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _expiringPhotosEnabled = next;
     });
   }
 
@@ -76,7 +118,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         },
       );
 
-      await _repository.markThreadRead(widget.otherUserId);
+      if (_readReceiptsEnabled) {
+        await _repository.markThreadRead(widget.otherUserId);
+      }
 
       if (!mounted) return;
       setState(() {
@@ -115,7 +159,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         _messages = messages;
       });
 
-      await _repository.markThreadRead(widget.otherUserId);
+      if (_readReceiptsEnabled) {
+        await _repository.markThreadRead(widget.otherUserId);
+      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollController.hasClients) return;
@@ -151,7 +197,8 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
 
   Future<void> _send() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    final String imageUrl = (_pendingPhotoUrl ?? '').trim();
+    if (text.isEmpty && imageUrl.isEmpty) return;
 
     setState(() {
       _isSending = true;
@@ -161,9 +208,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
       await _repository.sendMessage(
         recipientId: widget.otherUserId,
         body: text,
+        imageUrl: imageUrl.isEmpty ? null : imageUrl,
+        expiresIn30Days: _expiringPhotosEnabled,
       );
 
       _messageController.clear();
+      _pendingPhotoUrl = null;
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -182,6 +232,86 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
           _isSending = false;
         });
       }
+    }
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    if (_isSending) {
+      return;
+    }
+
+    try {
+      final String? imageUrl = await _imageService.pickCropAndUploadCommunityImage(
+        folder: 'dm',
+      );
+      if (!mounted || imageUrl == null || imageUrl.trim().isEmpty) {
+        return;
+      }
+      setState(() {
+        _pendingPhotoUrl = imageUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $error')),
+      );
+    }
+  }
+
+  void _removePendingPhoto() {
+    final String? imageUrl = _pendingPhotoUrl;
+    setState(() {
+      _pendingPhotoUrl = null;
+    });
+    _imageService.deleteUploadedImageByPublicUrl(imageUrl);
+  }
+
+  Future<void> _openMessageMenu(DirectMessageModel message) async {
+    final bool isMine = message.senderId == _currentUserId;
+    final String? selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (isMine)
+                ListTile(
+                  leading: const Icon(Icons.undo),
+                  title: const Text('Unsend'),
+                  onTap: () => Navigator.of(sheetContext).pop('unsend'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete message'),
+                onTap: () => Navigator.of(sheetContext).pop('delete'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    try {
+      if (selected == 'unsend') {
+        await _repository.unsendMessage(message.id);
+      } else if (selected == 'delete') {
+        await _repository.deleteMessage(message.id);
+      }
+      await _refresh();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Action failed: $error')),
+      );
     }
   }
 
@@ -223,7 +353,32 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.otherDisplayName)),
+      appBar: AppBar(
+        title: Text(widget.otherDisplayName),
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            onSelected: (String value) {
+              if (value == 'read_receipts') {
+                _toggleReadReceipts();
+              } else if (value == 'expiring_photos') {
+                _toggleExpiringPhotos();
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              CheckedPopupMenuItem<String>(
+                value: 'read_receipts',
+                checked: _readReceiptsEnabled,
+                child: const Text('Read receipts'),
+              ),
+              CheckedPopupMenuItem<String>(
+                value: 'expiring_photos',
+                checked: _expiringPhotosEnabled,
+                child: const Text('Expire photo messages in 30 days'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Column(
         children: [
           if (_isRefreshingMessages)
@@ -247,7 +402,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                             alignment: isMine
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
-                            child: Container(
+                            child: InkWell(
+                              onLongPress: () => _openMessageMenu(message),
+                              child: Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 14,
@@ -270,7 +427,22 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(message.body),
+                                  if ((message.imageUrl ?? '').trim().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: SizedBox(
+                                          width: 140,
+                                          height: 140,
+                                          child: Image.network(
+                                            message.imageUrl!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  Text(message.isUnsent ? '[Message unsent]' : message.body),
                                   const SizedBox(height: 6),
                                   Text(
                                     _formatTime(message.createdAt),
@@ -281,6 +453,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                               ),
                             ),
                           );
+                            ),
                         },
                       ),
           ),
@@ -288,8 +461,41 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if ((_pendingPhotoUrl ?? '').trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: <Widget>[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 64,
+                              height: 64,
+                              child: Image.network(
+                                _pendingPhotoUrl!,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            onPressed: _isSending ? null : _removePendingPhoto,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Remove'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: _isSending ? null : _pickAndUploadPhoto,
+                        icon: const Icon(Icons.image_outlined),
+                        tooltip: 'Add photo',
+                      ),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -310,6 +516,8 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2.2),
                           )
                         : Text(l10n.t('send')),
+                  ),
+                    ],
                   ),
                 ],
               ),

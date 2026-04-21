@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
@@ -331,6 +332,8 @@ class _EventsScreenState extends State<EventsScreen> {
     switch (event.currentUserAttendanceStatus) {
       case 'attending':
         return l10n.t('attendanceAttending');
+      case 'interested':
+        return 'Interested';
       case 'cancelled':
         return l10n.t('attendanceCancelled');
       case 'attended':
@@ -340,6 +343,38 @@ class _EventsScreenState extends State<EventsScreen> {
       default:
         return null;
     }
+  }
+
+  String _fieldAndType(EventModel event) {
+    final String field = (event.location ?? '').trim().isEmpty
+        ? 'Unknown field'
+        : event.location!.trim();
+    final String type = (event.eventType ?? '').trim().isEmpty
+        ? 'General'
+        : event.eventType!.trim();
+    return '$field | $type';
+  }
+
+  Color _skillBadgeColor(BuildContext context, String skillLevel) {
+    final String normalized = skillLevel.trim().toLowerCase();
+    if (normalized.contains('beginner')) {
+      return Colors.green;
+    }
+    if (normalized.contains('intermediate')) {
+      return Colors.orange;
+    }
+    if (normalized.contains('experienced')) {
+      return Colors.red;
+    }
+    return Theme.of(context).colorScheme.primary;
+  }
+
+  Future<void> _openBookTickets(BuildContext context, String url) async {
+    final Uri? uri = Uri.tryParse(url.trim());
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -437,86 +472,18 @@ class _EventsScreenState extends State<EventsScreen> {
                           currentUserId != null &&
                           event.hostUserId == currentUserId;
 
+                      final String dateLabel = _formatDate(event.startsAt);
+                      final String skillLabel = (event.skillLevel ?? 'All Levels').trim();
+                      final Color skillColor = _skillBadgeColor(context, skillLabel);
+                      final String imageUrl = (event.imageUrl ?? '').trim();
+
                       return Card(
-                        child: ListTile(
-                          title: Text(event.title),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              const SizedBox(height: 4),
-                              Text(_buildSubtitle(event)),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: <Widget>[
-                                  if (event.isOfficial)
-                                    _MiniInfoChip(
-                                      icon: Icons.verified,
-                                      label: l10n.t('official'),
-                                      color: Colors.blue,
-                                    ),
-                                  _MiniInfoChip(
-                                    icon: Icons.event_available,
-                                    label: l10n.t(
-                                      'goingWithCount',
-                                      args: {
-                                        'count': '${event.attendingCount}',
-                                      },
-                                    ),
-                                  ),
-                                  _MiniInfoChip(
-                                    icon: Icons.verified,
-                                    label: l10n.t(
-                                      'attendedWithCount',
-                                      args: {'count': '${event.attendedCount}'},
-                                    ),
-                                  ),
-                                  if (statusLabel != null)
-                                    _MiniInfoChip(
-                                      icon: Icons.person,
-                                      label: statusLabel,
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              if (canEdit)
-                                PopupMenuButton<String>(
-                                  tooltip: l10n.t('manageEvent'),
-                                  onSelected: (String value) {
-                                    if (value == 'edit') {
-                                      _openEdit(event);
-                                    } else if (value == 'delete') {
-                                      _deleteEvent(event);
-                                    }
-                                  },
-                                  itemBuilder: (BuildContext context) =>
-                                      <PopupMenuEntry<String>>[
-                                        PopupMenuItem<String>(
-                                          value: 'edit',
-                                          child: Text(l10n.t('editEvent')),
-                                        ),
-                                        PopupMenuItem<String>(
-                                          value: 'delete',
-                                          child: Text(
-                                            l10n.t('deleteEventAction'),
-                                          ),
-                                        ),
-                                      ],
-                                  icon: const Icon(Icons.more_vert),
-                                ),
-                              const Icon(Icons.chevron_right),
-                            ],
-                          ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
                           onTap: () async {
                             await Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    EventDetailsScreen(event: event),
+                                builder: (_) => EventDetailsScreen(event: event),
                               ),
                             );
                             if (!mounted) {
@@ -524,6 +491,155 @@ class _EventsScreenState extends State<EventsScreen> {
                             }
                             await _refresh();
                           },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              children: <Widget>[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: SizedBox(
+                                        width: 72,
+                                        height: 72,
+                                        child: imageUrl.isEmpty
+                                            ? Container(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest,
+                                                alignment: Alignment.center,
+                                                child: const Icon(Icons.image_outlined),
+                                              )
+                                            : Image.network(
+                                                imageUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) => Container(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .surfaceContainerHighest,
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(Icons.broken_image_outlined),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  event.title,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                dateLabel,
+                                                style: Theme.of(context).textTheme.bodySmall,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  _fieldAndType(event),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context).textTheme.bodyMedium,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: skillColor.withAlpha(36),
+                                                  borderRadius: BorderRadius.circular(999),
+                                                ),
+                                                child: Text(
+                                                  skillLabel,
+                                                  style: TextStyle(color: skillColor),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  '${l10n.t('goingWithCount', args: {'count': '${event.attendingCount}'})} • ${l10n.t('attendedWithCount', args: {'count': '${event.attendedCount}'})}'
+                                                  '${statusLabel == null ? '' : ' • $statusLabel'}',
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context).textTheme.bodySmall,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: <Widget>[
+                                    if ((event.bookTicketsUrl ?? '').trim().isNotEmpty)
+                                      TextButton.icon(
+                                        onPressed: () => _openBookTickets(
+                                          context,
+                                          event.bookTicketsUrl!,
+                                        ),
+                                        icon: const Icon(Icons.confirmation_number_outlined),
+                                        label: const Text('Book tickets'),
+                                      ),
+                                    const Spacer(),
+                                    if (canEdit)
+                                      PopupMenuButton<String>(
+                                        tooltip: l10n.t('manageEvent'),
+                                        onSelected: (String value) {
+                                          if (value == 'edit') {
+                                            _openEdit(event);
+                                          } else if (value == 'delete') {
+                                            _deleteEvent(event);
+                                          }
+                                        },
+                                        itemBuilder: (BuildContext context) =>
+                                            <PopupMenuEntry<String>>[
+                                              PopupMenuItem<String>(
+                                                value: 'edit',
+                                                child: Text(l10n.t('editEvent')),
+                                              ),
+                                              PopupMenuItem<String>(
+                                                value: 'delete',
+                                                child: Text(l10n.t('deleteEventAction')),
+                                              ),
+                                            ],
+                                        icon: const Icon(Icons.more_vert),
+                                      ),
+                                    const Icon(Icons.chevron_right),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },

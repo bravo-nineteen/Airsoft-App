@@ -122,6 +122,28 @@ class ContactRepository {
         .eq('addressee_id', contact.addresseeId);
   }
 
+  Future<List<ContactModel>> getAcceptedFriends() async {
+    final List<ContactModel> contacts = await getContacts();
+    return contacts
+        .where((ContactModel contact) => contact.status == 'accepted')
+        .toList();
+  }
+
+  Future<void> removeFriendByUserId(String otherUserId) async {
+    final User? current = _client.auth.currentUser;
+    if (current == null) {
+      throw Exception('Not logged in.');
+    }
+
+    await _client
+        .from('user_contacts')
+        .delete()
+        .or(
+          'and(requester_id.eq.${current.id},addressee_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,addressee_id.eq.${current.id})',
+        )
+        .eq('status', 'accepted');
+  }
+
   Future<bool> areAcceptedContacts(String otherUserId) async {
     final current = _client.auth.currentUser;
     if (current == null) return false;

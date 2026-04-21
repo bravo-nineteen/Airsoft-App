@@ -30,6 +30,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   final TextEditingController _organizerController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _bookTicketsController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _maxPlayersController = TextEditingController();
 
@@ -82,6 +83,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     _organizerController.text = event.organizerName ?? '';
     _contactController.text = event.contactInfo ?? '';
     _notesController.text = event.notes ?? '';
+    _bookTicketsController.text = event.bookTicketsUrl ?? '';
     _priceController.text = event.priceYen?.toString() ?? '';
     _maxPlayersController.text = event.maxPlayers?.toString() ?? '';
     _startAt = event.startsAt;
@@ -260,6 +262,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           priceYen: priceYen,
           maxPlayers: maxPlayers,
           imageUrl: _eventImageUrl,
+          bookTicketsUrl: _bookTicketsController.text.trim(),
         );
       } else {
         await _repository.createEvent(
@@ -279,6 +282,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           priceYen: priceYen,
           maxPlayers: maxPlayers,
           imageUrl: _eventImageUrl,
+          bookTicketsUrl: _bookTicketsController.text.trim(),
         );
       }
 
@@ -338,6 +342,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     _organizerController.dispose();
     _contactController.dispose();
     _notesController.dispose();
+    _bookTicketsController.dispose();
     _priceController.dispose();
     _maxPlayersController.dispose();
     super.dispose();
@@ -532,6 +537,12 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             TextField(
               controller: _contactController,
               decoration: InputDecoration(labelText: l10n.t('contact')),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _bookTicketsController,
+              decoration: const InputDecoration(labelText: 'Book tickets URL'),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),

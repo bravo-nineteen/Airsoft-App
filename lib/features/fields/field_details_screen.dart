@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
 
+import 'field_booking_inbox_screen.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
 
@@ -18,18 +20,68 @@ class FieldDetailsScreen extends StatefulWidget {
 class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   final FieldRepository _repository = FieldRepository();
   final TextEditingController _reviewController = TextEditingController();
+  final TextEditingController _claimStaffNameController =
+      TextEditingController();
+  final TextEditingController _claimIdController = TextEditingController();
+  final TextEditingController _claimPhoneController = TextEditingController();
+  final TextEditingController _claimEmailController = TextEditingController();
+  final TextEditingController _claimPaymentRefController =
+      TextEditingController();
+  final TextEditingController _bookingNameController = TextEditingController();
+  final TextEditingController _bookingPhoneController = TextEditingController();
+  final TextEditingController _bookingEmailController = TextEditingController();
+  final TextEditingController _bookingMessageController =
+      TextEditingController();
 
   List<FieldReviewModel> _reviews = <FieldReviewModel>[];
+  List<FieldBookingOptionModel> _bookingOptions = <FieldBookingOptionModel>[];
+  final Set<String> _selectedBookingOptionIds = <String>{};
   bool _loadingReviews = true;
+  bool _loadingBookingOptions = true;
   bool _savingReview = false;
+  bool _submittingClaim = false;
+  bool _submittingBooking = false;
   int _selectedRating = 5;
 
   FieldModel get field => widget.field;
+
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  bool get _isFieldManager {
+    return field.claimStatus == 'verified' &&
+        (field.claimedByUserId ?? '') == (_currentUserId ?? '');
+  }
 
   @override
   void initState() {
     super.initState();
     _loadReviews();
+    _loadBookingOptions();
+  }
+
+  Future<void> _loadBookingOptions() async {
+    setState(() {
+      _loadingBookingOptions = true;
+    });
+
+    try {
+      final List<FieldBookingOptionModel> options = await _repository
+          .getBookingOptions(field.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _bookingOptions = options;
+        _loadingBookingOptions = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingBookingOptions = false;
+      });
+    }
   }
 
   Future<void> _loadReviews() async {
@@ -104,9 +156,224 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     }
   }
 
+  Future<void> _submitClaimRequest() async {
+    if (_submittingClaim) {
+      return;
+    }
+    final String staffName = _claimStaffNameController.text.trim();
+    final String idNumber = _claimIdController.text.trim();
+    final String phone = _claimPhoneController.text.trim();
+    final String email = _claimEmailController.text.trim();
+    if (staffName.isEmpty || idNumber.isEmpty || phone.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fill in all claim verification fields.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _submittingClaim = true;
+    });
+
+    try {
+      await _repository.submitFieldClaimRequest(
+        fieldId: field.id,
+        staffName: staffName,
+        officialIdNumber: idNumber,
+        officialPhone: phone,
+        officialEmail: email,
+        paymentReference: _claimPaymentRefController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Claim request sent. Our team will contact you to verify and unlock field tools after payment confirmation (¥5000).',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed claim request: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submittingClaim = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitBookingRequest() async {
+    if (_submittingBooking) {
+      return;
+    }
+
+    final String name = _bookingNameController.text.trim();
+    final String phone = _bookingPhoneController.text.trim();
+    final String email = _bookingEmailController.text.trim();
+    final String message = _bookingMessageController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty || email.isEmpty || message.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill name, phone, email, and message.')),
+      );
+      return;
+    }
+
+    final List<FieldBookingOptionModel> selectedOptions = _bookingOptions
+        .where((FieldBookingOptionModel option) {
+          return _selectedBookingOptionIds.contains(option.id);
+        })
+        .toList();
+
+    setState(() {
+      _submittingBooking = true;
+    });
+
+    try {
+      await _repository.createBookingRequest(
+        fieldId: field.id,
+        bookingName: name,
+        bookingPhone: phone,
+        bookingEmail: email,
+        message: message,
+        selectedOptions: selectedOptions,
+      );
+      if (!mounted) {
+        return;
+      }
+      _bookingMessageController.clear();
+      setState(() {
+        _selectedBookingOptionIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Booking request sent to field staff.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed booking request: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submittingBooking = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showAddBookingOptionDialog() async {
+    final TextEditingController labelController = TextEditingController();
+    final TextEditingController priceController = TextEditingController();
+    String selectedType = 'other';
+
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            return AlertDialog(
+              title: const Text('Add booking option'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedType,
+                    items: const <DropdownMenuItem<String>>[
+                      DropdownMenuItem(value: 'pickup', child: Text('Pick up')),
+                      DropdownMenuItem(value: 'lunch', child: Text('Lunch')),
+                      DropdownMenuItem(value: 'other', child: Text('Other')),
+                    ],
+                    onChanged: (String? value) {
+                      setModalState(() {
+                        selectedType = value ?? 'other';
+                      });
+                    },
+                    decoration: const InputDecoration(labelText: 'Type'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(labelText: 'Label'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Price (optional, JPY)',
+                    ),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldSave != true) {
+      return;
+    }
+
+    final String label = labelController.text.trim();
+    final int? price = int.tryParse(priceController.text.trim());
+    if (label.isEmpty) {
+      return;
+    }
+
+    try {
+      await _repository.addBookingOption(
+        fieldId: field.id,
+        optionType: selectedType,
+        label: label,
+        priceYen: price,
+      );
+      await _loadBookingOptions();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add option: $error')));
+    }
+  }
+
   @override
   void dispose() {
     _reviewController.dispose();
+    _claimStaffNameController.dispose();
+    _claimIdController.dispose();
+    _claimPhoneController.dispose();
+    _claimEmailController.dispose();
+    _claimPaymentRefController.dispose();
+    _bookingNameController.dispose();
+    _bookingPhoneController.dispose();
+    _bookingEmailController.dispose();
+    _bookingMessageController.dispose();
     super.dispose();
   }
 
@@ -295,6 +562,10 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              _buildClaimCard(),
+              const SizedBox(height: 12),
+              _buildBookingCard(),
+              const SizedBox(height: 12),
               _buildReviewComposer(),
               const SizedBox(height: 8),
               _buildReviewsList(),
@@ -378,6 +649,205 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                     : const Icon(Icons.rate_review_outlined),
                 label: const Text('Post review'),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClaimCard() {
+    final bool isVerified = field.claimStatus == 'verified';
+    final bool isPending = field.claimStatus == 'pending';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Field ownership',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            if (isVerified)
+              const Text('This field is verified and managed by field staff.')
+            else if (isPending)
+              const Text(
+                'A claim request is pending verification. Our team will contact the requester.',
+              )
+            else
+              const Text(
+                'Staff can claim this field by submitting official ID, phone, email, then paying ¥5000 for verification/unlock.',
+              ),
+            if (!isVerified && !_isFieldManager) ...<Widget>[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _claimStaffNameController,
+                decoration: const InputDecoration(labelText: 'Staff name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _claimIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Official ID / employee ID',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _claimPhoneController,
+                decoration: const InputDecoration(labelText: 'Official phone'),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _claimEmailController,
+                decoration: const InputDecoration(labelText: 'Official email'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _claimPaymentRefController,
+                decoration: const InputDecoration(
+                  labelText: 'Google Play payment reference (optional)',
+                ),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: _submittingClaim ? null : _submitClaimRequest,
+                icon: _submittingClaim
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.verified_user_outlined),
+                label: const Text('Submit claim (¥5000 unlock)'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingCard() {
+    if (!field.bookingEnabled && !_isFieldManager) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(14),
+          child: Text('Bookings are not enabled for this field yet.'),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Text(
+                  'Book this field',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                if (_isFieldManager)
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => FieldBookingInboxScreen(field: field),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.inbox_outlined),
+                    label: const Text('Inbox'),
+                  ),
+                if (_isFieldManager)
+                  TextButton.icon(
+                    onPressed: _showAddBookingOptionDialog,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add option'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_loadingBookingOptions)
+              const LinearProgressIndicator()
+            else if (_bookingOptions.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _bookingOptions.map((FieldBookingOptionModel option) {
+                  final bool isSelected = _selectedBookingOptionIds.contains(
+                    option.id,
+                  );
+                  final String label = option.priceYen == null
+                      ? option.label
+                      : '${option.label} (+¥${option.priceYen})';
+                  return FilterChip(
+                    label: Text(label),
+                    selected: isSelected,
+                    onSelected: (bool selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedBookingOptionIds.add(option.id);
+                        } else {
+                          _selectedBookingOptionIds.remove(option.id);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              )
+            else
+              const Text('No pick up/lunch options set yet.'),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _bookingNameController,
+              decoration: const InputDecoration(labelText: 'Your name'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _bookingPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _bookingEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _bookingMessageController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                hintText: 'Player count, preferred date, requests, etc.',
+              ),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _submittingBooking ? null : _submitBookingRequest,
+              icon: _submittingBooking
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.event_available_outlined),
+              label: const Text('Send booking request'),
             ),
           ],
         ),

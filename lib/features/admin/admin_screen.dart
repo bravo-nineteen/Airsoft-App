@@ -21,12 +21,14 @@ class _AdminScreenState extends State<AdminScreen>
   final AdminRepository _repository = AdminRepository();
   final TextEditingController _userSearchController = TextEditingController();
   late final TabController _tabController = TabController(
-    length: 3,
+    length: 4,
     vsync: this,
   );
   late Future<bool> _isAdminFuture;
   late Future<_AdminDashboardData> _dashboardFuture;
   late Future<List<ProfileModel>> _profilesFuture;
+  late Future<List<FieldClaimRequestRecord>> _claimRequestsFuture;
+  late Future<List<FieldClaimRequestRecord>> _claimHistoryFuture;
   bool _isBusy = false;
 
   @override
@@ -35,6 +37,8 @@ class _AdminScreenState extends State<AdminScreen>
     _isAdminFuture = _repository.isCurrentUserAdmin();
     _dashboardFuture = _loadDashboard();
     _profilesFuture = _repository.searchProfiles('');
+    _claimRequestsFuture = _repository.getPendingFieldClaimRequests();
+    _claimHistoryFuture = _repository.getReviewedFieldClaimRequests();
   }
 
   Widget _buildAccessDenied({Object? error}) {
@@ -103,8 +107,15 @@ class _AdminScreenState extends State<AdminScreen>
     setState(() {
       _dashboardFuture = _loadDashboard();
       _profilesFuture = _repository.searchProfiles(_userSearchController.text);
+      _claimRequestsFuture = _repository.getPendingFieldClaimRequests();
+      _claimHistoryFuture = _repository.getReviewedFieldClaimRequests();
     });
-    await Future.wait<dynamic>([_dashboardFuture, _profilesFuture]);
+    await Future.wait<dynamic>([
+      _dashboardFuture,
+      _profilesFuture,
+      _claimRequestsFuture,
+      _claimHistoryFuture,
+    ]);
   }
 
   Future<void> _searchUsers() async {
@@ -362,6 +373,64 @@ class _AdminScreenState extends State<AdminScreen>
 
     if (updated == true) {
       await _refresh();
+    }
+  }
+
+  Future<void> _approveClaim(FieldClaimRequestRecord request) async {
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.approveFieldClaimRequest(request);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Approved claim for ${request.staffName}.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Approval failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _rejectClaim(FieldClaimRequestRecord request) async {
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.rejectFieldClaimRequest(request.id);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rejected claim for ${request.staffName}.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Rejection failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
     }
   }
 
@@ -659,6 +728,148 @@ class _AdminScreenState extends State<AdminScreen>
     );
   }
 
+  Widget _buildClaimsTab() {
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<List<FieldClaimRequestRecord>>([
+        _claimRequestsFuture,
+        _claimHistoryFuture,
+      ]),
+      builder: (BuildContext context, AsyncSnapshot<List<dynamic>> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Failed to load claim requests: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        final List<dynamic> packed = snapshot.data ?? <dynamic>[];
+        final List<FieldClaimRequestRecord> requests = packed.isNotEmpty
+            ? (packed[0] as List<FieldClaimRequestRecord>)
+            : <FieldClaimRequestRecord>[];
+        final List<FieldClaimRequestRecord> history = packed.length > 1
+            ? (packed[1] as List<FieldClaimRequestRecord>)
+            : <FieldClaimRequestRecord>[];
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: <Widget>[
+            Text('Pending Claims', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (requests.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No pending field claims.'),
+                ),
+              )
+            else
+              ...requests.map((FieldClaimRequestRecord request) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          (request.fieldName ?? '').trim().isEmpty
+                              ? 'Field ${request.fieldId}'
+                              : request.fieldName!,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text('Staff: ${request.staffName}'),
+                        Text('ID: ${request.officialIdNumber}'),
+                        Text('Phone: ${request.officialPhone}'),
+                        Text('Email: ${request.officialEmail}'),
+                        Text('Requested by user: ${request.requesterUserId}'),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: <Widget>[
+                            FilledButton.tonalIcon(
+                              onPressed:
+                                  _isBusy ? null : () => _rejectClaim(request),
+                              icon: const Icon(Icons.close),
+                              label: const Text('Reject'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed:
+                                  _isBusy ? null : () => _approveClaim(request),
+                              icon: const Icon(Icons.check),
+                              label: const Text('Approve'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            const SizedBox(height: 16),
+            Text('Claim History', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (history.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No reviewed claims yet.'),
+                ),
+              )
+            else
+              ...history.map((FieldClaimRequestRecord request) {
+                final bool approved =
+                    request.verificationStatus.toLowerCase() == 'approved';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    title: Text(
+                      (request.fieldName ?? '').trim().isEmpty
+                          ? 'Field ${request.fieldId}'
+                          : request.fieldName!,
+                    ),
+                    subtitle: Text(
+                      '${request.staffName} • ${request.officialEmail}\nReviewed: ${request.reviewedAt ?? request.createdAt}',
+                    ),
+                    isThreeLine: true,
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: approved
+                            ? Colors.green.withAlpha(28)
+                            : Colors.red.withAlpha(28),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        approved ? 'Approved' : 'Rejected',
+                        style: TextStyle(
+                          color: approved ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _userSearchController.dispose();
@@ -694,6 +905,7 @@ class _AdminScreenState extends State<AdminScreen>
                 Tab(text: 'Moderation'),
                 Tab(text: 'Users'),
                 Tab(text: 'Official'),
+                Tab(text: 'Claims'),
               ],
             ),
           ),
@@ -703,6 +915,7 @@ class _AdminScreenState extends State<AdminScreen>
               _buildModerationTab(),
               _buildUsersTab(),
               _buildOfficialTab(),
+              _buildClaimsTab(),
             ],
           ),
         );

@@ -1,3 +1,5 @@
+import '../../core/time/japan_time.dart';
+
 class EventModel {
   const EventModel({
     required this.id,
@@ -16,6 +18,8 @@ class EventModel {
     this.priceYen,
     this.maxPlayers,
     this.imageUrl,
+    this.bookTicketsUrl,
+    this.pinnedUntil,
     this.hostUserId,
     this.currentUserAttendanceStatus,
     this.attendingCount = 0,
@@ -41,6 +45,8 @@ class EventModel {
   final int? priceYen;
   final int? maxPlayers;
   final String? imageUrl;
+  final String? bookTicketsUrl;
+  final DateTime? pinnedUntil;
   final String? hostUserId;
   final String? currentUserAttendanceStatus;
   final int attendingCount;
@@ -71,6 +77,8 @@ class EventModel {
     int? priceYen,
     int? maxPlayers,
     String? imageUrl,
+    String? bookTicketsUrl,
+    DateTime? pinnedUntil,
     String? hostUserId,
     String? currentUserAttendanceStatus,
     int? attendingCount,
@@ -96,6 +104,8 @@ class EventModel {
       priceYen: priceYen ?? this.priceYen,
       maxPlayers: maxPlayers ?? this.maxPlayers,
       imageUrl: imageUrl ?? this.imageUrl,
+      bookTicketsUrl: bookTicketsUrl ?? this.bookTicketsUrl,
+      pinnedUntil: pinnedUntil ?? this.pinnedUntil,
       hostUserId: hostUserId ?? this.hostUserId,
       currentUserAttendanceStatus:
           currentUserAttendanceStatus ?? this.currentUserAttendanceStatus,
@@ -109,11 +119,10 @@ class EventModel {
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
     final DateTime startsAt =
-        DateTime.tryParse((json['starts_at'] ?? '').toString())?.toLocal() ??
-            DateTime.now();
+      JapanTime.parseServerTimestamp(json['starts_at']) ?? DateTime.now();
 
     final DateTime endsAt =
-        DateTime.tryParse((json['ends_at'] ?? '').toString())?.toLocal() ??
+      JapanTime.parseServerTimestamp(json['ends_at']) ??
             startsAt.add(const Duration(hours: 6));
 
     return EventModel(
@@ -133,6 +142,8 @@ class EventModel {
       priceYen: _readNullableInt(json['price_yen']),
       maxPlayers: _readNullableInt(json['max_players']),
       imageUrl: _readNullableString(json['image_url']),
+        bookTicketsUrl: _readNullableString(json['book_tickets_url']),
+          pinnedUntil: JapanTime.parseServerTimestamp(json['pinned_until']),
       hostUserId: _readNullableString(json['host_user_id']),
       currentUserAttendanceStatus:
           _readNullableString(json['current_user_attendance_status']),
@@ -198,10 +209,8 @@ class EventAttendanceRecord {
       userId: (json['user_id'] ?? '').toString(),
       status: (json['status'] ?? 'attending').toString(),
       confirmedByHost: json['confirmed_by_host'] == true,
-      confirmedAt: DateTime.tryParse((json['confirmed_at'] ?? '').toString())
-          ?.toLocal(),
-      updatedAt:
-          DateTime.tryParse((json['updated_at'] ?? '').toString())?.toLocal(),
+        confirmedAt: JapanTime.parseServerTimestamp(json['confirmed_at']),
+        updatedAt: JapanTime.parseServerTimestamp(json['updated_at']),
       displayName: _readNullableString(json['display_name']),
       avatarUrl: _readNullableString(json['avatar_url']),
     );

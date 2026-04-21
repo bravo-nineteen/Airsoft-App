@@ -7,6 +7,7 @@ import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
 import '../social/contacts_screen.dart';
+import '../social/contact_repository.dart';
 import '../social/direct_message_screen.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
@@ -52,9 +53,9 @@ class _CommunityPublicProfileScreenState
     with SingleTickerProviderStateMixin {
   final CommunityRepository _repository = CommunityRepository();
   final EventRepository _eventRepository = EventRepository();
+  final ContactRepository _contactRepository = ContactRepository();
 
   Map<String, dynamic>? _profile;
-  List<CommunityPostModel> _recentPosts = <CommunityPostModel>[];
   List<CommunityPostModel> _timelinePosts = <CommunityPostModel>[];
   List<CommunityCommentModel> _recentComments = <CommunityCommentModel>[];
   List<EventModel> _attendingEvents = <EventModel>[];
@@ -71,8 +72,8 @@ class _CommunityPublicProfileScreenState
   bool _incomingPending = false;
   bool _canMessage = false;
 
-  late final TabController _tabController =
-      TabController(length: 4, vsync: this);
+    late final TabController _tabController =
+      TabController(length: 3, vsync: this);
 
   @override
   void initState() {
@@ -88,8 +89,7 @@ class _CommunityPublicProfileScreenState
     try {
       final List<dynamic> results = await Future.wait<dynamic>([
       _repository.fetchProfileByUserId(widget.userId),
-      _repository.fetchPostsByAuthor(widget.userId, limit: 5),
-      _repository.fetchProfileTimelinePosts(widget.userId),
+      _repository.fetchMergedTimelinePosts(widget.userId),
       _repository.fetchCommentsByAuthor(widget.userId, limit: 20),
       _repository.fetchUserReceivedLikesCount(widget.userId),
       _repository.fetchFriendshipState(widget.userId),
@@ -98,17 +98,15 @@ class _CommunityPublicProfileScreenState
       ]);
 
       final Map<String, dynamic>? profile = results[0] as Map<String, dynamic>?;
-      final List<CommunityPostModel> recentPosts =
-        results[1] as List<CommunityPostModel>;
       final List<CommunityPostModel> timelinePosts =
-        results[2] as List<CommunityPostModel>;
+        results[1] as List<CommunityPostModel>;
       final List<CommunityCommentModel> recentComments =
-        results[3] as List<CommunityCommentModel>;
-      final int receivedLikesCount = results[4] as int;
+        results[2] as List<CommunityCommentModel>;
+      final int receivedLikesCount = results[3] as int;
       final Map<String, dynamic> friendshipState =
-        results[5] as Map<String, dynamic>;
-      final List<EventModel> attendingEvents = results[6] as List<EventModel>;
-      final EventAttendanceStats eventStats = results[7] as EventAttendanceStats;
+        results[4] as Map<String, dynamic>;
+      final List<EventModel> attendingEvents = results[5] as List<EventModel>;
+      final EventAttendanceStats eventStats = results[6] as EventAttendanceStats;
 
       if (!mounted) {
         return;
@@ -116,7 +114,6 @@ class _CommunityPublicProfileScreenState
 
       setState(() {
         _profile = profile;
-        _recentPosts = recentPosts;
         _timelinePosts = timelinePosts;
         _recentComments = recentComments;
         _attendingEvents = attendingEvents;
@@ -271,6 +268,67 @@ class _CommunityPublicProfileScreenState
     }
   }
 
+  Future<void> _confirmAndRemoveFriend() async {
+    if (_isSendingFriendRequest || !_areFriends) {
+      return;
+    }
+
+    final bool? shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove friend?'),
+          content: Text('Remove $_displayName from your friends list?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRemove != true) {
+      return;
+    }
+
+    setState(() {
+      _isSendingFriendRequest = true;
+    });
+
+    try {
+      await _contactRepository.removeFriendByUserId(widget.userId);
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Friend removed')),
+      );
+
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove friend: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingFriendRequest = false;
+        });
+      }
+    }
+  }
+
   Future<void> _onMessagePressed() async {
     if (!_canMessage) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -305,9 +363,9 @@ class _CommunityPublicProfileScreenState
       friendAction = null;
       friendIcon = Icons.lock_outline;
     } else if (_areFriends) {
-      friendLabel = 'Friends';
-      friendAction = null;
-      friendIcon = Icons.check_circle;
+      friendLabel = 'Remove Friend';
+      friendAction = _confirmAndRemoveFriend;
+      friendIcon = Icons.person_remove_outlined;
     } else if (_outgoingPending) {
       friendLabel = 'Requested';
       friendAction = null;
@@ -548,36 +606,6 @@ class _CommunityPublicProfileScreenState
     );
   }
 
-  Widget _buildRecentPostsSection(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Recent Posts',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (_recentPosts.isEmpty)
-            const Text('No recent posts yet.')
-          else
-            ..._recentPosts.map(
-              (CommunityPostModel post) => _buildPostCard(context, post),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTimelineSection(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
@@ -680,17 +708,6 @@ class _CommunityPublicProfileScreenState
 
   List<_PublicProfileActivityItem> get _activityItems {
     final List<_PublicProfileActivityItem> items = <_PublicProfileActivityItem>[
-      ..._recentPosts.map(
-        (CommunityPostModel post) => _PublicProfileActivityItem(
-          timestamp: post.createdAt,
-          title: post.title,
-          subtitle: post.excerpt.isEmpty
-              ? 'Posted in community'
-              : post.excerpt,
-          icon: Icons.article_outlined,
-          onTap: () => _openPost(post),
-        ),
-      ),
       ..._timelinePosts.map(
         (CommunityPostModel post) => _PublicProfileActivityItem(
           timestamp: post.createdAt,
@@ -735,7 +752,7 @@ class _CommunityPublicProfileScreenState
   Widget _buildActivitySection(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final List<_PublicProfileActivityItem> items = _activityItems;
-    final int totalPosts = _recentPosts.length + _timelinePosts.length;
+    final int totalPosts = _timelinePosts.length;
     final int totalComments = _recentComments.length;
 
     return Container(
@@ -820,7 +837,6 @@ class _CommunityPublicProfileScreenState
         bottom: TabBar(
           controller: _tabController,
           tabs: const <Tab>[
-            Tab(text: 'Posts'),
             Tab(text: 'Timeline'),
             Tab(text: 'Activity'),
             Tab(text: 'Events'),
@@ -879,7 +895,6 @@ class _CommunityPublicProfileScreenState
                                   runSpacing: 8,
                                   alignment: WrapAlignment.center,
                                   children: <Widget>[
-                                    Chip(label: Text('Posts ${_recentPosts.length}')),
                                     Chip(
                                       label: Text('Timeline ${_timelinePosts.length}'),
                                     ),
@@ -901,10 +916,6 @@ class _CommunityPublicProfileScreenState
                             child: TabBarView(
                               controller: _tabController,
                               children: <Widget>[
-                                SingleChildScrollView(
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  child: _buildRecentPostsSection(context),
-                                ),
                                 SingleChildScrollView(
                                   physics: const NeverScrollableScrollPhysics(),
                                   child: _buildTimelineSection(context),

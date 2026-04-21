@@ -7,6 +7,14 @@ class FieldRepository {
 
   final SupabaseClient _client = Supabase.instance.client;
 
+  String get _currentUserId {
+    final User? user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in.');
+    }
+    return user.id;
+  }
+
   Future<List<FieldModel>> getFields({
     String search = '',
     String location = 'All',
@@ -117,6 +125,220 @@ class FieldRepository {
       'rating': rating,
       'review_text': reviewText.trim(),
     }, onConflict: 'field_id,user_id');
+  }
+
+  Future<void> submitFieldClaimRequest({
+    required String fieldId,
+    required String staffName,
+    required String officialIdNumber,
+    required String officialPhone,
+    required String officialEmail,
+    String? verificationNote,
+    String paymentPlatform = 'google_play',
+    String? paymentReference,
+  }) async {
+    final String requesterId = _currentUserId;
+
+    await _client.from('field_claim_requests').insert({
+      'field_id': fieldId,
+      'requester_user_id': requesterId,
+      'staff_name': staffName.trim(),
+      'official_id_number': officialIdNumber.trim(),
+      'official_phone': officialPhone.trim(),
+      'official_email': officialEmail.trim(),
+      'verification_note': _nullIfEmpty(verificationNote),
+      'payment_amount_yen': 5000,
+      'payment_platform': paymentPlatform,
+      'payment_reference': _nullIfEmpty(paymentReference),
+      'payment_status': 'pending',
+      'verification_status': 'pending',
+    });
+
+    await _client
+        .from('fields')
+        .update({'claim_status': 'pending'})
+        .eq('id', fieldId)
+        .neq('claim_status', 'verified');
+  }
+
+  Future<List<FieldBookingOptionModel>> getBookingOptions(String fieldId) async {
+    final response = await _client
+        .from('field_booking_options')
+        .select()
+        .eq('field_id', fieldId)
+        .eq('is_active', true)
+        .order('sort_order', ascending: true)
+        .order('created_at', ascending: true);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) =>
+              FieldBookingOptionModel.fromJson(Map<String, dynamic>.from(row)),
+        )
+        .toList();
+  }
+
+  Future<void> addBookingOption({
+    required String fieldId,
+    required String optionType,
+    required String label,
+    int? priceYen,
+  }) async {
+    await _client.from('field_booking_options').insert({
+      'field_id': fieldId,
+      'option_type': optionType,
+      'label': label.trim(),
+      'price_yen': priceYen,
+    });
+  }
+
+  Future<void> createBookingRequest({
+    required String fieldId,
+    required String bookingName,
+    required String bookingPhone,
+    required String bookingEmail,
+    required String message,
+    required List<FieldBookingOptionModel> selectedOptions,
+  }) async {
+    await _client.from('field_bookings').insert({
+      'field_id': fieldId,
+      'user_id': _currentUserId,
+      'booking_name': bookingName.trim(),
+      'booking_phone': bookingPhone.trim(),
+      'booking_email': bookingEmail.trim(),
+      'message': message.trim(),
+      'selected_options': selectedOptions
+          .map(
+            (FieldBookingOptionModel option) => {
+              'id': option.id,
+              'label': option.label,
+              'type': option.optionType,
+              'price_yen': option.priceYen,
+            },
+          )
+          .toList(),
+      'status': 'pending',
+    });
+  }
+
+  Future<List<FieldBookingRequestModel>> getBookingsForField(String fieldId) async {
+    final response = await _client
+        .from('field_bookings')
+        .select()
+        .eq('field_id', fieldId)
+        .order('created_at', ascending: false);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) =>
+              FieldBookingRequestModel.fromJson(Map<String, dynamic>.from(row)),
+        )
+        .toList();
+  }
+
+  Future<void> updateBookingStatus({
+    required String bookingId,
+    required String status,
+  }) async {
+    await _client
+        .from('field_bookings')
+        .update({'status': status})
+        .eq('id', bookingId);
+  }
+
+  String? _nullIfEmpty(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final String trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+}
+
+class FieldBookingOptionModel {
+  const FieldBookingOptionModel({
+    required this.id,
+    required this.fieldId,
+    required this.optionType,
+    required this.label,
+    this.priceYen,
+    required this.isActive,
+  });
+
+  final String id;
+  final String fieldId;
+  final String optionType;
+  final String label;
+  final int? priceYen;
+  final bool isActive;
+
+  factory FieldBookingOptionModel.fromJson(Map<String, dynamic> json) {
+    return FieldBookingOptionModel(
+      id: (json['id'] ?? '').toString(),
+      fieldId: (json['field_id'] ?? '').toString(),
+      optionType: (json['option_type'] ?? 'other').toString(),
+      label: (json['label'] ?? '').toString(),
+      priceYen: (json['price_yen'] as num?)?.toInt(),
+      isActive: (json['is_active'] as bool?) ?? true,
+    );
+  }
+}
+
+class FieldBookingRequestModel {
+  const FieldBookingRequestModel({
+    required this.id,
+    required this.fieldId,
+    this.userId,
+    required this.bookingName,
+    required this.bookingPhone,
+    required this.bookingEmail,
+    required this.message,
+    required this.selectedOptions,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String fieldId;
+  final String? userId;
+  final String bookingName;
+  final String bookingPhone;
+  final String bookingEmail;
+  final String message;
+  final List<Map<String, dynamic>> selectedOptions;
+  final String status;
+  final DateTime createdAt;
+
+  factory FieldBookingRequestModel.fromJson(Map<String, dynamic> json) {
+    final dynamic selectedRaw = json['selected_options'];
+    final List<Map<String, dynamic>> options = (selectedRaw is List)
+        ? selectedRaw
+              .map((dynamic item) {
+                if (item is Map<String, dynamic>) {
+                  return item;
+                }
+                if (item is Map) {
+                  return Map<String, dynamic>.from(item);
+                }
+                return <String, dynamic>{'label': item.toString()};
+              })
+              .toList()
+        : const <Map<String, dynamic>>[];
+
+    return FieldBookingRequestModel(
+      id: (json['id'] ?? '').toString(),
+      fieldId: (json['field_id'] ?? '').toString(),
+      userId: json['user_id']?.toString(),
+      bookingName: (json['booking_name'] ?? '').toString(),
+      bookingPhone: (json['booking_phone'] ?? '').toString(),
+      bookingEmail: (json['booking_email'] ?? '').toString(),
+      message: (json['message'] ?? '').toString(),
+      selectedOptions: options,
+      status: (json['status'] ?? 'pending').toString(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toLocal() ??
+          DateTime.now(),
+    );
   }
 }
 

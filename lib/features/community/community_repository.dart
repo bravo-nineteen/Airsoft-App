@@ -258,6 +258,77 @@ class CommunityRepository {
         .toList();
   }
 
+  Future<List<CommunityPostModel>> fetchMergedTimelinePosts(
+    String userId, {
+    int? limit,
+  }) async {
+    dynamic query = _client
+        .from('community_posts')
+        .select()
+        .eq('is_deleted', false)
+        .or('and(post_context.eq.profile,target_user_id.eq.$userId),and(post_context.eq.community,author_id.eq.$userId)')
+        .order('created_at', ascending: false);
+
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    final response = await query;
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic e) =>
+              CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
+        )
+        .toList();
+  }
+
+  Future<List<CommunityPostModel>> fetchFriendsTimelinePosts({
+    int limit = 6,
+  }) async {
+    final User? user = _client.auth.currentUser;
+    if (user == null) {
+      return <CommunityPostModel>[];
+    }
+
+    final List<dynamic> contacts = await _client
+        .from('user_contacts')
+        .select('requester_id, addressee_id')
+        .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
+        .eq('status', 'accepted');
+
+    final Set<String> friendIds = <String>{};
+    for (final dynamic row in contacts) {
+      final String requesterId = row['requester_id'].toString();
+      final String addresseeId = row['addressee_id'].toString();
+      if (requesterId == user.id) {
+        friendIds.add(addresseeId);
+      } else {
+        friendIds.add(requesterId);
+      }
+    }
+
+    if (friendIds.isEmpty) {
+      return <CommunityPostModel>[];
+    }
+
+    final dynamic response = await _client
+        .from('community_posts')
+        .select()
+        .eq('is_deleted', false)
+        .eq('post_context', 'profile')
+        .inFilter('target_user_id', friendIds.toList())
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic e) =>
+              CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
+        )
+        .toList();
+  }
+
   Future<CommunityPostModel> fetchPostById(String postId) async {
     final response = await _withTransientRetry(
       () => _client

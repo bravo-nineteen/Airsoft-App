@@ -1,25 +1,36 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../community/community_image_service.dart';
 import 'event_model.dart';
 import '../notifications/notification_writer.dart';
 
 class EventRepository {
   EventRepository({SupabaseClient? client})
     : _client = client,
-      _notificationWriter = NotificationWriter(client: client);
+      _notificationWriter = NotificationWriter(client: client),
+      _imageService = CommunityImageService(client: client);
 
   final SupabaseClient? _client;
   final NotificationWriter _notificationWriter;
+  final CommunityImageService _imageService;
 
   SupabaseClient get _resolvedClient => _client ?? Supabase.instance.client;
 
   User? get currentUser => _resolvedClient.auth.currentUser;
 
   Future<List<EventModel>> getEvents() async {
-    final response = await _resolvedClient
-        .from('events')
-        .select()
-        .order('starts_at', ascending: true);
+    dynamic query = _resolvedClient.from('events').select();
+    dynamic response;
+    try {
+      response = await query
+          .order('pinned_until', ascending: false)
+          .order('starts_at', ascending: true);
+    } on PostgrestException catch (error) {
+      if (!_isMissingColumnError(error, 'pinned_until')) {
+        rethrow;
+      }
+      response = await query.order('starts_at', ascending: true);
+    }
 
     final List<EventModel> baseEvents = (response as List<dynamic>)
         .map(
@@ -63,6 +74,7 @@ class EventRepository {
     int? priceYen,
     int? maxPlayers,
     String? imageUrl,
+    String? bookTicketsUrl,
   }) async {
     final User? user = currentUser;
     if (user == null) {
@@ -96,6 +108,7 @@ class EventRepository {
       'price_yen': priceYen,
       'max_players': maxPlayers,
       'image_url': _nullIfEmpty(imageUrl),
+      'book_tickets_url': _nullIfEmpty(bookTicketsUrl),
       'host_user_id': user.id,
       'is_official': isOfficial,
     };
@@ -129,6 +142,7 @@ class EventRepository {
     int? priceYen,
     int? maxPlayers,
     String? imageUrl,
+    String? bookTicketsUrl,
   }) async {
     final User? user = currentUser;
     if (user == null) {
@@ -162,6 +176,7 @@ class EventRepository {
       'price_yen': priceYen,
       'max_players': maxPlayers,
       'image_url': _nullIfEmpty(imageUrl),
+      'book_tickets_url': _nullIfEmpty(bookTicketsUrl),
       'is_official': isOfficial,
     };
 
@@ -190,11 +205,67 @@ class EventRepository {
       throw Exception('You must be logged in.');
     }
 
+    final Map<String, dynamic>? existing = await _resolvedClient
+        .from('events')
+        .select('image_url')
+        .eq('id', eventId)
+        .eq('host_user_id', user.id)
+        .maybeSingle();
+    final String? imageUrl = _nullIfEmpty(existing?['image_url']?.toString());
+
     await _resolvedClient
       .from('events')
       .delete()
       .eq('id', eventId)
       .eq('host_user_id', user.id);
+
+    await _imageService.deleteUploadedImageByPublicUrl(imageUrl);
+  }
+
+  Future<void> markInterested(String eventId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to set interest.');
+    }
+
+    final Map<String, dynamic>? existing = await _resolvedClient
+        .from('event_attendees')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (existing == null) {
+      await _resolvedClient.from('event_attendees').insert({
+        'event_id': eventId,
+        'user_id': user.id,
+        'status': 'interested',
+      });
+      return;
+    }
+
+    try {
+      await _resolvedClient
+          .from('event_attendees')
+          .update({'status': 'interested'})
+          .eq('event_id', eventId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (!_isMissingUpdatedAtTriggerError(error)) {
+        rethrow;
+      }
+
+      await _resolvedClient
+          .from('event_attendees')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('user_id', user.id);
+      await _resolvedClient.from('event_attendees').insert({
+        'event_id': eventId,
+        'user_id': user.id,
+        'status': 'interested',
+      });
+    }
   }
 
   Future<void> attendEvent(String eventId) async {

@@ -41,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   CommunityRepository? _communityRepository;
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
+  List<CommunityPostModel> _friendsTimelinePosts = <CommunityPostModel>[];
   List<AojBlogPost> _blogPosts = <AojBlogPost>[];
 
   bool _isLoading = true;
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final results = await Future.wait<dynamic>([
         _fetchLatestPosts(),
+        _fetchFriendsTimelinePosts(),
         _fetchBlogPosts(),
       ]);
 
@@ -87,7 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _latestPosts = (results[0] as List<CommunityPostModel>)
             .take(6)
             .toList();
-        _blogPosts = results[1] as List<AojBlogPost>;
+        _friendsTimelinePosts =
+          (results[1] as List<CommunityPostModel>).take(6).toList();
+        _blogPosts = results[2] as List<AojBlogPost>;
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -168,6 +172,12 @@ class _HomeScreenState extends State<HomeScreen> {
           (dynamic item) => AojBlogPost.fromJson(item as Map<String, dynamic>),
         )
         .toList();
+  }
+
+  Future<List<CommunityPostModel>> _fetchFriendsTimelinePosts() {
+    final CommunityRepository repository = _communityRepository ??=
+        CommunityRepository();
+    return repository.fetchFriendsTimelinePosts(limit: 6);
   }
 
   void _openPost(CommunityPostModel post) {
@@ -272,6 +282,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       ..._latestPosts.map((CommunityPostModel post) {
+                        return _HomePostCard(
+                          post: post,
+                          onTap: () => _openPost(post),
+                        );
+                      }),
+                    const SizedBox(height: 20),
+                    _SectionHeader(
+                      title: 'Friends Timeline',
+                      subtitle: 'Latest timeline posts from your friends',
+                      onViewAll: _openBoards,
+                    ),
+                    const SizedBox(height: 12),
+                    if (_friendsTimelinePosts.isEmpty)
+                      const _EmptyBlock(
+                        icon: Icons.people_outline,
+                        text: 'No friend timeline posts yet',
+                      )
+                    else
+                      ..._friendsTimelinePosts.map((CommunityPostModel post) {
                         return _HomePostCard(
                           post: post,
                           onTap: () => _openPost(post),

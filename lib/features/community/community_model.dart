@@ -1,3 +1,5 @@
+import '../../core/time/japan_time.dart';
+
 class CommunityPostModel {
   final String id;
   final String? authorId;
@@ -183,11 +185,9 @@ class CommunityPostModel {
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
-              ?.toLocal() ??
+        createdAt: JapanTime.parseServerTimestamp(json['created_at']) ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse((json['updated_at'] ?? '').toString())
-          ?.toLocal(),
+        updatedAt: JapanTime.parseServerTimestamp(json['updated_at']),
       isPinned: json['is_pinned'] == true,
       postContext: _readNullableString(json['post_context']) ?? 'community',
       targetUserId: _readNullableString(json['target_user_id']),
@@ -272,8 +272,7 @@ class CommunityCommentModel {
         imageUrl: _readNullableString(json['image_url']),
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       likedByMe: json['liked_by_me'] == true,
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
-              ?.toLocal() ??
+      createdAt: JapanTime.parseServerTimestamp(json['created_at']) ??
           DateTime.now(),
       parentCommentId: _readNullableString(json['parent_comment_id']),
     );

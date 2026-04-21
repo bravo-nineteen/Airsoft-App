@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_user_profile_screen.dart';
+import '../social/contact_model.dart';
+import '../social/contact_repository.dart';
 import '../settings/settings_screen.dart';
 import 'avatar_picker_widget.dart';
 import 'edit_profile_screen.dart';
@@ -28,12 +31,15 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileRepository _repository = ProfileRepository();
+  final ContactRepository _contactRepository = ContactRepository();
   late Future<ProfileModel?> _future;
+  late Future<List<ContactModel>> _friendsFuture;
 
   @override
   void initState() {
     super.initState();
     _future = _repository.getCurrentProfile();
+    _friendsFuture = _contactRepository.getAcceptedFriends();
   }
 
   Future<void> _refresh() async {
@@ -42,8 +48,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     setState(() {
       _future = _repository.getCurrentProfile();
+      _friendsFuture = _contactRepository.getAcceptedFriends();
     });
     await _future;
+  }
+
+  String _otherUserId(ContactModel contact, String currentUserId) {
+    return contact.requesterId == currentUserId
+        ? contact.addresseeId
+        : contact.requesterId;
+  }
+
+  String _otherDisplayName(ContactModel contact, String currentUserId) {
+    if (contact.requesterId == currentUserId) {
+      final String value = (contact.addresseeCallSign ?? '').trim();
+      return value.isEmpty ? 'Unknown user' : value;
+    }
+    final String value = (contact.requesterCallSign ?? '').trim();
+    return value.isEmpty ? 'Unknown user' : value;
   }
 
   Future<void> _edit(ProfileModel profile) async {
@@ -160,6 +182,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _InfoCard(title: l10n.teamName, value: profile.teamName),
             _InfoCard(title: l10n.loadout, value: profile.loadout),
             _LoadoutGallery(cards: profile.normalizedLoadoutCards),
+            FutureBuilder<List<ContactModel>>(
+              future: _friendsFuture,
+              builder: (BuildContext context, AsyncSnapshot<List<ContactModel>> friendsSnapshot) {
+                if (friendsSnapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                    ),
+                  );
+                }
+
+                final List<ContactModel> friends = friendsSnapshot.data ?? <ContactModel>[];
+                if (friends.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                final String currentUserId =
+                    Supabase.instance.client.auth.currentUser?.id ?? '';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
+                          child: Text(
+                            'Friends',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        ...friends.map((ContactModel contact) {
+                          final String userId = _otherUserId(contact, currentUserId);
+                          final String displayName = _otherDisplayName(contact, currentUserId);
+                          return ListTile(
+                            leading: CircleAvatar(
+                              child: Text(
+                                displayName.isEmpty
+                                    ? '?'
+                                    : displayName.characters.first.toUpperCase(),
+                              ),
+                            ),
+                            title: Text(displayName),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => CommunityUserProfileScreen(
+                                    userId: userId,
+                                    fallbackName: displayName,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             _InfoCard(title: l10n.instagram, value: profile.instagram),
             _InfoCard(title: l10n.facebook, value: profile.facebook),
             _InfoCard(title: l10n.youtube, value: profile.youtube),

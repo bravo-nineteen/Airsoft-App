@@ -16,6 +16,12 @@ class FieldModel {
     this.prosText,
     this.consText,
     this.isOfficial = false,
+    this.claimStatus = 'unclaimed',
+    this.claimedByUserId,
+    this.bookingEnabled = false,
+    this.bookingContactName,
+    this.bookingPhone,
+    this.bookingEmail,
   });
 
   final String id;
@@ -34,6 +40,12 @@ class FieldModel {
   final String? prosText;
   final String? consText;
   final bool isOfficial;
+  final String claimStatus;
+  final String? claimedByUserId;
+  final bool bookingEnabled;
+  final String? bookingContactName;
+  final String? bookingPhone;
+  final String? bookingEmail;
 
   factory FieldModel.fromJson(Map<String, dynamic> json) {
     return FieldModel(
@@ -59,6 +71,12 @@ class FieldModel {
         json['cons_list'] ?? json['cons'] ?? json['cons_text'],
       ),
       isOfficial: (json['is_official'] as bool?) ?? false,
+      claimStatus: _readNullableString(json['claim_status']) ?? 'unclaimed',
+      claimedByUserId: _readNullableString(json['claimed_by_user_id']),
+      bookingEnabled: (json['booking_enabled'] as bool?) ?? false,
+      bookingContactName: _readNullableString(json['booking_contact_name']),
+      bookingPhone: _readNullableString(json['booking_phone']),
+      bookingEmail: _readNullableString(json['booking_email']),
     );
   }
 

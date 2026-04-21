@@ -8,6 +8,8 @@ class CommunityPostCategories {
   static const String events = 'Events';
   static const String team = 'Team';
   static const String advice = 'Advice';
+  static const String offTopic = 'Off Topic';
+  static const String camping = 'Camping';
   static const String timeline = 'Timeline';
 
   static const List<String> communityCategories = <String>[
@@ -19,6 +21,8 @@ class CommunityPostCategories {
     events,
     team,
     advice,
+    offTopic,
+    camping,
   ];
 
   static const List<String> communityCategoriesWithAll = <String>[
@@ -31,6 +35,8 @@ class CommunityPostCategories {
     events,
     team,
     advice,
+    offTopic,
+    camping,
   ];
 
   static const List<String> timelineCategories = <String>[
