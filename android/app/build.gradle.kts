@@ -76,6 +76,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            ndk {
+                debugSymbolLevel = "NONE"
+            }
         }
     }
 }

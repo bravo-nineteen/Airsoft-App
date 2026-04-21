@@ -127,6 +127,40 @@ class FieldRepository {
     }, onConflict: 'field_id,user_id');
   }
 
+  Future<void> updateFieldReview({
+    required String reviewId,
+    required int rating,
+    required String reviewText,
+  }) async {
+    final User? user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to edit reviews.');
+    }
+
+    await _client
+        .from('field_reviews')
+        .update({
+          'rating': rating,
+          'review_text': reviewText.trim(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', reviewId)
+        .eq('user_id', user.id);
+  }
+
+  Future<void> deleteFieldReview(String reviewId) async {
+    final User? user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to delete reviews.');
+    }
+
+    await _client
+        .from('field_reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('user_id', user.id);
+  }
+
   Future<void> submitFieldClaimRequest({
     required String fieldId,
     required String staffName,

@@ -42,6 +42,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   bool _submittingClaim = false;
   bool _submittingBooking = false;
   int _selectedRating = 5;
+  String? _editingReviewId;
 
   FieldModel get field => widget.field;
 
@@ -121,12 +122,22 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     });
 
     try {
-      await _repository.upsertFieldReview(
-        fieldId: field.id,
-        rating: _selectedRating,
-        reviewText: text,
-      );
+      if (_editingReviewId != null) {
+        await _repository.updateFieldReview(
+          reviewId: _editingReviewId!,
+          rating: _selectedRating,
+          reviewText: text,
+        );
+      } else {
+        await _repository.upsertFieldReview(
+          fieldId: field.id,
+          rating: _selectedRating,
+          reviewText: text,
+        );
+      }
+
       _reviewController.clear();
+      _editingReviewId = null;
       await _loadReviews();
       if (!mounted) {
         return;
@@ -153,6 +164,69 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
           _savingReview = false;
         });
       }
+    }
+  }
+
+  void _startEditingReview(FieldReviewModel review) {
+    setState(() {
+      _editingReviewId = review.id;
+      _selectedRating = review.rating;
+      _reviewController.text = review.reviewText;
+    });
+  }
+
+  void _cancelEditingReview() {
+    setState(() {
+      _editingReviewId = null;
+      _reviewController.clear();
+      _selectedRating = 5;
+    });
+  }
+
+  Future<void> _deleteReview(FieldReviewModel review) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete review?'),
+          content: const Text('This will permanently remove your review.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.deleteFieldReview(review.id);
+      if (_editingReviewId == review.id) {
+        _cancelEditingReview();
+      }
+      await _loadReviews();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Review deleted')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete review: $error')));
     }
   }
 
@@ -672,6 +746,8 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   }
 
   Widget _buildReviewComposer() {
+    final bool isEditing = _editingReviewId != null;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -710,19 +786,26 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _savingReview ? null : _submitReview,
-                icon: _savingReview
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.rate_review_outlined),
-                label: const Text('Post review'),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                if (isEditing)
+                  TextButton(
+                    onPressed: _savingReview ? null : _cancelEditingReview,
+                    child: const Text('Cancel'),
+                  ),
+                FilledButton.icon(
+                  onPressed: _savingReview ? null : _submitReview,
+                  icon: _savingReview
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.rate_review_outlined),
+                  label: Text(isEditing ? 'Update review' : 'Post review'),
+                ),
+              ],
             ),
           ],
         ),
@@ -924,6 +1007,8 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
         final String name = (review.callSign ?? '').trim().isEmpty
             ? 'Operator'
             : review.callSign!;
+        final bool isOwner = review.userId == _currentUserId;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
@@ -946,6 +1031,28 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               padding: const EdgeInsets.only(top: 6),
               child: Text(review.reviewText),
             ),
+            trailing: isOwner
+                ? PopupMenuButton<String>(
+                    onSelected: (String value) {
+                      if (value == 'edit') {
+                        _startEditingReview(review);
+                      } else if (value == 'delete') {
+                        _deleteReview(review);
+                      }
+                    },
+                    itemBuilder: (BuildContext context) =>
+                        const <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text('Delete'),
+                          ),
+                        ],
+                  )
+                : null,
           ),
         );
       }).toList(),
