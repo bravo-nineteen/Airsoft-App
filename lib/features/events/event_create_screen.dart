@@ -270,9 +270,9 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     switch (value) {
       case 'english':
-        return l10n.english;
+        return l10n.t('english');
       case 'japanese':
-        return l10n.japanese;
+        return l10n.t('japanese');
       default:
         return l10n.t('bilingual');
     }

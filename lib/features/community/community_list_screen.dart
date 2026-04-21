@@ -691,8 +691,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final Map<String, String> postLanguageLabels = <String, String>{
-      'english': l10n.english,
-      'japanese': l10n.japanese,
+      'english': l10n.t('english'),
+      'japanese': l10n.t('japanese'),
       'bilingual': l10n.t('bilingual'),
     };
     final String languageSummary = switch (_selectedLanguagePreference) {

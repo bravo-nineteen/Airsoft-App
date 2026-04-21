@@ -308,7 +308,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.campaign),
-            label: l10n.boards,
+            label: l10n.t('boards'),
           ),
           BottomNavigationBarItem(
             icon: _badgeIcon(
