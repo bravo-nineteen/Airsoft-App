@@ -315,6 +315,41 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     }
   }
 
+  void _openImageLightbox(String imageUrl) {
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: <Widget>[
+              InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton.filled(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
@@ -440,14 +475,19 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                                     if ((message.imageUrl ?? '').trim().isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.only(bottom: 8),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: SizedBox(
-                                            width: 140,
-                                            height: 140,
-                                            child: Image.network(
-                                              message.imageUrl!,
-                                              fit: BoxFit.cover,
+                                        child: InkWell(
+                                          onTap: () => _openImageLightbox(
+                                            message.imageUrl!.trim(),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: SizedBox(
+                                              width: 140,
+                                              height: 140,
+                                              child: Image.network(
+                                                message.imageUrl!,
+                                                fit: BoxFit.cover,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -489,12 +529,17 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                         children: <Widget>[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: SizedBox(
-                              width: 64,
-                              height: 64,
-                              child: Image.network(
-                                _pendingPhotoUrl!,
-                                fit: BoxFit.cover,
+                            child: InkWell(
+                              onTap: () => _openImageLightbox(
+                                _pendingPhotoUrl!.trim(),
+                              ),
+                              child: SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: Image.network(
+                                  _pendingPhotoUrl!,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           ),
