@@ -791,6 +791,7 @@ class _BlogPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final hasImage = post.imageUrl != null && post.imageUrl!.trim().isNotEmpty;
 
@@ -992,6 +993,7 @@ class _QuickAccessStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Container(

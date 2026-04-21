@@ -795,7 +795,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     }
                   },
                   itemBuilder: (BuildContext context) =>
-                      const <PopupMenuEntry<String>>[
+                      <PopupMenuEntry<String>>[
                         PopupMenuItem<String>(
                           value: 'edit',
                           child: Text(l10n.t('edit')),
