@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
@@ -260,6 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openBlogPost(AojBlogPost post) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final uri = Uri.tryParse(post.link);
     if (uri == null) {
       return;
@@ -270,11 +272,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!launched && mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open blog post')));
+      ).showSnackBar(SnackBar(content: Text(l10n.t('couldNotOpenBlogPost'))));
     }
   }
 
   Future<void> _openBlogIndex() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final uri = Uri.parse('https://airsoftonlinejapan.com/blog/');
 
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -282,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!launched && mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open blog')));
+      ).showSnackBar(SnackBar(content: Text(l10n.t('couldNotOpenBlog'))));
     }
   }
 
@@ -294,6 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return SafeArea(
       bottom: false,
       child: _isLoading
@@ -319,15 +323,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_selectedFilter == HomeInterestFilter.all ||
                       _selectedFilter == HomeInterestFilter.posts) ...[
                     _SectionHeader(
-                      title: 'Recent Posts',
-                      subtitle: 'What members are talking about now',
+                      title: l10n.t('recentPosts'),
+                      subtitle: l10n.t('recentPostsSubtitle'),
                       onViewAll: _openBoards,
                     ),
                     const SizedBox(height: 12),
                     if (_latestPosts.isEmpty)
-                      const _EmptyBlock(
+                      _EmptyBlock(
                         icon: Icons.forum_outlined,
-                        text: 'No posts yet',
+                        text: l10n.t('noPostsYet'),
                       )
                     else
                       ..._latestPosts.map((CommunityPostModel post) {
@@ -338,14 +342,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       }),
                     const SizedBox(height: 20),
                     _SectionHeader(
-                      title: 'Friends Timeline',
-                      subtitle: 'Latest timeline posts from your friends',
+                      title: l10n.t('friendsTimeline'),
+                      subtitle: l10n.t('friendsTimelineSubtitle'),
                     ),
                     const SizedBox(height: 12),
                     if (_friendsTimelinePosts.isEmpty)
-                      const _EmptyBlock(
+                      _EmptyBlock(
                         icon: Icons.people_outline,
-                        text: 'No friend timeline posts yet',
+                        text: l10n.t('noFriendTimelinePostsYet'),
                       )
                     else
                       ..._friendsTimelinePosts.map((CommunityPostModel post) {
@@ -359,15 +363,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_selectedFilter == HomeInterestFilter.all ||
                       _selectedFilter == HomeInterestFilter.events) ...[
                     _SectionHeader(
-                      title: 'Events',
-                      subtitle: 'Closest events happening soon',
+                      title: l10n.t('events'),
+                      subtitle: l10n.t('closestEventsSoon'),
                       onViewAll: _openEventsPage,
                     ),
                     const SizedBox(height: 12),
                     if (_upcomingEvents.isEmpty)
-                      const _EmptyBlock(
+                      _EmptyBlock(
                         icon: Icons.event_busy_outlined,
-                        text: 'No upcoming events',
+                        text: l10n.t('noUpcomingEvents'),
                       )
                     else
                       ..._upcomingEvents.map((EventModel event) {
@@ -381,15 +385,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_selectedFilter == HomeInterestFilter.all ||
                       _selectedFilter == HomeInterestFilter.blog) ...[
                     _SectionHeader(
-                      title: 'Airsoft Blog',
-                      subtitle: 'Latest posts from airsoftonlinejapan.com/blog',
+                      title: l10n.t('airsoftBlog'),
+                      subtitle: l10n.t('airsoftBlogSubtitle'),
                       onViewAll: _openBlogIndex,
                     ),
                     const SizedBox(height: 12),
                     if (_blogPosts.isEmpty)
-                      const _EmptyBlock(
+                      _EmptyBlock(
                         icon: Icons.menu_book_outlined,
-                        text: 'No blog posts found',
+                        text: l10n.t('noBlogPostsFound'),
                       )
                     else
                       ..._blogPosts.map(
@@ -417,13 +421,14 @@ class _HomeTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Row(
       children: <Widget>[
         Expanded(
           child: Text(
-            'FieldOps News Feed',
+            l10n.t('fieldOpsNewsFeed'),
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
             ),
@@ -445,28 +450,29 @@ class _InterestSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return SizedBox(
       height: 42,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: <Widget>[
           _InterestChip(
-            label: 'All',
+            label: l10n.t('all'),
             selected: selectedFilter == HomeInterestFilter.all,
             onTap: () => onSelected(HomeInterestFilter.all),
           ),
           _InterestChip(
-            label: 'Posts',
+            label: l10n.t('boards'),
             selected: selectedFilter == HomeInterestFilter.posts,
             onTap: () => onSelected(HomeInterestFilter.posts),
           ),
           _InterestChip(
-            label: 'Events',
+            label: l10n.t('events'),
             selected: selectedFilter == HomeInterestFilter.events,
             onTap: () => onSelected(HomeInterestFilter.events),
           ),
           _InterestChip(
-            label: 'Blog',
+            label: l10n.t('blog'),
             selected: selectedFilter == HomeInterestFilter.blog,
             onTap: () => onSelected(HomeInterestFilter.blog),
           ),
@@ -513,6 +519,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Row(
@@ -534,7 +541,7 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         if (onViewAll != null)
-          TextButton(onPressed: onViewAll, child: const Text('View all')),
+          TextButton(onPressed: onViewAll, child: Text(l10n.t('viewAll'))),
       ],
     );
   }
@@ -557,6 +564,7 @@ class _HomeEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeData theme = Theme.of(context);
     final String where = [
       if ((event.location ?? '').trim().isNotEmpty) event.location!.trim(),
@@ -607,7 +615,7 @@ class _HomeEventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      where.isEmpty ? 'Location TBD' : where,
+                      where.isEmpty ? l10n.t('locationTbd') : where,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium,
@@ -633,6 +641,7 @@ class _HomePostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final imageUrl = post.primaryImageUrl;
     final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
@@ -859,7 +868,7 @@ class _BlogPostCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     _MiniBadge(
-                      text: 'Blog',
+                      text: l10n.t('blog'),
                       color: theme.colorScheme.tertiaryContainer,
                       textColor: theme.colorScheme.onTertiaryContainer,
                     ),
@@ -880,9 +889,9 @@ class _BlogPostCard extends StatelessWidget {
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 8),
-                    const _MetaItem(
+                    _MetaItem(
                       icon: Icons.open_in_new,
-                      text: 'Open article',
+                      text: l10n.t('openArticle'),
                     ),
                   ],
                 ),
@@ -912,6 +921,7 @@ class _InfoFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Card(
@@ -995,7 +1005,7 @@ class _QuickAccessStrip extends StatelessWidget {
           Expanded(
             child: _QuickActionButton(
               icon: Icons.forum_outlined,
-              label: 'Boards',
+              label: l10n.t('boards'),
               onTap: onBoardsTap,
             ),
           ),
@@ -1003,7 +1013,7 @@ class _QuickAccessStrip extends StatelessWidget {
           Expanded(
             child: _QuickActionButton(
               icon: Icons.event_outlined,
-              label: 'Events',
+              label: l10n.t('events'),
               onTap: onEventsTap,
             ),
           ),
@@ -1011,7 +1021,7 @@ class _QuickAccessStrip extends StatelessWidget {
           Expanded(
             child: _QuickActionButton(
               icon: Icons.menu_book_outlined,
-              label: 'Blog',
+              label: l10n.t('blog'),
               onTap: onBlogTap,
             ),
           ),
