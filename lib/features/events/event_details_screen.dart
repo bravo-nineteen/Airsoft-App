@@ -37,6 +37,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Future<void> _load() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() {
       _isLoading = true;
     });
@@ -73,7 +74,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load event: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedLoadEvent', args: {'error': '$error'}))),
+      );
     }
   }
 
@@ -117,6 +120,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Future<void> _attend() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_isUpdatingAttendance) {
       return;
     }
@@ -133,7 +137,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to confirm attendance: $error')),
+        SnackBar(
+          content: Text(
+            l10n.t('failedConfirmAttendance', args: {'error': '$error'}),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -145,6 +153,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Future<void> _cancel() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_isUpdatingAttendance) {
       return;
     }
@@ -161,7 +170,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel attendance: $error')),
+        SnackBar(
+          content: Text(
+            l10n.t('failedCancelAttendance', args: {'error': '$error'}),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -176,6 +189,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     required String attendeeUserId,
     required String status,
   }) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_busyAttendeeIds.contains(attendeeUserId)) {
       return;
     }
@@ -197,7 +211,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update attendee: $error')),
+        SnackBar(
+          content: Text(l10n.t('failedUpdateAttendee', args: {'error': '$error'})),
+        ),
       );
     } finally {
       if (mounted) {
@@ -224,20 +240,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Future<void> _deleteEvent() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete event?'),
-          content: const Text('This will permanently delete this event.'),
+          title: Text(l10n.t('deleteEventPromptTitle')),
+          content: Text(l10n.t('deleteEventDetailsBody')),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
+              child: Text(l10n.t('delete')),
             ),
           ],
         );
@@ -260,11 +277,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete event: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedDeleteEvent', args: {'error': '$error'}))),
+      );
     }
   }
 
   Future<void> _submitComment() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String body = _commentController.text.trim();
     if (body.isEmpty || _isSendingComment) {
       return;
@@ -273,7 +293,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final User? user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in to comment.')),
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToComment'))),
       );
       return;
     }
@@ -298,7 +318,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to post comment: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedPostComment', args: {'error': '$error'}))),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -323,6 +345,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Future<void> _editComment(EventCommentModel comment) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TextEditingController controller =
         TextEditingController(text: comment.body);
 
@@ -331,21 +354,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         context: context,
         builder: (BuildContext dialogContext) {
           return AlertDialog(
-            title: const Text('Edit comment'),
+            title: Text(l10n.t('editComment')),
             content: TextField(
               controller: controller,
               minLines: 3,
               maxLines: 6,
-              decoration: const InputDecoration(labelText: 'Comment'),
+              decoration: InputDecoration(labelText: l10n.t('comment')),
             ),
             actions: <Widget>[
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l10n.t('cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Save'),
+                child: Text(l10n.t('save')),
               ),
             ],
           );
@@ -367,27 +390,30 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update comment: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedUpdateComment', args: {'error': '$error'}))),
+      );
     } finally {
       controller.dispose();
     }
   }
 
   Future<void> _deleteComment(EventCommentModel comment) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Delete comment?'),
-          content: const Text('This will remove your comment.'),
+          title: Text(l10n.t('deleteCommentTitle')),
+          content: Text(l10n.t('deleteCommentBody')),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
+              child: Text(l10n.t('delete')),
             ),
           ],
         );
@@ -407,11 +433,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete comment: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedDeleteComment', args: {'error': '$error'}))),
+      );
     }
   }
 
   Widget _buildAttendanceActions() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String? status = _event.currentUserAttendanceStatus;
 
     return Card(
@@ -421,7 +450,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Attendance',
+              l10n.t('attendance'),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -433,21 +462,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               children: <Widget>[
                 _StatusChip(
                   icon: Icons.event_available,
-                  label: 'Going ${_event.attendingCount}',
+                  label: l10n.t('goingWithCount', args: {'count': '${_event.attendingCount}'}),
                 ),
                 _StatusChip(
                   icon: Icons.verified,
-                  label: 'Attended ${_event.attendedCount}',
+                  label: l10n.t('attendedWithCount', args: {'count': '${_event.attendedCount}'}),
                 ),
                 _StatusChip(
                   icon: Icons.cancel_outlined,
-                  label: 'Cancelled ${_event.cancelledCount}',
+                  label: l10n.t('cancelledWithCount', args: {'count': '${_event.cancelledCount}'}),
                 ),
               ],
             ),
             const SizedBox(height: 14),
             if (status == 'attending') ...[
-              const Text('You are marked as attending this event.'),
+              Text(l10n.t('youAreAttendingEvent')),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
@@ -455,7 +484,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: FilledButton.icon(
                       onPressed: _isUpdatingAttendance ? null : _attend,
                       icon: const Icon(Icons.check_circle),
-                      label: const Text('Attending'),
+                      label: Text(l10n.t('attendanceAttending')),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -463,13 +492,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _isUpdatingAttendance ? null : _cancel,
                       icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Cancel'),
+                      label: Text(l10n.t('cancel')),
                     ),
                   ),
                 ],
               ),
             ] else if (status == 'cancelled') ...[
-              const Text('You have cancelled your attendance.'),
+              Text(l10n.t('youCancelledAttendance')),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
@@ -477,20 +506,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: FilledButton.icon(
                       onPressed: _isUpdatingAttendance ? null : _attend,
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Attend Instead'),
+                      label: Text(l10n.t('attendInstead')),
                     ),
                   ),
                 ],
               ),
             ] else if (status == 'attended') ...[
-              const Text('The host has confirmed you attended this event.'),
+              Text(l10n.t('hostConfirmedAttended')),
               const SizedBox(height: 10),
-              const _StatusChip(
+              _StatusChip(
                 icon: Icons.verified,
-                label: 'Attendance Confirmed',
+                label: l10n.t('attendanceConfirmed'),
               ),
             ] else if (status == 'no_show') ...[
-              const Text('The host marked you as not attended.'),
+              Text(l10n.t('hostMarkedNoShow')),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
@@ -498,13 +527,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _isUpdatingAttendance ? null : _attend,
                       icon: const Icon(Icons.replay),
-                      label: const Text('Mark Attending Again'),
+                      label: Text(l10n.t('markAttendingAgain')),
                     ),
                   ),
                 ],
               ),
             ] else ...[
-              const Text('Let the host know you are going.'),
+              Text(l10n.t('letHostKnowGoing')),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
@@ -512,7 +541,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: FilledButton.icon(
                       onPressed: _isUpdatingAttendance ? null : _attend,
                       icon: const Icon(Icons.event_available),
-                      label: const Text('Attend'),
+                      label: Text(l10n.t('attend')),
                     ),
                   ),
                 ],
@@ -525,6 +554,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildHostSection() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (!_isCurrentUserHost(_event)) {
       return const SizedBox.shrink();
     }
@@ -536,19 +566,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Host Controls',
+              l10n.t('hostControls'),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
-              'Confirm whether attendees actually showed up.',
+              l10n.t('confirmAttendeesHelp'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
             if (_attendees.isEmpty)
-              const Text('No attendees yet.')
+              Text(l10n.t('noAttendeesYet'))
             else
               ..._attendees.map((EventAttendanceRecord attendee) {
                 final bool isBusy = _busyAttendeeIds.contains(attendee.userId);
@@ -595,7 +625,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Status: ${_readableStatus(attendee.status)}',
+                                  l10n.t(
+                                    'statusLabel',
+                                    args: {'status': _readableStatus(attendee.status)},
+                                  ),
                                 ),
                               ],
                             ),
@@ -614,7 +647,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     attendeeUserId: attendee.userId,
                                     status: 'attended',
                                   ),
-                            child: const Text('Mark Attended'),
+                            child: Text(l10n.t('markAttended')),
                           ),
                           OutlinedButton(
                             onPressed: isBusy
@@ -623,7 +656,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     attendeeUserId: attendee.userId,
                                     status: 'no_show',
                                   ),
-                            child: const Text('Mark No Show'),
+                            child: Text(l10n.t('markNoShow')),
                           ),
                           OutlinedButton(
                             onPressed: isBusy
@@ -632,7 +665,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     attendeeUserId: attendee.userId,
                                     status: 'attending',
                                   ),
-                            child: const Text('Reset'),
+                            child: Text(l10n.t('reset')),
                           ),
                         ],
                       ),
@@ -647,6 +680,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildAttendeesSection() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final List<EventAttendanceRecord> attending = _attendees
         .where((EventAttendanceRecord attendee) => attendee.status == 'attending')
         .toList();
@@ -658,19 +692,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Attendees',
+              l10n.t('attendees'),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
-              'People going: ${attending.length}',
+              l10n.t('peopleGoingCount', args: {'count': '${attending.length}'}),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
             if (attending.isEmpty)
-              const Text('No attendees yet.')
+              Text(l10n.t('noAttendeesYet'))
             else
               ...attending.map((EventAttendanceRecord attendee) {
                 final String displayName =
@@ -702,6 +736,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildCommentCard(EventCommentModel comment, {bool isReply = false}) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isOwner = _isCommentOwner(comment);
 
     return Container(
@@ -744,7 +779,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     if (comment.updatedAt != null &&
                         comment.updatedAt!.isAfter(comment.createdAt))
                       Text(
-                        'Edited',
+                        l10n.t('edited'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                   ],
@@ -763,11 +798,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       const <PopupMenuEntry<String>>[
                         PopupMenuItem<String>(
                           value: 'edit',
-                          child: Text('Edit'),
+                          child: Text(l10n.t('edit')),
                         ),
                         PopupMenuItem<String>(
                           value: 'delete',
-                          child: Text('Delete'),
+                          child: Text(l10n.t('delete')),
                         ),
                       ],
                 ),
@@ -781,7 +816,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               child: TextButton.icon(
                 onPressed: () => _setReplyTarget(comment),
                 icon: const Icon(Icons.reply_outlined),
-                label: const Text('Reply'),
+                label: Text(l10n.t('reply')),
               ),
             ),
         ],
@@ -790,6 +825,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildCommentsSection() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final List<EventCommentModel> topLevel = _topLevelComments;
 
     return Card(
@@ -799,14 +835,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Comments (${_comments.length})',
+              l10n.t('commentsWithCount', args: {'count': '${_comments.length}'}),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             if (topLevel.isEmpty)
-              const Text('No comments yet.')
+              Text(l10n.t('noCommentsYet'))
             else
               ...topLevel.map((EventCommentModel comment) {
                 final List<EventCommentModel> replies = _childRepliesFor(comment.id);
@@ -827,7 +863,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Log in to join the conversation.',
+                  l10n.t('logInToJoinConversation'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -844,7 +880,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        'Replying to ${_replyToCommentAuthor ?? 'comment'}',
+                        l10n.t(
+                          'replyingTo',
+                          args: {'name': _replyToCommentAuthor ?? l10n.t('comment')},
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -852,7 +891,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     IconButton(
                       onPressed: _clearReplyTarget,
                       icon: const Icon(Icons.close),
-                      tooltip: 'Cancel reply',
+                      tooltip: l10n.t('cancelReply'),
                     ),
                   ],
                 ),
@@ -865,8 +904,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     enabled: _isLoggedIn && !_isSendingComment,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Write a comment',
+                    decoration: InputDecoration(
+                      hintText: l10n.t('writeComment'),
                     ),
                   ),
                 ),
@@ -881,7 +920,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Send'),
+                      : Text(l10n.t('send')),
                 ),
               ],
             ),
@@ -892,15 +931,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   String _readableStatus(String status) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     switch (status) {
       case 'attending':
-        return 'Attending';
+        return l10n.t('attendanceAttending');
       case 'cancelled':
-        return 'Cancelled';
+        return l10n.t('attendanceCancelled');
       case 'attended':
-        return 'Attended';
+        return l10n.t('attendanceAttended');
       case 'no_show':
-        return 'No Show';
+        return l10n.t('attendanceNoShow');
       default:
         return status;
     }
@@ -941,14 +981,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       _deleteEvent();
                     }
                   },
-                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                  itemBuilder: (context) => <PopupMenuEntry<String>>[
                     PopupMenuItem<String>(
                       value: 'edit',
-                      child: Text('Edit event'),
+                      child: Text(l10n.t('editEvent')),
                     ),
                     PopupMenuItem<String>(
                       value: 'delete',
-                      child: Text('Delete event'),
+                      child: Text(l10n.t('deleteEventAction')),
                     ),
                   ],
                 ),

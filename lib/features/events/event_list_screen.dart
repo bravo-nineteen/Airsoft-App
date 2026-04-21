@@ -66,15 +66,16 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   String? _statusLabel(EventModel event) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     switch (event.currentUserAttendanceStatus) {
       case 'attending':
-        return 'Attending';
+        return l10n.t('attendanceAttending');
       case 'cancelled':
-        return 'Cancelled';
+        return l10n.t('attendanceCancelled');
       case 'attended':
-        return 'Attended';
+        return l10n.t('attendanceAttended');
       case 'no_show':
-        return 'No Show';
+        return l10n.t('attendanceNoShow');
       default:
         return null;
     }
@@ -94,7 +95,7 @@ class _EventListScreenState extends State<EventListScreen> {
         child: FloatingActionButton.extended(
           onPressed: _openCreate,
           icon: const Icon(Icons.add),
-          label: const Text('New event'),
+          label: Text(l10n.t('newEventCta')),
         ),
       ),
       body: RefreshIndicator(
@@ -173,7 +174,7 @@ class _EventListScreenState extends State<EventListScreen> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Official Event',
+                                l10n.t('officialEvent'),
                                 style: Theme.of(context)
                                     .textTheme
                                     .labelMedium
@@ -201,11 +202,17 @@ class _EventListScreenState extends State<EventListScreen> {
                               children: <Widget>[
                                 _MiniInfoChip(
                                   icon: Icons.event_available,
-                                  label: 'Going ${event.attendingCount}',
+                                  label: l10n.t(
+                                    'goingWithCount',
+                                    args: {'count': '${event.attendingCount}'},
+                                  ),
                                 ),
                                 _MiniInfoChip(
                                   icon: Icons.verified,
-                                  label: 'Attended ${event.attendedCount}',
+                                  label: l10n.t(
+                                    'attendedWithCount',
+                                    args: {'count': '${event.attendedCount}'},
+                                  ),
                                 ),
                                 if (statusLabel != null)
                                   _MiniInfoChip(

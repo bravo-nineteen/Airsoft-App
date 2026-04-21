@@ -236,6 +236,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   }
 
   Future<void> _pickAndUploadPhoto() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_isSending) {
       return;
     }
@@ -255,7 +256,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload image: $error')),
+        SnackBar(content: Text(l10n.t('failedUploadImage', args: {'error': '$error'}))),
       );
     }
   }
@@ -269,6 +270,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   }
 
   Future<void> _openMessageMenu(DirectMessageModel message) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isMine = message.senderId == _currentUserId;
     final String? selected = await showModalBottomSheet<String>(
       context: context,
@@ -280,12 +282,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
               if (isMine)
                 ListTile(
                   leading: const Icon(Icons.undo),
-                  title: const Text('Unsend'),
+                  title: Text(l10n.t('unsend')),
                   onTap: () => Navigator.of(sheetContext).pop('unsend'),
                 ),
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete message'),
+                title: Text(l10n.t('deleteMessage')),
                 onTap: () => Navigator.of(sheetContext).pop('delete'),
               ),
             ],
@@ -310,7 +312,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Action failed: $error')),
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
       );
     }
   }
@@ -403,12 +405,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
               CheckedPopupMenuItem<String>(
                 value: 'read_receipts',
                 checked: _readReceiptsEnabled,
-                child: const Text('Read receipts'),
+                child: Text(l10n.t('readReceipts')),
               ),
               CheckedPopupMenuItem<String>(
                 value: 'expiring_photos',
                 checked: _expiringPhotosEnabled,
-                child: const Text('Expire photo messages in 30 days'),
+                child: Text(l10n.t('expirePhotoMessages30d')),
               ),
             ],
           ),
@@ -494,7 +496,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                                       ),
                                     Text(
                                       message.isUnsent
-                                          ? '[Message unsent]'
+                                          ? l10n.t('messageUnsent')
                                           : message.body,
                                       style: theme.textTheme.bodyMedium?.copyWith(
                                         color: messageTextColor,
@@ -547,7 +549,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                           TextButton.icon(
                             onPressed: _isSending ? null : _removePendingPhoto,
                             icon: const Icon(Icons.delete_outline),
-                            label: const Text('Remove'),
+                            label: Text(l10n.t('remove')),
                           ),
                         ],
                       ),
@@ -557,7 +559,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                       IconButton(
                         onPressed: _isSending ? null : _pickAndUploadPhoto,
                         icon: const Icon(Icons.image_outlined),
-                        tooltip: 'Add photo',
+                        tooltip: l10n.t('addPhoto'),
                       ),
                       Expanded(
                         child: TextField(

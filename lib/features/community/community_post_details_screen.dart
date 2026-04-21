@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
 import 'community_repository.dart';
@@ -202,6 +203,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _load({bool incrementView = false, bool preserveContent = true}) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() {
       if (_post == null || !preserveContent) {
         _isLoading = true;
@@ -240,11 +242,14 @@ class _CommunityPostDetailsScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load post: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedLoadPost', args: {'error': '$error'}))),
+      );
     }
   }
 
   Future<void> _submitComment() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final message = _commentController.text.trim();
     final String? pendingImageUrl = _pendingCommentImageUrl?.trim();
     if ((message.isEmpty && (pendingImageUrl == null || pendingImageUrl.isEmpty)) ||
@@ -256,7 +261,7 @@ class _CommunityPostDetailsScreenState
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in to comment')),
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToComment'))),
       );
       return;
     }
@@ -318,7 +323,9 @@ class _CommunityPostDetailsScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to post comment: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedPostComment', args: {'error': '$error'}))),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -329,6 +336,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _pickAndUploadCommentImage() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_isSendingComment) {
       return;
     }
@@ -350,7 +358,9 @@ class _CommunityPostDetailsScreenState
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to upload image: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedUploadImage', args: {'error': '$error'}))),
+      );
     }
   }
 
@@ -363,6 +373,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _togglePostLike() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final post = _post;
     if (post == null || _isTogglingPostLike) {
       return;
@@ -391,7 +402,9 @@ class _CommunityPostDetailsScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update like: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedUpdateLike', args: {'error': '$error'}))),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -402,6 +415,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _toggleCommentLike(String commentId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_togglingCommentLikes.contains(commentId)) {
       return;
     }
@@ -435,7 +449,9 @@ class _CommunityPostDetailsScreenState
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update comment like: $error')),
+        SnackBar(
+          content: Text(l10n.t('failedUpdateCommentLike', args: {'error': '$error'})),
+        ),
       );
     } finally {
       if (mounted) {
@@ -447,6 +463,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _editPost(CommunityPostModel post) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final titleController = TextEditingController(text: post.title);
     final bodyController = TextEditingController(text: post.bodyText);
 
@@ -455,7 +472,7 @@ class _CommunityPostDetailsScreenState
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Edit post'),
+            title: Text(l10n.t('editPost')),
             content: SizedBox(
               width: 520,
               child: Column(
@@ -463,14 +480,14 @@ class _CommunityPostDetailsScreenState
                 children: <Widget>[
                   TextField(
                     controller: titleController,
-                    decoration: const InputDecoration(labelText: 'Title'),
+                    decoration: InputDecoration(labelText: l10n.t('title')),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: bodyController,
                     minLines: 5,
                     maxLines: 10,
-                    decoration: const InputDecoration(labelText: 'Content'),
+                    decoration: InputDecoration(labelText: l10n.t('content')),
                   ),
                 ],
               ),
@@ -478,11 +495,11 @@ class _CommunityPostDetailsScreenState
             actions: <Widget>[
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l10n.t('cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Save'),
+                child: Text(l10n.t('save')),
               ),
             ],
           );
@@ -507,7 +524,9 @@ class _CommunityPostDetailsScreenState
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update post: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedUpdatePost', args: {'error': '$error'}))),
+      );
     } finally {
       titleController.dispose();
       bodyController.dispose();
@@ -515,20 +534,21 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _deletePost(CommunityPostModel post) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete post?'),
-          content: const Text('This will remove your post from the feed.'),
+          title: Text(l10n.t('deletePostTitle')),
+          content: Text(l10n.t('deletePostBody')),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
+              child: Text(l10n.t('delete')),
             ),
           ],
         );
@@ -551,11 +571,14 @@ class _CommunityPostDetailsScreenState
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete post: $error')));
+      ).showSnackBar(
+        SnackBar(content: Text(l10n.t('failedDeletePost', args: {'error': '$error'}))),
+      );
     }
   }
 
   Future<void> _editComment(CommunityCommentModel comment) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final controller = TextEditingController(text: comment.message);
 
     try {
@@ -563,21 +586,21 @@ class _CommunityPostDetailsScreenState
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Edit comment'),
+            title: Text(l10n.t('editComment')),
             content: TextField(
               controller: controller,
               minLines: 3,
               maxLines: 6,
-              decoration: const InputDecoration(labelText: 'Comment'),
+              decoration: InputDecoration(labelText: l10n.t('comment')),
             ),
             actions: <Widget>[
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l10n.t('cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Save'),
+                child: Text(l10n.t('save')),
               ),
             ],
           );
@@ -598,7 +621,7 @@ class _CommunityPostDetailsScreenState
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update comment: $error')),
+        SnackBar(content: Text(l10n.t('failedUpdateComment', args: {'error': '$error'}))),
       );
     } finally {
       controller.dispose();
@@ -606,20 +629,21 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _deleteComment(CommunityCommentModel comment) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete comment?'),
-          content: const Text('This will remove your comment.'),
+          title: Text(l10n.t('deleteCommentTitle')),
+          content: Text(l10n.t('deleteCommentBody')),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
+              child: Text(l10n.t('delete')),
             ),
           ],
         );
@@ -641,7 +665,7 @@ class _CommunityPostDetailsScreenState
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete comment: $error')),
+        SnackBar(content: Text(l10n.t('failedDeleteComment', args: {'error': '$error'}))),
       );
     }
   }
@@ -671,11 +695,12 @@ class _CommunityPostDetailsScreenState
   }
 
   void _openProfile(String? userId, String fallbackName) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final _ = fallbackName;
     if (userId == null || userId.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Profile not available')));
+      ).showSnackBar(SnackBar(content: Text(l10n.t('profileNotAvailable'))));
       return;
     }
 
@@ -688,25 +713,41 @@ class _CommunityPostDetailsScreenState
     );
   }
 
-  void _openImageLightbox(String imageUrl) {
+  void _openImageLightbox(List<String> imageUrls, {int initialIndex = 0}) {
+    if (imageUrls.isEmpty) {
+      return;
+    }
+
     showDialog<void>(
       context: context,
       builder: (_) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(12),
-          backgroundColor: Colors.black,
+        final int startIndex = initialIndex.clamp(0, imageUrls.length - 1);
+        final PageController pageController = PageController(
+          initialPage: startIndex,
+        );
+
+        return Dialog.fullscreen(
+          backgroundColor: Colors.transparent,
           child: Stack(
             children: <Widget>[
-              InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4,
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: ExtendedImage.network(
-                    imageUrl,
-                    fit: BoxFit.contain,
-                    cache: true,
-                  ),
+              ColoredBox(
+                color: Colors.black,
+                child: PageView.builder(
+                  controller: pageController,
+                  itemCount: imageUrls.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4,
+                      child: Center(
+                        child: ExtendedImage.network(
+                          imageUrls[index],
+                          fit: BoxFit.contain,
+                          cache: true,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               Positioned(
@@ -717,6 +758,30 @@ class _CommunityPostDetailsScreenState
                   icon: const Icon(Icons.close),
                 ),
               ),
+              if (imageUrls.length > 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 8,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        AppLocalizations.of(context).t('swipeForMore'),
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -746,6 +811,7 @@ class _CommunityPostDetailsScreenState
     CommunityCommentModel comment, {
     bool isReply = false,
   }) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isBusy = _togglingCommentLikes.contains(comment.id);
     final bool isOwner = _isCommentOwner(comment);
 
@@ -798,18 +864,21 @@ class _CommunityPostDetailsScreenState
                           _deleteComment(comment);
                         }
                       },
-                      itemBuilder: (context) => const <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+                      itemBuilder: (context) => <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          value: 'edit',
+                          child: Text(l10n.t('edit')),
+                        ),
                         PopupMenuItem<String>(
                           value: 'delete',
-                          child: Text('Delete'),
+                          child: Text(l10n.t('delete')),
                         ),
                       ],
                     ),
                   IconButton(
-                    tooltip: 'Copy comment',
+                    tooltip: l10n.t('copyComment'),
                     onPressed: () =>
-                        _copyToClipboard(comment.message, 'Comment copied'),
+                        _copyToClipboard(comment.message, l10n.t('commentCopied')),
                     icon: const Icon(Icons.copy_outlined),
                   ),
                   IconButton(
@@ -828,7 +897,9 @@ class _CommunityPostDetailsScreenState
           if ((comment.imageUrl ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 10),
             InkWell(
-              onTap: () => _openImageLightbox(comment.imageUrl!.trim()),
+              onTap: () => _openImageLightbox(
+                <String>[comment.imageUrl!.trim()],
+              ),
               borderRadius: BorderRadius.circular(12),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -851,7 +922,7 @@ class _CommunityPostDetailsScreenState
               child: TextButton.icon(
                 onPressed: () => _setReplyTarget(comment),
                 icon: const Icon(Icons.reply_outlined),
-                label: const Text('Reply'),
+                label: Text(l10n.t('reply')),
               ),
             ),
           ],
@@ -874,6 +945,7 @@ class _CommunityPostDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final post = _post;
     final bool hasMediaTab = post != null && post.imageUrls.isNotEmpty;
     final Widget body = _isLoading
@@ -883,11 +955,11 @@ class _CommunityPostDetailsScreenState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Post not found'),
+                    Text(l10n.t('postNotFound')),
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: _load,
-                      child: const Text('Retry'),
+                      child: Text(l10n.t('retry')),
                     ),
                   ],
                 ),
@@ -897,8 +969,11 @@ class _CommunityPostDetailsScreenState
                   if (_isRefreshing)
                     const LinearProgressIndicator(minHeight: 2),
                   if (hasMediaTab)
-                    const TabBar(
-                      tabs: <Tab>[Tab(text: 'Discussion'), Tab(text: 'Media')],
+                    TabBar(
+                      tabs: <Tab>[
+                        Tab(text: l10n.t('discussion')),
+                        Tab(text: l10n.t('media')),
+                      ],
                     ),
                   Expanded(
                     child: hasMediaTab
@@ -916,10 +991,10 @@ class _CommunityPostDetailsScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Post'),
+        title: Text(l10n.t('post')),
         actions: [
           IconButton(
-            tooltip: 'Copy post',
+            tooltip: l10n.t('copyPost'),
             onPressed: post == null ? null : () => _copyPost(post),
             icon: const Icon(Icons.copy_all_outlined),
           ),
@@ -932,9 +1007,9 @@ class _CommunityPostDetailsScreenState
                   _deletePost(post);
                 }
               },
-              itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
-                PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(value: 'edit', child: Text(l10n.t('edit'))),
+                PopupMenuItem<String>(value: 'delete', child: Text(l10n.t('delete'))),
               ],
             ),
         ],
@@ -946,6 +1021,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Widget _buildDiscussionTab(CommunityPostModel post) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeData theme = Theme.of(context);
     final List<CommunityCommentModel> topLevelComments = _topLevelComments;
     final List<CommunityCommentModel> visibleTopLevel = _showAllComments
@@ -980,7 +1056,7 @@ class _CommunityPostDetailsScreenState
                   if (post.imageUrls.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 12),
                     Text(
-                      'Media (${post.imageUrls.length})',
+                      l10n.t('mediaWithCount', args: {'count': '${post.imageUrls.length}'}),
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -995,7 +1071,10 @@ class _CommunityPostDetailsScreenState
                         itemBuilder: (BuildContext context, int index) {
                           final String imageUrl = post.imageUrls[index];
                           return InkWell(
-                            onTap: () => _openImageLightbox(imageUrl),
+                            onTap: () => _openImageLightbox(
+                              post.imageUrls,
+                              initialIndex: index,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
@@ -1071,7 +1150,7 @@ class _CommunityPostDetailsScreenState
           ),
           const SizedBox(height: 16),
           Text(
-            'Comments (${_comments.length})',
+            l10n.t('commentsWithCount', args: {'count': '${_comments.length}'}),
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -1081,7 +1160,7 @@ class _CommunityPostDetailsScreenState
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
-                child: Text('No comments yet', style: theme.textTheme.bodyMedium),
+                child: Text(l10n.t('noCommentsYet'), style: theme.textTheme.bodyMedium),
               ),
             )
           else ...<Widget>[
@@ -1114,7 +1193,7 @@ class _CommunityPostDetailsScreenState
                     });
                   },
                   icon: const Icon(Icons.expand_more),
-                  label: const Text('Show all threads'),
+                  label: Text(l10n.t('showAllThreads')),
                 ),
               ),
           ],
@@ -1125,8 +1204,9 @@ class _CommunityPostDetailsScreenState
   }
 
   Widget _buildMediaTab(CommunityPostModel post) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (post.imageUrls.isEmpty) {
-      return const Center(child: Text('No images attached to this post.'));
+      return Center(child: Text(l10n.t('noImagesAttachedToPost')));
     }
 
     return GridView.builder(
@@ -1141,7 +1221,10 @@ class _CommunityPostDetailsScreenState
       itemBuilder: (BuildContext context, int index) {
         final String imageUrl = post.imageUrls[index];
         return InkWell(
-          onTap: () => _openImageLightbox(imageUrl),
+          onTap: () => _openImageLightbox(
+            post.imageUrls,
+            initialIndex: index,
+          ),
           borderRadius: BorderRadius.circular(12),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
@@ -1175,6 +1258,7 @@ class _CommunityPostDetailsScreenState
   }
 
   Widget _buildCommentComposer() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return SafeArea(
       top: false,
       child: Padding(
@@ -1195,7 +1279,10 @@ class _CommunityPostDetailsScreenState
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        'Replying to ${_replyToCommentAuthor ?? 'comment'}',
+                        l10n.t(
+                          'replyingTo',
+                          args: {'name': _replyToCommentAuthor ?? l10n.t('comment')},
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1203,7 +1290,7 @@ class _CommunityPostDetailsScreenState
                     IconButton(
                       onPressed: _clearReplyTarget,
                       icon: const Icon(Icons.close),
-                      tooltip: 'Cancel reply',
+                      tooltip: l10n.t('cancelReply'),
                     ),
                   ],
                 ),
@@ -1230,7 +1317,7 @@ class _CommunityPostDetailsScreenState
                     TextButton.icon(
                       onPressed: _isSendingComment ? null : _removePendingCommentImage,
                       icon: const Icon(Icons.delete_outline),
-                      label: const Text('Remove image'),
+                      label: Text(l10n.t('removeImage')),
                     ),
                   ],
                 ),
@@ -1239,7 +1326,7 @@ class _CommunityPostDetailsScreenState
               children: <Widget>[
                 IconButton(
                   onPressed: _isSendingComment ? null : _pickAndUploadCommentImage,
-                  tooltip: 'Upload image',
+                  tooltip: l10n.t('uploadImage'),
                   icon: const Icon(Icons.image_outlined),
                 ),
                 Expanded(
@@ -1247,7 +1334,7 @@ class _CommunityPostDetailsScreenState
                     controller: _commentController,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(hintText: 'Write a comment'),
+                    decoration: InputDecoration(hintText: l10n.t('writeComment')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1259,7 +1346,7 @@ class _CommunityPostDetailsScreenState
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2.2),
                         )
-                      : const Text('Send'),
+                      : Text(l10n.t('send')),
                 ),
               ],
             ),
@@ -1270,6 +1357,7 @@ class _CommunityPostDetailsScreenState
   }
 
   String _postBody(CommunityPostModel post) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final body = post.bodyText.trim();
     if (body.isNotEmpty) {
       return body;
@@ -1278,7 +1366,7 @@ class _CommunityPostDetailsScreenState
     if (plain.isNotEmpty) {
       return plain;
     }
-    return 'No content available.';
+    return l10n.t('noContentAvailable');
   }
 
   String _formatDateTime(DateTime value) {
@@ -1291,13 +1379,14 @@ class _CommunityPostDetailsScreenState
   }
 
   Future<void> _copyPost(CommunityPostModel post) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final text = StringBuffer()
       ..writeln(post.title)
       ..writeln()
       ..writeln(_postBody(post))
       ..writeln()
-      ..writeln('Author: ${post.authorName}')
-      ..writeln('Posted: ${_formatDateTime(post.createdAt)}');
+      ..writeln('${l10n.t('author')}: ${post.authorName}')
+      ..writeln('${l10n.t('posted')}: ${_formatDateTime(post.createdAt)}');
 
     await Clipboard.setData(ClipboardData(text: text.toString().trim()));
 
@@ -1306,7 +1395,7 @@ class _CommunityPostDetailsScreenState
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Full post copied to clipboard')),
+      SnackBar(content: Text(l10n.t('fullPostCopied'))),
     );
   }
 }
