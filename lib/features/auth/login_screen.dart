@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Password reset email sent. Check your inbox.',
+                      l10n.t('passwordResetSent'),
                     ),
                   ),
                 );
@@ -110,12 +110,12 @@ class _LoginScreenState extends State<LoginScreen> {
             }
 
             return AlertDialog(
-              title: const Text('Forgot password'),
+              title: Text(l10n.t('forgotPassword')),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Enter your email address and we will send a password reset link.',
+                  Text(
+                    l10n.t('forgotPasswordPrompt'),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: sending
                       ? null
                       : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.t('cancel')),
                 ),
                 FilledButton(
                   onPressed: sending ? null : sendResetEmail,
@@ -149,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Send reset link'),
+                      : Text(l10n.t('sendResetLink')),
                 ),
               ],
             );
@@ -222,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _loading ? null : _openForgotPasswordDialog,
-                      child: const Text('Forgot password?'),
+                      child: Text(l10n.t('forgotPasswordQuestion')),
                     ),
                   ),
                   const SizedBox(height: 8),

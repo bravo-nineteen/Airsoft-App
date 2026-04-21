@@ -384,6 +384,13 @@ class AppLocalizations {
         'expirePhotoMessages30d': 'Expire photo messages in 30 days',
         'messageUnsent': '[Message unsent]',
         'addPhoto': 'Add photo',
+        'officialEvent': 'Official Event',
+        'forgotPassword': 'Forgot password',
+        'forgotPasswordPrompt':
+          'Enter your email address and we will send a password reset link.',
+        'forgotPasswordQuestion': 'Forgot password?',
+        'sendResetLink': 'Send reset link',
+        'passwordResetSent': 'Password reset email sent. Check your inbox.',
     },
     'ja': {
       'appTitle': 'エアソフトアプリ',
@@ -743,6 +750,13 @@ class AppLocalizations {
       'expirePhotoMessages30d': '写真メッセージを30日で期限切れにする',
       'messageUnsent': '[メッセージを取り消しました]',
       'addPhoto': '写真を追加',
+      'officialEvent': '公式イベント',
+      'forgotPassword': 'パスワードを忘れた場合',
+      'forgotPasswordPrompt':
+          'メールアドレスを入力すると、パスワード再設定リンクを送信します。',
+      'forgotPasswordQuestion': 'パスワードをお忘れですか？',
+      'sendResetLink': '再設定リンクを送信',
+      'passwordResetSent': 'パスワード再設定メールを送信しました。受信箱を確認してください。',
     },
   };
 
