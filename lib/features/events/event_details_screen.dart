@@ -17,12 +17,17 @@ class EventDetailsScreen extends StatefulWidget {
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   final EventRepository _repository = EventRepository();
+  final TextEditingController _commentController = TextEditingController();
 
   late EventModel _event;
   List<EventAttendanceRecord> _attendees = <EventAttendanceRecord>[];
+  List<EventCommentModel> _comments = <EventCommentModel>[];
   bool _isLoading = true;
   bool _isUpdatingAttendance = false;
+  bool _isSendingComment = false;
   final Set<String> _busyAttendeeIds = <String>{};
+  String? _replyToCommentId;
+  String? _replyToCommentAuthor;
 
   @override
   void initState() {
@@ -38,8 +43,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     try {
       final EventModel event = await _repository.getEventById(widget.event.id);
-      final List<EventAttendanceRecord> attendees = await _repository
-          .getEventAttendeesForHost(event.id);
+      final List<dynamic> results = await Future.wait<dynamic>(<Future<dynamic>>[
+        _repository.getEventAttendeesForHost(event.id),
+        _repository.getEventComments(event.id),
+      ]);
+      final List<EventAttendanceRecord> attendees =
+          results[0] as List<EventAttendanceRecord>;
+      final List<EventCommentModel> comments =
+          results[1] as List<EventCommentModel>;
 
       if (!mounted) {
         return;
@@ -48,6 +59,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       setState(() {
         _event = event;
         _attendees = attendees;
+        _comments = comments;
         _isLoading = false;
       });
     } catch (error) {
@@ -68,6 +80,29 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _isCurrentUserHost(EventModel event) {
     final User? user = Supabase.instance.client.auth.currentUser;
     return user != null && event.hostUserId == user.id;
+  }
+
+  bool _isCommentOwner(EventCommentModel comment) {
+    final User? user = Supabase.instance.client.auth.currentUser;
+    return user != null && user.id == comment.userId;
+  }
+
+  List<EventCommentModel> get _topLevelComments {
+    return _comments
+        .where(
+          (EventCommentModel comment) =>
+              comment.parentCommentId == null ||
+              comment.parentCommentId!.trim().isEmpty,
+        )
+        .toList();
+  }
+
+  List<EventCommentModel> _childRepliesFor(String parentCommentId) {
+    return _comments
+        .where(
+          (EventCommentModel comment) => comment.parentCommentId == parentCommentId,
+        )
+        .toList();
   }
 
   String _formatDateTime(DateTime value) {
@@ -224,6 +259,153 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to delete event: $error')));
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final String body = _commentController.text.trim();
+    if (body.isEmpty || _isSendingComment) {
+      return;
+    }
+
+    final User? user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be logged in to comment.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSendingComment = true;
+    });
+
+    try {
+      await _repository.addEventComment(
+        eventId: _event.id,
+        body: body,
+        parentCommentId: _replyToCommentId,
+      );
+      _commentController.clear();
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to post comment: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingComment = false;
+        });
+      }
+    }
+  }
+
+  void _setReplyTarget(EventCommentModel comment) {
+    setState(() {
+      _replyToCommentId = comment.id;
+      _replyToCommentAuthor = comment.displayName;
+    });
+  }
+
+  void _clearReplyTarget() {
+    setState(() {
+      _replyToCommentId = null;
+      _replyToCommentAuthor = null;
+    });
+  }
+
+  Future<void> _editComment(EventCommentModel comment) async {
+    final TextEditingController controller =
+        TextEditingController(text: comment.body);
+
+    try {
+      final bool? shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Edit comment'),
+            content: TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Comment'),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+
+      await _repository.updateEventComment(
+        commentId: comment.id,
+        body: controller.text,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update comment: $error')));
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _deleteComment(EventCommentModel comment) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete comment?'),
+          content: const Text('This will remove your comment.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await _repository.softDeleteEventComment(comment.id);
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete comment: $error')));
     }
   }
 
@@ -517,6 +699,179 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  Widget _buildCommentCard(EventCommentModel comment, {bool isReply = false}) {
+    final bool isOwner = _isCommentOwner(comment);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              CircleAvatar(
+                radius: 16,
+                backgroundImage:
+                    (comment.avatarUrl ?? '').trim().isNotEmpty
+                    ? NetworkImage(comment.avatarUrl!)
+                    : null,
+                child: (comment.avatarUrl ?? '').trim().isEmpty
+                    ? Text(_avatarInitial(comment.displayName))
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      comment.displayName,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      _formatDateTime(comment.createdAt),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (isOwner)
+                PopupMenuButton<String>(
+                  onSelected: (String value) {
+                    if (value == 'edit') {
+                      _editComment(comment);
+                    } else if (value == 'delete') {
+                      _deleteComment(comment);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) =>
+                      const <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          value: 'edit',
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(comment.body),
+          if (!isReply)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _setReplyTarget(comment),
+                icon: const Icon(Icons.reply_outlined),
+                label: const Text('Reply'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentsSection() {
+    final List<EventCommentModel> topLevel = _topLevelComments;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Comments (${_comments.length})',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            if (topLevel.isEmpty)
+              const Text('No comments yet.')
+            else
+              ...topLevel.map((EventCommentModel comment) {
+                final List<EventCommentModel> replies = _childRepliesFor(comment.id);
+                return Column(
+                  children: <Widget>[
+                    _buildCommentCard(comment),
+                    ...replies.map(
+                      (EventCommentModel reply) => Padding(
+                        padding: const EdgeInsets.only(left: 18),
+                        child: _buildCommentCard(reply, isReply: true),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            const SizedBox(height: 8),
+            if (_replyToCommentId != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'Replying to ${_replyToCommentAuthor ?? 'comment'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _clearReplyTarget,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Cancel reply',
+                    ),
+                  ],
+                ),
+              ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'Write a comment',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _isSendingComment ? null : _submitComment,
+                  child: _isSendingComment
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Send'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _readableStatus(String status) {
     switch (status) {
       case 'attending':
@@ -538,6 +893,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       return '?';
     }
     return trimmed.substring(0, 1).toUpperCase();
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   @override
@@ -680,6 +1041,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     const SizedBox(height: 12),
                     _buildHostSection(),
+                    const SizedBox(height: 12),
+                    _buildCommentsSection(),
                   ],
                 ),
               ),

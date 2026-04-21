@@ -300,6 +300,24 @@ create table if not exists public.event_attendees (
   unique (event_id, user_id)
 );
 
+create table if not exists public.event_comments (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  parent_comment_id uuid references public.event_comments(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  body text not null default '',
+  is_deleted boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_event_comments_event_id
+  on public.event_comments (event_id, created_at asc);
+create index if not exists idx_event_comments_parent_comment_id
+  on public.event_comments (parent_comment_id);
+create index if not exists idx_event_comments_user_id
+  on public.event_comments (user_id);
+
 alter table public.event_attendees add column if not exists confirmed_by_host boolean not null default false;
 alter table public.event_attendees add column if not exists confirmed_at timestamptz;
 alter table public.community_posts add column if not exists updated_at timestamptz not null default now();
@@ -337,6 +355,7 @@ alter table public.direct_messages enable row level security;
 alter table public.notifications enable row level security;
 alter table public.events enable row level security;
 alter table public.event_attendees enable row level security;
+alter table public.event_comments enable row level security;
 alter table public.field_reviews enable row level security;
 
 drop policy if exists community_posts_select_public on public.community_posts;
@@ -435,6 +454,15 @@ create policy event_attendees_update_self_or_host on public.event_attendees for 
     or exists (select 1 from public.events e where e.id = event_id and e.host_user_id = auth.uid())
   );
 
+drop policy if exists event_comments_select_public on public.event_comments;
+create policy event_comments_select_public on public.event_comments for select using (true);
+drop policy if exists event_comments_insert_self on public.event_comments;
+create policy event_comments_insert_self on public.event_comments for insert to authenticated with check (auth.uid() = user_id);
+drop policy if exists event_comments_update_own on public.event_comments;
+create policy event_comments_update_own on public.event_comments for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists event_comments_delete_own on public.event_comments;
+create policy event_comments_delete_own on public.event_comments for delete to authenticated using (auth.uid() = user_id);
+
 drop policy if exists field_reviews_select_public on public.field_reviews;
 create policy field_reviews_select_public
 on public.field_reviews
@@ -474,6 +502,8 @@ drop trigger if exists trg_events_set_updated_at on public.events;
 create trigger trg_events_set_updated_at before update on public.events for each row execute function public.set_updated_at();
 drop trigger if exists trg_event_attendees_set_updated_at on public.event_attendees;
 create trigger trg_event_attendees_set_updated_at before update on public.event_attendees for each row execute function public.set_updated_at();
+drop trigger if exists trg_event_comments_set_updated_at on public.event_comments;
+create trigger trg_event_comments_set_updated_at before update on public.event_comments for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------
 -- MIGRATION 005: Admin roles, bans, moderation, official content
@@ -570,6 +600,11 @@ drop policy if exists events_admin_update on public.events;
 create policy events_admin_update on public.events for update to authenticated using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
 drop policy if exists events_admin_delete on public.events;
 create policy events_admin_delete on public.events for delete to authenticated using (public.is_admin(auth.uid()));
+
+drop policy if exists event_comments_delete_admin on public.event_comments;
+create policy event_comments_delete_admin on public.event_comments for delete to authenticated using (public.is_admin(auth.uid()));
+drop policy if exists event_comments_update_admin on public.event_comments;
+create policy event_comments_update_admin on public.event_comments for update to authenticated using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
 
 -- Fields admin management
 drop policy if exists fields_admin_insert on public.fields;

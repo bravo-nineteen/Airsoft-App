@@ -545,6 +545,118 @@ class EventRepository {
     }).toList();
   }
 
+  Future<List<EventCommentModel>> getEventComments(String eventId) async {
+    final response = await _resolvedClient
+        .from('event_comments')
+        .select(
+          'id, event_id, parent_comment_id, user_id, body, is_deleted, created_at, updated_at',
+        )
+        .eq('event_id', eventId)
+        .eq('is_deleted', false)
+        .order('created_at', ascending: true);
+
+    final List<EventCommentModel> baseComments = (response as List<dynamic>)
+        .map(
+          (dynamic e) => EventCommentModel.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+
+    if (baseComments.isEmpty) {
+      return <EventCommentModel>[];
+    }
+
+    final Set<String> userIds = baseComments
+        .map((EventCommentModel comment) => comment.userId)
+        .where((String id) => id.trim().isNotEmpty)
+        .toSet();
+    if (userIds.isEmpty) {
+      return baseComments;
+    }
+
+    final profilesResponse = await _resolvedClient
+        .from('profiles')
+        .select('id, call_sign, avatar_url')
+        .inFilter('id', userIds.toList());
+
+    final Map<String, Map<String, dynamic>> profilesById =
+        <String, Map<String, dynamic>>{
+          for (final dynamic row in profilesResponse as List<dynamic>)
+            row['id'].toString(): Map<String, dynamic>.from(row as Map),
+        };
+
+    return baseComments.map((EventCommentModel comment) {
+      final Map<String, dynamic>? profile = profilesById[comment.userId];
+      return comment.copyWith(
+        callSign: profile?['call_sign']?.toString(),
+        avatarUrl: profile?['avatar_url']?.toString(),
+      );
+    }).toList();
+  }
+
+  Future<void> addEventComment({
+    required String eventId,
+    required String body,
+    String? parentCommentId,
+  }) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to comment.');
+    }
+
+    final String trimmedBody = body.trim();
+    if (trimmedBody.isEmpty) {
+      throw Exception('Comment cannot be empty.');
+    }
+
+    await _resolvedClient.from('event_comments').insert({
+      'event_id': eventId,
+      'parent_comment_id': _nullIfEmpty(parentCommentId),
+      'user_id': user.id,
+      'body': trimmedBody,
+      'is_deleted': false,
+    });
+  }
+
+  Future<void> updateEventComment({
+    required String commentId,
+    required String body,
+  }) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to edit comments.');
+    }
+
+    final String trimmedBody = body.trim();
+    if (trimmedBody.isEmpty) {
+      throw Exception('Comment cannot be empty.');
+    }
+
+    await _resolvedClient
+        .from('event_comments')
+        .update({'body': trimmedBody, 'updated_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', commentId)
+        .eq('user_id', user.id);
+  }
+
+  Future<void> softDeleteEventComment(String commentId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to delete comments.');
+    }
+
+    await _resolvedClient
+        .from('event_comments')
+        .update({
+          'is_deleted': true,
+          'body': '',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', commentId)
+        .eq('user_id', user.id);
+  }
+
   Future<List<EventModel>> getUserAttendingEvents(String userId) async {
     final response = await _resolvedClient
         .from('event_attendees')

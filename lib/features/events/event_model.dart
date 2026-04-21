@@ -238,3 +238,91 @@ class EventAttendanceStats {
   final int cancelled;
   final int noShow;
 }
+
+class EventCommentModel {
+  const EventCommentModel({
+    required this.id,
+    required this.eventId,
+    required this.userId,
+    required this.body,
+    required this.createdAt,
+    this.updatedAt,
+    this.parentCommentId,
+    this.callSign,
+    this.avatarUrl,
+  });
+
+  final String id;
+  final String eventId;
+  final String userId;
+  final String body;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String? parentCommentId;
+  final String? callSign;
+  final String? avatarUrl;
+
+  String get displayName {
+    final String name = (callSign ?? '').trim();
+    return name.isEmpty ? 'Operator' : name;
+  }
+
+  EventCommentModel copyWith({
+    String? id,
+    String? eventId,
+    String? userId,
+    String? body,
+    DateTime? createdAt,
+    Object? updatedAt = _eventCommentNoChange,
+    Object? parentCommentId = _eventCommentNoChange,
+    Object? callSign = _eventCommentNoChange,
+    Object? avatarUrl = _eventCommentNoChange,
+  }) {
+    return EventCommentModel(
+      id: id ?? this.id,
+      eventId: eventId ?? this.eventId,
+      userId: userId ?? this.userId,
+      body: body ?? this.body,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt == _eventCommentNoChange
+          ? this.updatedAt
+          : updatedAt as DateTime?,
+      parentCommentId: parentCommentId == _eventCommentNoChange
+          ? this.parentCommentId
+          : parentCommentId as String?,
+      callSign: callSign == _eventCommentNoChange
+          ? this.callSign
+          : callSign as String?,
+      avatarUrl: avatarUrl == _eventCommentNoChange
+          ? this.avatarUrl
+          : avatarUrl as String?,
+    );
+  }
+
+  factory EventCommentModel.fromJson(Map<String, dynamic> json) {
+    return EventCommentModel(
+      id: (json['id'] ?? '').toString(),
+      eventId: (json['event_id'] ?? '').toString(),
+      userId: (json['user_id'] ?? '').toString(),
+      body: (json['body'] ?? '').toString(),
+      createdAt: JapanTime.parseServerTimestamp(json['created_at']) ?? DateTime.now(),
+      updatedAt: JapanTime.parseServerTimestamp(json['updated_at']),
+      parentCommentId: _readNullableString(json['parent_comment_id']),
+      callSign: _readNullableString(json['call_sign']),
+      avatarUrl: _readNullableString(json['avatar_url']),
+    );
+  }
+
+  static String? _readNullableString(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    final String text = value.toString().trim();
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return null;
+    }
+    return text;
+  }
+}
+
+const Object _eventCommentNoChange = Object();

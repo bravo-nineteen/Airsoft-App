@@ -29,9 +29,72 @@ alter table public.events
 alter table public.events
   add column if not exists book_tickets_url text;
 
+create table if not exists public.event_comments (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  parent_comment_id uuid references public.event_comments(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  body text not null default '',
+  is_deleted boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_event_comments_event_id
+  on public.event_comments (event_id, created_at asc);
+create index if not exists idx_event_comments_parent_comment_id
+  on public.event_comments (parent_comment_id);
+create index if not exists idx_event_comments_user_id
+  on public.event_comments (user_id);
+
 create index if not exists idx_direct_messages_expires_at
   on public.direct_messages (expires_at)
   where expires_at is not null;
+
+alter table public.event_comments enable row level security;
+
+drop policy if exists event_comments_select_public on public.event_comments;
+create policy event_comments_select_public
+  on public.event_comments
+  for select
+  using (true);
+
+drop policy if exists event_comments_insert_self on public.event_comments;
+create policy event_comments_insert_self
+  on public.event_comments
+  for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists event_comments_update_own on public.event_comments;
+create policy event_comments_update_own
+  on public.event_comments
+  for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists event_comments_delete_own on public.event_comments;
+create policy event_comments_delete_own
+  on public.event_comments
+  for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists event_comments_delete_admin on public.event_comments;
+create policy event_comments_delete_admin
+  on public.event_comments
+  for delete
+  to authenticated
+  using (public.is_admin(auth.uid()));
+
+drop policy if exists event_comments_update_admin on public.event_comments;
+create policy event_comments_update_admin
+  on public.event_comments
+  for update
+  to authenticated
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
 
 -- Backfill missing image upload timestamps for existing event images.
 update public.events
@@ -387,4 +450,9 @@ for each row execute function public.set_updated_at();
 drop trigger if exists trg_field_bookings_set_updated_at on public.field_bookings;
 create trigger trg_field_bookings_set_updated_at
 before update on public.field_bookings
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_event_comments_set_updated_at on public.event_comments;
+create trigger trg_event_comments_set_updated_at
+before update on public.event_comments
 for each row execute function public.set_updated_at();
