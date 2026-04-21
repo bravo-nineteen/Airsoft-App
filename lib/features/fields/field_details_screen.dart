@@ -769,11 +769,11 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: FilledButton.icon(
                     onPressed: null,
-                    icon: Icon(Icons.chat_bubble_outline),
-                    label: Text('Message field'),
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text('Message field'),
                   ),
                 ),
               ],
