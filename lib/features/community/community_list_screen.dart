@@ -21,13 +21,15 @@ class CommunityListScreen extends StatefulWidget {
   State<CommunityListScreen> createState() => _CommunityListScreenState();
 }
 
-class _CommunityListScreenState extends State<CommunityListScreen> {
+class _CommunityListScreenState extends State<CommunityListScreen>
+    with WidgetsBindingObserver {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final CommunityRepository _repository = CommunityRepository();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   RealtimeChannel? _postsChannel;
   Timer? _backgroundSyncTimer;
+  Timer? _transientRetryTimer;
 
   List<CommunityPostModel> _posts = <CommunityPostModel>[];
   final List<CommunityPostModel> _pendingPosts = <CommunityPostModel>[];
@@ -47,9 +49,20 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   static const List<String> _categories =
       CommunityPostCategories.communityCategoriesWithAll;
 
+  bool _isTransientLoadError(Object error) {
+    final String text = error.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('clientexception') ||
+        text.contains('timeout') ||
+        text.contains('connection closed') ||
+        text.contains('network is unreachable');
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _primeFromSharedFeed();
     _contentPreloader.communityRevision.addListener(_handleSharedFeedUpdated);
@@ -86,7 +99,26 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       if (!mounted || _isLoading || _isLoadingMore) {
         return;
       }
-      _loadPosts();
+      _loadPosts(showError: false);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
+
+    _scheduleTransientRetry();
+  }
+
+  void _scheduleTransientRetry() {
+    _transientRetryTimer?.cancel();
+    _transientRetryTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || _isLoading || _isLoadingMore) {
+        return;
+      }
+      _loadPosts(showError: false);
     });
   }
 
@@ -289,10 +321,10 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     }
     _didInitLanguagePreference = true;
     _selectedLanguagePreference = 'all';
-    _loadPosts();
+    _loadPosts(showError: false);
   }
 
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts({bool showError = true}) async {
     if (!mounted) {
       return;
     }
@@ -345,11 +377,25 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         return;
       }
 
+      final bool isTransient = _isTransientLoadError(error);
+
       setState(() {
         _isLoading = false;
         _isInitialLoading = false;
         _isRefreshing = false;
       });
+
+      if (!showError || (isTransient && _posts.isNotEmpty)) {
+        if (isTransient) {
+          _scheduleTransientRetry();
+        }
+        return;
+      }
+
+      if (isTransient) {
+        _scheduleTransientRetry();
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -652,6 +698,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _contentPreloader.communityRevision.removeListener(
       _handleSharedFeedUpdated,
     );
@@ -659,6 +706,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       Supabase.instance.client.removeChannel(_postsChannel!);
     }
     _backgroundSyncTimer?.cancel();
+    _transientRetryTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _searchController.dispose();
@@ -835,7 +883,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                       post: post,
                       timeAgo: _timeAgo(post.createdAt),
                       languageLabel:
-                          postLanguageLabels[(post.language ?? '').toLowerCase()] ??
+                          postLanguageLabels[(post.language ?? '')
+                              .toLowerCase()] ??
                           l10n.t('allLanguages'),
                       onTap: () => _openPostDetails(post),
                       onImageTap: () {

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
+import '../admin/admin_create_field_screen.dart';
+import '../admin/admin_repository.dart';
 
 import 'field_details_screen.dart';
 import 'field_map_screen.dart';
@@ -20,6 +22,7 @@ class FieldsScreen extends StatefulWidget {
 class _FieldsScreenState extends State<FieldsScreen> {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final FieldRepository _repository = FieldRepository();
+  final AdminRepository _adminRepository = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedLocation = 'All';
@@ -28,6 +31,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
   bool _mapView = false;
 
   late Future<List<FieldModel>> _fieldsFuture;
+  late Future<bool> _isAdminFuture;
 
   final List<String> _locations = const [
     'All',
@@ -52,6 +56,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
     super.initState();
     _contentPreloader.fieldsRevision.addListener(_handleSharedFieldsUpdated);
     _fieldsFuture = _loadFields();
+    _isAdminFuture = _adminRepository.isCurrentUserAdmin();
   }
 
   @override
@@ -102,6 +107,18 @@ class _FieldsScreenState extends State<FieldsScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => FieldDetailsScreen(field: field)));
+  }
+
+  Future<void> _openCreateFieldScreen() async {
+    final bool? created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AdminCreateFieldScreen()),
+    );
+
+    if (!mounted || created != true) {
+      return;
+    }
+
+    _refreshFields();
   }
 
   @override
@@ -221,6 +238,24 @@ class _FieldsScreenState extends State<FieldsScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              FutureBuilder<bool>(
+                future: _isAdminFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.data != true) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _openCreateFieldScreen,
+                      icon: const Icon(Icons.add_business),
+                      label: const Text('Add Field (Admin)'),
+                    ),
+                  );
+                },
               ),
             ],
           ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../admin/admin_create_shop_screen.dart';
+import '../admin/admin_repository.dart';
 import 'shop_details_screen.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
@@ -14,10 +16,12 @@ class ShopsScreen extends StatefulWidget {
 
 class _ShopsScreenState extends State<ShopsScreen> {
   final ShopRepository _repository = ShopRepository();
+  final AdminRepository _adminRepository = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedPrefecture = 'All';
   late Future<List<ShopModel>> _shopsFuture;
+  late Future<bool> _isAdminFuture;
 
   final List<String> _prefectures = const [
     'All',
@@ -62,6 +66,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
   void initState() {
     super.initState();
     _shopsFuture = _loadShops();
+    _isAdminFuture = _adminRepository.isCurrentUserAdmin();
   }
 
   @override
@@ -100,9 +105,19 @@ class _ShopsScreenState extends State<ShopsScreen> {
   }
 
   void _openShop(ShopModel shop) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShopDetailsScreen(shop: shop)),
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ShopDetailsScreen(shop: shop)));
+  }
+
+  Future<void> _openCreateShopScreen() async {
+    final bool? created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AdminCreateShopScreen()),
     );
+    if (!mounted || created != true) {
+      return;
+    }
+    _refresh();
   }
 
   @override
@@ -141,6 +156,24 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   _applyFilters();
                 },
               ),
+              const SizedBox(height: 12),
+              FutureBuilder<bool>(
+                future: _isAdminFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.data != true) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _openCreateShopScreen,
+                      icon: const Icon(Icons.store_mall_directory),
+                      label: const Text('Add Shop (Admin)'),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -157,8 +190,10 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      l10n.t('failedLoadShops',
-                          args: {'error': '${snapshot.error}'}),
+                      l10n.t(
+                        'failedLoadShops',
+                        args: {'error': '${snapshot.error}'},
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -194,7 +229,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, _, _) =>
                                         _ShopThumbnailPlaceholder(
-                                            name: shop.name),
+                                          name: shop.name,
+                                        ),
                                   )
                                 : _ShopThumbnailPlaceholder(name: shop.name),
                           ),
@@ -206,8 +242,11 @@ class _ShopsScreenState extends State<ShopsScreen> {
                               const SizedBox(width: 6),
                               const Tooltip(
                                 message: 'Official listing',
-                                child: Icon(Icons.verified,
-                                    size: 16, color: Colors.blue),
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
                               ),
                             ],
                           ],

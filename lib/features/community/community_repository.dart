@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -24,24 +25,36 @@ class CommunityRepository {
 
   bool _isTransient(Object error) {
     final String text = error.toString().toLowerCase();
+    if (error is SocketException) {
+      return true;
+    }
     return text.contains('502') ||
         text.contains('503') ||
         text.contains('gateway') ||
         text.contains('socketexception') ||
-        text.contains('timeout');
+        text.contains('timeout') ||
+        text.contains('failed host lookup') ||
+        text.contains('no address associated with hostname') ||
+        text.contains('network is unreachable') ||
+        text.contains('clientexception');
   }
 
   Future<T> _withTransientRetry<T>(Future<T> Function() action) async {
+    const List<Duration> retryDelays = <Duration>[
+      Duration(milliseconds: 500),
+      Duration(milliseconds: 1500),
+      Duration(milliseconds: 3000),
+    ];
     Object? lastError;
-    for (int attempt = 0; attempt < 3; attempt++) {
+    for (int attempt = 0; attempt < retryDelays.length + 1; attempt++) {
       try {
         return await action();
       } catch (error) {
         lastError = error;
-        if (!_isTransient(error) || attempt == 2) {
+        if (!_isTransient(error) || attempt == retryDelays.length) {
           rethrow;
         }
-        await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+        await Future<void>.delayed(retryDelays[attempt]);
       }
     }
     throw lastError ?? Exception('Unknown community error');
@@ -136,30 +149,27 @@ class CommunityRepository {
     }
 
     try {
-      await _client.from('post_drafts').upsert(
-        <String, dynamic>{
-          'user_id': userId,
-          'draft_key': draftKey,
-          'post_context': postContext,
-          'target_user_id': _nullIfEmpty(targetUserId),
-          'title': title,
-          'body_text': bodyText,
-          'plain_text': plainText,
-          'media_json': imageUrls,
-          'poll_json': <String, dynamic>{
-            'language': language,
-            'category': category,
-            'question': _nullIfEmpty(pollQuestion),
-            'options': (pollOptions ?? <String>[])
-                .map((String value) => value.trim())
-                .where((String value) => value.isNotEmpty)
-                .toList(),
-            'allow_multiple': pollAllowMultiple,
-          },
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
+      await _client.from('post_drafts').upsert(<String, dynamic>{
+        'user_id': userId,
+        'draft_key': draftKey,
+        'post_context': postContext,
+        'target_user_id': _nullIfEmpty(targetUserId),
+        'title': title,
+        'body_text': bodyText,
+        'plain_text': plainText,
+        'media_json': imageUrls,
+        'poll_json': <String, dynamic>{
+          'language': language,
+          'category': category,
+          'question': _nullIfEmpty(pollQuestion),
+          'options': (pollOptions ?? <String>[])
+              .map((String value) => value.trim())
+              .where((String value) => value.isNotEmpty)
+              .toList(),
+          'allow_multiple': pollAllowMultiple,
         },
-        onConflict: 'user_id,draft_key',
-      );
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id,draft_key');
     } on PostgrestException catch (error) {
       if (_isMissingTableError(error, 'post_drafts')) {
         return;
@@ -242,16 +252,14 @@ class CommunityRepository {
             .not('parent_comment_id', 'is', null);
       }
 
-      await _client.from('comment_drafts').upsert(
-        <String, dynamic>{
-          'user_id': userId,
-          'thread_type': threadType,
-          'thread_id': threadId,
-          'parent_comment_id': normalizedParent,
-          'body_text': bodyText,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        },
-      );
+      await _client.from('comment_drafts').upsert(<String, dynamic>{
+        'user_id': userId,
+        'thread_type': threadType,
+        'thread_id': threadId,
+        'parent_comment_id': normalizedParent,
+        'body_text': bodyText,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
     } on PostgrestException catch (error) {
       if (_isMissingTableError(error, 'comment_drafts')) {
         return;
@@ -354,8 +362,9 @@ class CommunityRepository {
 
     final String trimmedQuery = query.trim();
     if (trimmedQuery.isNotEmpty) {
-      final String escaped =
-          trimmedQuery.replaceAll(',', ' ').replaceAll('%', '');
+      final String escaped = trimmedQuery
+          .replaceAll(',', ' ')
+          .replaceAll('%', '');
       request = request.or(
         'title.ilike.%$escaped%,plain_text.ilike.%$escaped%,body_text.ilike.%$escaped%,author_name.ilike.%$escaped%,category.ilike.%$escaped%',
       );
@@ -374,10 +383,10 @@ class CommunityRepository {
 
     final dynamic response = await _withTransientRetry(
       () => request
-        .order('is_pinned', ascending: false)
-        .order('created_at', ascending: false)
-        .order('id', ascending: false)
-        .range(offset, offset + limit - 1),
+          .order('is_pinned', ascending: false)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + limit - 1),
     );
 
     List<CommunityPostModel> posts = (response as List<dynamic>)
@@ -389,14 +398,17 @@ class CommunityRepository {
 
     final String? viewerUserId = currentUserId;
     if (viewerUserId != null) {
-      final Set<String> hiddenUserIds = await _safetyRepository.getHiddenAuthorIds();
+      final Set<String> hiddenUserIds = await _safetyRepository
+          .getHiddenAuthorIds();
       posts = posts.where((CommunityPostModel post) {
         return !hiddenUserIds.contains(post.authorId ?? '');
       }).toList();
     }
 
     if (posts.isNotEmpty) {
-      final List<String> postIds = posts.map((CommunityPostModel p) => p.id).toList();
+      final List<String> postIds = posts
+          .map((CommunityPostModel p) => p.id)
+          .toList();
       final dynamic commentsResponse = await _withTransientRetry(
         () => _client
             .from('community_comments')
@@ -489,7 +501,9 @@ class CommunityRepository {
         .from('community_posts')
         .select()
         .eq('is_deleted', false)
-        .or('and(post_context.eq.profile,target_user_id.eq.$userId),and(post_context.eq.community,author_id.eq.$userId)')
+        .or(
+          'and(post_context.eq.profile,target_user_id.eq.$userId),and(post_context.eq.community,author_id.eq.$userId)',
+        )
         .order('created_at', ascending: false);
 
     if (limit != null) {
@@ -610,7 +624,8 @@ class CommunityRepository {
 
     final String? viewerUserId = currentUserId;
     if (viewerUserId != null) {
-      final Set<String> hiddenUserIds = await _safetyRepository.getHiddenAuthorIds();
+      final Set<String> hiddenUserIds = await _safetyRepository
+          .getHiddenAuthorIds();
       comments = comments.where((CommunityCommentModel comment) {
         return !hiddenUserIds.contains(comment.authorId ?? '');
       }).toList();
@@ -766,12 +781,11 @@ class CommunityRepository {
     required DateTime? expiresAt,
   }) async {
     final String trimmedQuestion = (question ?? '').trim();
-    final List<String> trimmedOptions =
-        (options ?? <String>[])
-            .map((String value) => value.trim())
-            .where((String value) => value.isNotEmpty)
-            .toSet()
-            .toList();
+    final List<String> trimmedOptions = (options ?? <String>[])
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList();
 
     if (trimmedQuestion.isEmpty || trimmedOptions.length < 2) {
       return;
@@ -853,14 +867,15 @@ class CommunityRepository {
         if (optionId.isEmpty) {
           continue;
         }
-        voteCountByOptionId[optionId] = (voteCountByOptionId[optionId] ?? 0) + 1;
+        voteCountByOptionId[optionId] =
+            (voteCountByOptionId[optionId] ?? 0) + 1;
         if (viewerId != null && row['user_id']?.toString() == viewerId) {
           selectedOptionIds.add(optionId);
         }
       }
 
-      final List<CommunityPostPollOption> options =
-          optionsResponse.map<CommunityPostPollOption>((dynamic row) {
+      final List<CommunityPostPollOption> options = optionsResponse
+          .map<CommunityPostPollOption>((dynamic row) {
             final String optionId = row['id']?.toString() ?? '';
             return CommunityPostPollOption(
               id: optionId,
@@ -869,7 +884,8 @@ class CommunityRepository {
               sortOrder: (row['sort_order'] as num?)?.toInt() ?? 0,
               voteCount: voteCountByOptionId[optionId] ?? 0,
             );
-          }).toList();
+          })
+          .toList();
 
       final int totalVotes = voteCountByOptionId.values.fold<int>(
         0,
@@ -973,18 +989,18 @@ class CommunityRepository {
     final authorAvatarUrl = profile?['avatar_url']?.toString();
     final now = DateTime.now().toUtc().toIso8601String();
     final Map<String, dynamic>? postRecord = await _client
-      .from('community_posts')
-      .select('id, title, author_id, user_id, comment_count')
-      .eq('id', postId)
-      .maybeSingle();
+        .from('community_posts')
+        .select('id, title, author_id, user_id, comment_count')
+        .eq('id', postId)
+        .maybeSingle();
     final Map<String, dynamic>? parentCommentRecord =
-      parentCommentId == null || parentCommentId.trim().isEmpty
-      ? null
-      : await _client
-          .from('community_comments')
-          .select('id, author_id, user_id')
-          .eq('id', parentCommentId)
-          .maybeSingle();
+        parentCommentId == null || parentCommentId.trim().isEmpty
+        ? null
+        : await _client
+              .from('community_comments')
+              .select('id, author_id, user_id')
+              .eq('id', parentCommentId)
+              .maybeSingle();
 
     final payload = <String, dynamic>{
       'post_id': postId,
@@ -1019,7 +1035,8 @@ class CommunityRepository {
         _nullIfEmpty(postRecord?['title']?.toString()) ?? 'your post';
     if (parentCommentRecord != null) {
       await _notificationWriter.safeCreateNotification(
-        userId: _nullIfEmpty(
+        userId:
+            _nullIfEmpty(
               parentCommentRecord['author_id']?.toString() ??
                   parentCommentRecord['user_id']?.toString(),
             ) ??
@@ -1033,7 +1050,8 @@ class CommunityRepository {
     }
 
     await _notificationWriter.safeCreateNotification(
-      userId: _nullIfEmpty(
+      userId:
+          _nullIfEmpty(
             postRecord?['author_id']?.toString() ??
                 postRecord?['user_id']?.toString(),
           ) ??
@@ -1103,8 +1121,9 @@ class CommunityRepository {
 
     final List<String> imageUrls = <String>[
       _nullIfEmpty(existingPost?['image_url']?.toString()) ?? '',
-      ...((existingPost?['image_urls'] as List<dynamic>? ?? <dynamic>[])
-          .map((dynamic e) => _nullIfEmpty(e.toString()) ?? '')),
+      ...((existingPost?['image_urls'] as List<dynamic>? ?? <dynamic>[]).map(
+        (dynamic e) => _nullIfEmpty(e.toString()) ?? '',
+      )),
     ].where((String value) => value.isNotEmpty).toSet().toList();
 
     await _client
@@ -1171,7 +1190,8 @@ class CommunityRepository {
     if (existing == null) {
       final String actorName = await _notificationWriter.getCurrentActorName();
       await _notificationWriter.safeCreateNotification(
-        userId: _nullIfEmpty(
+        userId:
+            _nullIfEmpty(
               postRecord?['author_id']?.toString() ??
                   postRecord?['user_id']?.toString(),
             ) ??
@@ -1233,7 +1253,8 @@ class CommunityRepository {
     if (existing == null) {
       final String actorName = await _notificationWriter.getCurrentActorName();
       await _notificationWriter.safeCreateNotification(
-        userId: _nullIfEmpty(
+        userId:
+            _nullIfEmpty(
               commentRecord?['author_id']?.toString() ??
                   commentRecord?['user_id']?.toString(),
             ) ??
@@ -1291,11 +1312,7 @@ class CommunityRepository {
     final String now = DateTime.now().toUtc().toIso8601String();
     await _client
         .from('community_comments')
-        .update({
-          'is_deleted': true,
-          'image_url': null,
-          'updated_at': now,
-        })
+        .update({'is_deleted': true, 'image_url': null, 'updated_at': now})
         .eq('id', commentId);
 
     await _imageService.deleteUploadedImageByPublicUrl(commentImageUrl);

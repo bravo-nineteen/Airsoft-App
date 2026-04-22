@@ -300,20 +300,20 @@ class AdminRepository {
     bool isOfficial = true,
   }) async {
     final Map<String, dynamic> payload = {
-          'name': name.trim(),
-          'location_name': locationName.trim(),
-          'description': description.trim(),
-          'latitude': latitude,
-          'longitude': longitude,
-          'prefecture': _nullIfEmpty(prefecture),
-          'city': _nullIfEmpty(city),
-          'field_type': _nullIfEmpty(fieldType),
-          'image_url': _nullIfEmpty(imageUrl),
-          'feature_list': _nullIfEmpty(featuresText),
-          'pros_list': _nullIfEmpty(prosText),
-          'cons_list': _nullIfEmpty(consText),
-          'is_official': isOfficial,
-        };
+      'name': name.trim(),
+      'location_name': locationName.trim(),
+      'description': description.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'prefecture': _nullIfEmpty(prefecture),
+      'city': _nullIfEmpty(city),
+      'field_type': _nullIfEmpty(fieldType),
+      'image_url': _nullIfEmpty(imageUrl),
+      'feature_list': _nullIfEmpty(featuresText),
+      'pros_list': _nullIfEmpty(prosText),
+      'cons_list': _nullIfEmpty(consText),
+      'is_official': isOfficial,
+    };
 
     try {
       await _client.from('fields').update(payload).eq('id', fieldId);
@@ -326,6 +326,65 @@ class AdminRepository {
       payload.remove('cons_list');
       await _client.from('fields').update(payload).eq('id', fieldId);
     }
+  }
+
+  Future<void> createOfficialShop({
+    required String name,
+    required String address,
+    String? prefecture,
+    String? city,
+    String? openingTimes,
+    String? phoneNumber,
+    String? featuresText,
+    String? imageUrl,
+    double? latitude,
+    double? longitude,
+  }) async {
+    await _client.from('shops').insert({
+      'name': name.trim(),
+      'address': address.trim(),
+      'prefecture': _nullIfEmpty(prefecture),
+      'city': _nullIfEmpty(city),
+      'opening_times': _nullIfEmpty(openingTimes),
+      'phone_number': _nullIfEmpty(phoneNumber),
+      'features': _nullIfEmpty(featuresText),
+      'image_url': _nullIfEmpty(imageUrl),
+      'latitude': latitude,
+      'longitude': longitude,
+      'is_official': true,
+    });
+  }
+
+  Future<void> updateShop({
+    required String shopId,
+    required String name,
+    required String address,
+    String? prefecture,
+    String? city,
+    String? openingTimes,
+    String? phoneNumber,
+    String? featuresText,
+    String? imageUrl,
+    double? latitude,
+    double? longitude,
+    bool isOfficial = true,
+  }) async {
+    await _client
+        .from('shops')
+        .update({
+          'name': name.trim(),
+          'address': address.trim(),
+          'prefecture': _nullIfEmpty(prefecture),
+          'city': _nullIfEmpty(city),
+          'opening_times': _nullIfEmpty(openingTimes),
+          'phone_number': _nullIfEmpty(phoneNumber),
+          'features': _nullIfEmpty(featuresText),
+          'image_url': _nullIfEmpty(imageUrl),
+          'latitude': latitude,
+          'longitude': longitude,
+          'is_official': isOfficial,
+        })
+        .eq('id', shopId);
   }
 
   Future<List<FieldClaimRequestRecord>> getPendingFieldClaimRequests({
@@ -489,7 +548,8 @@ class AdminRepository {
         .eq('id', report.id);
 
     if ((queueItemId ?? '').trim().isNotEmpty) {
-      final String queueStatus = reportStatus == 'open' || reportStatus == 'triaged'
+      final String queueStatus =
+          reportStatus == 'open' || reportStatus == 'triaged'
           ? 'in_review'
           : 'resolved';
       await _client
@@ -598,7 +658,9 @@ class AdminRepository {
           title: row['title']?.toString() ?? 'Post',
           subtitle: row['author_name']?.toString(),
           body: row['plain_text']?.toString(),
-          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+          createdAt: DateTime.tryParse(
+            (row['created_at'] ?? '').toString(),
+          )?.toUtc(),
         );
       }
 
@@ -615,7 +677,9 @@ class AdminRepository {
           title: 'Comment',
           subtitle: row['author_name']?.toString(),
           body: row['message']?.toString(),
-          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+          createdAt: DateTime.tryParse(
+            (row['created_at'] ?? '').toString(),
+          )?.toUtc(),
         );
       }
 
@@ -632,7 +696,9 @@ class AdminRepository {
           title: row['title']?.toString() ?? 'Event',
           subtitle: null,
           body: row['description']?.toString(),
-          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+          createdAt: DateTime.tryParse(
+            (row['created_at'] ?? '').toString(),
+          )?.toUtc(),
         );
       }
 
@@ -647,9 +713,12 @@ class AdminRepository {
         }
         return ModerationTargetPreview(
           title: 'Direct Message',
-          subtitle: '${row['sender_id'] ?? '-'} -> ${row['recipient_id'] ?? '-'}',
+          subtitle:
+              '${row['sender_id'] ?? '-'} -> ${row['recipient_id'] ?? '-'}',
           body: row['body']?.toString(),
-          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+          createdAt: DateTime.tryParse(
+            (row['created_at'] ?? '').toString(),
+          )?.toUtc(),
         );
       }
 
@@ -666,7 +735,9 @@ class AdminRepository {
           title: row['call_sign']?.toString() ?? 'User',
           subtitle: row['user_code']?.toString(),
           body: row['bio']?.toString(),
-          createdAt: DateTime.tryParse((row['updated_at'] ?? '').toString())?.toUtc(),
+          createdAt: DateTime.tryParse(
+            (row['updated_at'] ?? '').toString(),
+          )?.toUtc(),
         );
       }
     } catch (_) {
@@ -928,8 +999,8 @@ class FieldClaimRequestRecord {
       officialEmail: (json['official_email'] ?? '').toString(),
       verificationStatus: (json['verification_status'] ?? '').toString(),
       paymentStatus: (json['payment_status'] ?? '').toString(),
-        reviewedBy: json['reviewed_by']?.toString(),
-        reviewedAt: json['reviewed_at'] == null
+      reviewedBy: json['reviewed_by']?.toString(),
+      reviewedAt: json['reviewed_at'] == null
           ? null
           : DateTime.tryParse(json['reviewed_at'].toString())?.toUtc(),
       createdAt:
