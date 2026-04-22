@@ -1,4 +1,5 @@
 import '../../core/time/japan_time.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CommunityPostModel {
   final String id;
@@ -155,15 +156,24 @@ class CommunityPostModel {
 
   factory CommunityPostModel.fromJson(Map<String, dynamic> json) {
     final dynamic rawImageUrls = json['image_urls'];
+    final String? legacyImageUrl = _normalizeCommunityImageUrl(
+      _readNullableString(json['image_url']),
+    );
     final List<String> parsedImageUrls;
 
     if (rawImageUrls is List) {
       parsedImageUrls = rawImageUrls
-          .map((dynamic e) => e.toString().trim())
+          .map(
+            (dynamic e) => _normalizeCommunityImageUrl(e.toString().trim()) ?? '',
+          )
           .where((String e) => e.isNotEmpty)
           .toList();
     } else {
       parsedImageUrls = <String>[];
+    }
+
+    if (parsedImageUrls.isEmpty && legacyImageUrl != null) {
+      parsedImageUrls.add(legacyImageUrl);
     }
 
     final authorId = _readNullableString(json['author_id']) ??
@@ -177,7 +187,7 @@ class CommunityPostModel {
       title: _readNullableString(json['title']) ?? '',
       bodyText: _readNullableString(json['body_text']) ?? '',
       plainText: _readNullableString(json['plain_text']) ?? '',
-      imageUrl: _readNullableString(json['image_url']),
+      imageUrl: legacyImageUrl,
       imageUrls: parsedImageUrls,
       category: _readNullableString(json['category']),
       language: _readNullableString(json['language']),
@@ -269,7 +279,7 @@ class CommunityCommentModel {
       message: _readNullableString(json['message']) ??
           _readNullableString(json['body']) ??
           '',
-        imageUrl: _readNullableString(json['image_url']),
+      imageUrl: _normalizeCommunityImageUrl(_readNullableString(json['image_url'])),
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       likedByMe: json['liked_by_me'] == true,
       createdAt: JapanTime.parseServerTimestamp(json['created_at']) ??
@@ -291,6 +301,48 @@ String? _readNullableString(dynamic value) {
     return null;
   }
   return text;
+}
+
+String? _normalizeCommunityImageUrl(String? value) {
+  final String? raw = _readNullableString(value);
+  if (raw == null) {
+    return null;
+  }
+
+  final String lower = raw.toLowerCase();
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    return raw;
+  }
+
+  String objectPath = raw.replaceAll('\\', '/').trim();
+  while (objectPath.startsWith('/')) {
+    objectPath = objectPath.substring(1);
+  }
+
+  const String publicPrefix = 'public/community-images/';
+  const String bucketPrefix = 'community-images/';
+  if (objectPath.startsWith(publicPrefix)) {
+    objectPath = objectPath.substring(publicPrefix.length);
+  } else if (objectPath.startsWith(bucketPrefix)) {
+    objectPath = objectPath.substring(bucketPrefix.length);
+  }
+
+  final int queryIndex = objectPath.indexOf('?');
+  if (queryIndex != -1) {
+    objectPath = objectPath.substring(0, queryIndex);
+  }
+  objectPath = objectPath.trim();
+  if (objectPath.isEmpty) {
+    return null;
+  }
+
+  try {
+    return Supabase.instance.client.storage
+        .from('community-images')
+        .getPublicUrl(objectPath);
+  } catch (_) {
+    return raw;
+  }
 }
 
 class CommunityPostsPage {
