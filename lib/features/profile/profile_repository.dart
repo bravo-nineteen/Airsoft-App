@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../shared/services/user_avatar_cache.dart';
 import 'profile_model.dart';
 
 class ProfileRepository {
@@ -48,7 +49,9 @@ class ProfileRepository {
       return ProfileModel.fromJson(newProfile);
     }
 
-    return ProfileModel.fromJson(data);
+    final profile = ProfileModel.fromJson(data);
+    UserAvatarCache.instance.warmCurrentUser(user.id, profile.avatarUrl);
+    return profile;
   }
 
   Future<ProfileModel> updateCurrentProfile(ProfileModel profile) async {
@@ -93,7 +96,9 @@ class ProfileRepository {
       throw Exception('Failed to reload updated profile.');
     }
 
-    return ProfileModel.fromJson(refreshed);
+    final updated = ProfileModel.fromJson(refreshed);
+    UserAvatarCache.instance.warmCurrentUser(user.id, updated.avatarUrl);
+    return updated;
   }
 
   Future<void> updateAvatarUrl(String avatarUrl) async {
@@ -106,6 +111,7 @@ class ProfileRepository {
       'avatar_url': avatarUrl,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', user.id);
+    UserAvatarCache.instance.set(user.id, avatarUrl);
   }
 
   /// Deletes all user data and the auth account.  The SQL function

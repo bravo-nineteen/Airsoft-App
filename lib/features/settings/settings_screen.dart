@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/services/user_avatar_cache.dart';
 import '../../core/notifications/notification_settings_screen.dart';
 import '../admin/admin_repository.dart';
 import '../admin/admin_screen.dart';
@@ -50,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout(BuildContext context) async {
+    UserAvatarCache.instance.clear();
     await Supabase.instance.client.auth.signOut();
 
     if (context.mounted) {

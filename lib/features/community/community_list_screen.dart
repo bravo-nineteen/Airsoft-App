@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/user_avatar.dart';
 import '../../core/content/app_content_preloader.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
@@ -1031,24 +1032,11 @@ class _CompactPostCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Row(
                           children: <Widget>[
-                            CircleAvatar(
+                            UserAvatar(
+                              userId: post.authorId,
+                              avatarUrl: post.authorAvatarUrl,
                               radius: 12,
-                              backgroundImage:
-                                  post.authorAvatarUrl != null &&
-                                      post.authorAvatarUrl!.trim().isNotEmpty
-                                  ? NetworkImage(post.authorAvatarUrl!)
-                                  : null,
-                              child:
-                                  post.authorAvatarUrl == null ||
-                                      post.authorAvatarUrl!.trim().isEmpty
-                                  ? Text(
-                                      post.authorName.isEmpty
-                                          ? '?'
-                                          : post.authorName
-                                                .substring(0, 1)
-                                                .toUpperCase(),
-                                    )
-                                  : null,
+                              initials: post.authorName,
                             ),
                             const SizedBox(width: 8),
                             Expanded(

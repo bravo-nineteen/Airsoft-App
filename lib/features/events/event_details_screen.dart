@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/user_avatar.dart';
 import '../safety/safety_repository.dart';
 import 'event_create_screen.dart';
 import 'event_model.dart';
@@ -1117,20 +1118,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          CircleAvatar(
+                          UserAvatar(
+                            userId: attendee.userId,
+                            avatarUrl: attendee.avatarUrl,
                             radius: 18,
-                            backgroundImage:
-                                attendee.avatarUrl != null &&
-                                    attendee.avatarUrl!.trim().isNotEmpty
-                                ? NetworkImage(attendee.avatarUrl!)
-                                : null,
-                            child:
-                                attendee.avatarUrl == null ||
-                                    attendee.avatarUrl!.trim().isEmpty
-                                ? Text(
-                                    _avatarInitial(displayName),
-                                  )
-                                : null,
+                            initials: displayName,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -1253,17 +1245,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        attendee.avatarUrl != null &&
-                            attendee.avatarUrl!.trim().isNotEmpty
-                        ? NetworkImage(attendee.avatarUrl!)
-                        : null,
-                    child:
-                        attendee.avatarUrl == null ||
-                            attendee.avatarUrl!.trim().isEmpty
-                        ? Text(_avatarInitial(displayName))
-                        : null,
+                  leading: UserAvatar(
+                    userId: attendee.userId,
+                    avatarUrl: attendee.avatarUrl,
+                    initials: displayName,
                   ),
                   title: Text(displayName),
                 );
@@ -1334,15 +1319,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ],
           Row(
             children: <Widget>[
-              CircleAvatar(
+              UserAvatar(
+                userId: comment.userId,
+                avatarUrl: comment.avatarUrl,
                 radius: 16,
-                backgroundImage:
-                    (comment.avatarUrl ?? '').trim().isNotEmpty
-                    ? NetworkImage(comment.avatarUrl!)
-                    : null,
-                child: (comment.avatarUrl ?? '').trim().isEmpty
-                    ? Text(_avatarInitial(comment.displayName))
-                    : null,
+                initials: comment.displayName,
               ),
               const SizedBox(width: 8),
               Expanded(
