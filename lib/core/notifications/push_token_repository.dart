@@ -16,35 +16,64 @@ class PushTokenRepository {
       throw Exception('User not authenticated.');
     }
 
-    await _client.from('user_devices').upsert(
-      {
-        'user_id': user.id,
-        'fcm_token': token,
-        'platform': platform,
-        'device_name': deviceName,
-        'is_active': true,
-        'last_seen_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      onConflict: 'fcm_token',
-    );
+    final String now = DateTime.now().toIso8601String();
+    final Map<String, dynamic> fullPayload = <String, dynamic>{
+      'user_id': user.id,
+      'token': token,
+      'platform': platform,
+      'device_name': deviceName,
+      'is_active': true,
+      'last_seen_at': now,
+      'updated_at': now,
+    };
+
+    try {
+      await _client.from('device_tokens').upsert(
+            fullPayload,
+            onConflict: 'token',
+          );
+      return;
+    } on PostgrestException {
+      // Fallback for older schemas that only include a subset of columns.
+      await _client.from('device_tokens').upsert(
+            {
+              'user_id': user.id,
+              'token': token,
+              'platform': platform,
+              'updated_at': now,
+            },
+            onConflict: 'token',
+          );
+    }
   }
 
   Future<void> deactivateToken(String token) async {
-    await _client
-        .from('user_devices')
-        .update({
-          'is_active': false,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('fcm_token', token);
+    final String now = DateTime.now().toIso8601String();
+    try {
+      await _client
+          .from('device_tokens')
+          .update({
+            'is_active': false,
+            'updated_at': now,
+          })
+          .eq('token', token);
+    } on PostgrestException {
+      // Fallback for schemas without is_active.
+      await _client
+          .from('device_tokens')
+          .update({'updated_at': now})
+          .eq('token', token);
+    }
   }
 
   Future<void> debugPrintMyTokens() async {
     final user = _client.auth.currentUser;
     if (user == null) return;
 
-    final rows = await _client.from('user_devices').select().eq('user_id', user.id);
+    final rows = await _client
+        .from('device_tokens')
+        .select()
+        .eq('user_id', user.id);
     debugPrint('Saved tokens: $rows');
   }
 }

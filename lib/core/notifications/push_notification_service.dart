@@ -25,6 +25,8 @@ class PushNotificationService {
       );
 
   static StreamSubscription<String>? _tokenRefreshSubscription;
+  static StreamSubscription<AuthState>? _authSubscription;
+  static String? _lastRegisteredUserId;
   static bool _initialized = false;
 
   static Future<void> init() async {
@@ -49,6 +51,17 @@ class PushNotificationService {
     debugPrint('Push permission status: ${permission.authorizationStatus}');
 
     await _registerCurrentToken();
+
+    _authSubscription?.cancel();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (AuthState state) async {
+        final String? nextUserId = state.session?.user.id;
+        if (nextUserId == null || nextUserId == _lastRegisteredUserId) {
+          return;
+        }
+        await _registerCurrentToken();
+      },
+    );
 
     _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = _messaging.onTokenRefresh.listen(
@@ -141,6 +154,7 @@ class PushNotificationService {
       platform: platform,
       deviceName: platform,
     );
+    _lastRegisteredUserId = user.id;
   }
 
   static String _platformName() {
