@@ -496,6 +496,29 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       }
     }
 
+    String? utilityTitle;
+    if (!showingPrimaryTabs) {
+      switch (_utilityPanel) {
+        case _UtilityPanel.notifications:
+          utilityTitle = l10n.t('notifications');
+          break;
+        case _UtilityPanel.messages:
+          utilityTitle = l10n.t('messages');
+          break;
+        case _UtilityPanel.fields:
+          utilityTitle = l10n.t('fields');
+          break;
+        case _UtilityPanel.shops:
+          utilityTitle = l10n.t('shops');
+          break;
+        case _UtilityPanel.settings:
+          utilityTitle = l10n.t('settings');
+          break;
+        case _UtilityPanel.none:
+          break;
+      }
+    }
+
     return Scaffold(
       appBar: showingPrimaryTabs
           ? AppBar(
@@ -526,7 +549,13 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                 const SizedBox(width: 4),
               ],
             )
-          : null,
+          : AppBar(
+              leading: BackButton(
+                onPressed: () => setState(
+                    () => _utilityPanel = _UtilityPanel.none),
+              ),
+              title: utilityTitle != null ? Text(utilityTitle) : null,
+            ),
       body: body,
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
