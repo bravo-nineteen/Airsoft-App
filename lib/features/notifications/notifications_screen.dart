@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../community/community_post_details_screen.dart';
+import '../community/community_user_profile_screen.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_repository.dart';
 import '../social/contacts_screen.dart';
@@ -84,6 +85,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'community_post_like':
       case 'community_comment_like':
         return Icons.favorite_border;
+      case 'moderation_report_triaged':
+      case 'moderation_report_actioned':
+      case 'moderation_report_dismissed':
+        return Icons.gavel_outlined;
       default:
         return Icons.notifications_none;
     }
@@ -160,6 +165,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           );
         } catch (_) {
           // Ignore broken event links and just refresh the list.
+        }
+      }
+    } else if (normalizedType.contains('safety') ||
+        normalizedType.contains('report')) {
+      final _SafetyReportTarget? target = await _resolveSafetyTarget(item);
+      if (target != null && mounted) {
+        if (target.targetType == 'post' || target.targetType == 'comment') {
+          final String? postId = await _resolvePostIdFromSafetyTarget(target);
+          if (postId != null && mounted) {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CommunityPostDetailsScreen(postId: postId),
+              ),
+            );
+          }
+        } else if (target.targetType == 'event') {
+          final String? eventId = target.targetId;
+          if (eventId != null && eventId.isNotEmpty && mounted) {
+            try {
+              final EventRepository eventRepository =
+                  _eventRepository ??= EventRepository();
+              final event = await eventRepository.getEventById(eventId);
+              if (!mounted) {
+                return;
+              }
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => EventDetailsScreen(event: event),
+                ),
+              );
+            } catch (_) {
+              // Ignore broken links.
+            }
+          }
+        } else {
+          final String? userId = target.userId;
+          if (userId != null && userId.isNotEmpty && mounted) {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CommunityUserProfileScreen(
+                  userId: userId,
+                  fallbackName: item.title.trim().isNotEmpty
+                      ? item.title
+                      : l10n.t('operator'),
+                ),
+              ),
+            );
+          }
         }
       }
     }
@@ -268,6 +321,74 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<_SafetyReportTarget?> _resolveSafetyTarget(
+    AppNotificationModel item,
+  ) async {
+    final String? entityId = item.entityId?.trim();
+    if (entityId == null || entityId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final Map<String, dynamic>? reportRow = await Supabase.instance.client
+          .from('safety_reports')
+          .select('id, reporter_user_id, target_type, target_id')
+          .eq('id', entityId)
+          .maybeSingle();
+
+      if (reportRow == null) {
+        return null;
+      }
+
+      final String targetType = (reportRow['target_type'] ?? '').toString();
+      final String? targetId = reportRow['target_id']?.toString();
+      final String? reporterUserId = reportRow['reporter_user_id']?.toString();
+
+      if (targetType == 'user') {
+        return _SafetyReportTarget(
+          targetType: targetType,
+          targetId: targetId,
+          userId: (targetId ?? '').trim().isNotEmpty ? targetId : reporterUserId,
+        );
+      }
+
+      return _SafetyReportTarget(
+        targetType: targetType,
+        targetId: targetId,
+        userId: reporterUserId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _resolvePostIdFromSafetyTarget(_SafetyReportTarget target) async {
+    final String targetType = target.targetType;
+    final String? targetId = target.targetId;
+    if ((targetId ?? '').trim().isEmpty) {
+      return null;
+    }
+
+    if (targetType == 'post') {
+      return targetId;
+    }
+
+    if (targetType == 'comment') {
+      try {
+        final Map<String, dynamic>? row = await Supabase.instance.client
+            .from('community_comments')
+            .select('post_id')
+            .eq('id', targetId!)
+            .maybeSingle();
+        return row?['post_id']?.toString();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   String _timeLabel(AppLocalizations l10n, DateTime value) {
@@ -446,4 +567,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
     );
   }
+}
+
+class _SafetyReportTarget {
+  const _SafetyReportTarget({
+    required this.targetType,
+    required this.targetId,
+    required this.userId,
+  });
+
+  final String targetType;
+  final String? targetId;
+  final String? userId;
 }

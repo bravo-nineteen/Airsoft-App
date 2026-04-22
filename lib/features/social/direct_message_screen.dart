@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../community/community_image_service.dart';
+import '../safety/safety_repository.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
 import 'direct_message_repository.dart';
@@ -28,6 +29,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   final DirectMessageRepository _repository = DirectMessageRepository();
   final CommunityImageService _imageService = CommunityImageService();
   final ContactRepository _contactRepository = ContactRepository();
+  final SafetyRepository _safetyRepository = SafetyRepository();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -290,6 +292,11 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                 title: Text(l10n.t('deleteMessage')),
                 onTap: () => Navigator.of(sheetContext).pop('delete'),
               ),
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l10n.t('report')),
+                onTap: () => Navigator.of(sheetContext).pop('report'),
+              ),
             ],
           ),
         );
@@ -305,8 +312,139 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         await _repository.unsendMessage(message.id);
       } else if (selected == 'delete') {
         await _repository.deleteMessage(message.id);
+      } else if (selected == 'report') {
+        await _reportTarget(targetType: 'dm', targetId: message.id);
       }
       await _refresh();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  Future<void> _reportTarget({
+    required String targetType,
+    required String targetId,
+  }) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    String selectedReason = 'other';
+    final TextEditingController detailsController = TextEditingController();
+    final bool? shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text(l10n.t('reportContent')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedReason,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem(value: 'spam', child: Text(l10n.t('reportReasonSpam'))),
+                      DropdownMenuItem(value: 'harassment', child: Text(l10n.t('reportReasonHarassment'))),
+                      DropdownMenuItem(value: 'hate', child: Text(l10n.t('reportReasonHate'))),
+                      DropdownMenuItem(value: 'scam', child: Text(l10n.t('reportReasonScam'))),
+                      DropdownMenuItem(value: 'other', child: Text(l10n.t('other'))),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        selectedReason = value ?? 'other';
+                      });
+                    },
+                    decoration: InputDecoration(labelText: l10n.t('reason')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: detailsController,
+                    minLines: 2,
+                    maxLines: 5,
+                    decoration: InputDecoration(labelText: l10n.t('detailsOptional')),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(l10n.t('submitReport')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldSubmit != true) {
+      detailsController.dispose();
+      return;
+    }
+
+    try {
+      await _safetyRepository.submitReport(
+        targetType: targetType,
+        targetId: targetId,
+        reasonCategory: selectedReason,
+        details: detailsController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('reportSubmitted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Future<void> _blockConversationUser() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    try {
+      await _safetyRepository.blockUser(widget.otherUserId);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userBlocked'))),
+      );
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  Future<void> _muteConversationUser() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    try {
+      await _safetyRepository.muteUser(widget.otherUserId);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userMuted'))),
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -399,6 +537,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                 _toggleReadReceipts();
               } else if (value == 'expiring_photos') {
                 _toggleExpiringPhotos();
+              } else if (value == 'report_user') {
+                _reportTarget(targetType: 'user', targetId: widget.otherUserId);
+              } else if (value == 'mute_user') {
+                _muteConversationUser();
+              } else if (value == 'block_user') {
+                _blockConversationUser();
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
@@ -411,6 +555,19 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                 value: 'expiring_photos',
                 checked: _expiringPhotosEnabled,
                 child: Text(l10n.t('expirePhotoMessages30d')),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'report_user',
+                child: Text(l10n.t('reportUser')),
+              ),
+              PopupMenuItem<String>(
+                value: 'mute_user',
+                child: Text(l10n.t('muteUser')),
+              ),
+              PopupMenuItem<String>(
+                value: 'block_user',
+                child: Text(l10n.t('blockUser')),
               ),
             ],
           ),

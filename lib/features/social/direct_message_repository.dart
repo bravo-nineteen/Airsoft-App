@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_image_service.dart';
+import '../safety/safety_repository.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
 import '../notifications/notification_writer.dart';
@@ -13,12 +14,14 @@ class DirectMessageRepository {
     : _client = client ?? Supabase.instance.client,
       _contactRepository = ContactRepository(client: client),
       _notificationWriter = NotificationWriter(client: client),
-      _imageService = CommunityImageService(client: client);
+      _imageService = CommunityImageService(client: client),
+      _safetyRepository = SafetyRepository(client: client);
 
   final SupabaseClient _client;
   final ContactRepository _contactRepository;
   final NotificationWriter _notificationWriter;
   final CommunityImageService _imageService;
+  final SafetyRepository _safetyRepository;
 
   String get _currentUserId {
     final user = _client.auth.currentUser;
@@ -56,6 +59,11 @@ class DirectMessageRepository {
   Future<List<DirectMessageModel>> getMessages(String otherUserId) async {
     final currentUserId = _currentUserId;
 
+    final bool canMessage = await _safetyRepository.canMessageUser(otherUserId);
+    if (!canMessage) {
+      throw Exception('Messaging is unavailable because one user has blocked the other.');
+    }
+
     final allowed = await _contactRepository.areAcceptedContacts(otherUserId);
     if (!allowed) {
       throw Exception('Messaging is only available for accepted contacts.');
@@ -86,6 +94,11 @@ class DirectMessageRepository {
     bool expiresIn30Days = false,
   }) async {
     final currentUserId = _currentUserId;
+
+    final bool canMessage = await _safetyRepository.canMessageUser(recipientId);
+    if (!canMessage) {
+      throw Exception('Messaging is unavailable because one user has blocked the other.');
+    }
 
     final allowed = await _contactRepository.areAcceptedContacts(recipientId);
     if (!allowed) {

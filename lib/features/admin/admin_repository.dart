@@ -405,6 +405,277 @@ class AdminRepository {
         .eq('id', claimRequestId);
   }
 
+  Future<List<SafetyReportRecord>> getSafetyReports({
+    int limit = 100,
+    String? status,
+  }) async {
+    dynamic query = _client
+        .from('safety_reports')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    if ((status ?? '').trim().isNotEmpty) {
+      query = query.eq('status', status!.trim());
+    }
+
+    final dynamic response = await query;
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => SafetyReportRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<ModerationQueueRecord>> getModerationQueue({
+    int limit = 100,
+    String? status,
+  }) async {
+    dynamic query = _client
+        .from('moderation_queue')
+        .select()
+        .order('created_at', ascending: true)
+        .limit(limit);
+
+    if ((status ?? '').trim().isNotEmpty) {
+      query = query.eq('status', status!.trim());
+    }
+
+    final dynamic response = await query;
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => ModerationQueueRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<ModerationAuditLogRecord>> getModerationAuditLogs({
+    int limit = 100,
+  }) async {
+    final dynamic response = await _client
+        .from('moderation_audit_logs')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => ModerationAuditLogRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> reviewSafetyReport({
+    required SafetyReportRecord report,
+    required String reportStatus,
+    String? queueItemId,
+    String? note,
+  }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('safety_reports')
+        .update({
+          'status': reportStatus,
+          'reviewed_by': _currentUserId,
+          'reviewed_at': now,
+          'updated_at': now,
+        })
+        .eq('id', report.id);
+
+    if ((queueItemId ?? '').trim().isNotEmpty) {
+      final String queueStatus = reportStatus == 'open' || reportStatus == 'triaged'
+          ? 'in_review'
+          : 'resolved';
+      await _client
+          .from('moderation_queue')
+          .update({
+            'status': queueStatus,
+            'assigned_to': _currentUserId,
+            'updated_at': now,
+          })
+          .eq('id', queueItemId!);
+    }
+
+    await _client.from('moderation_audit_logs').insert({
+      'moderator_user_id': _currentUserId,
+      'action': 'report_status_$reportStatus',
+      'target_type': report.targetType,
+      'target_id': report.targetId,
+      'report_id': report.id,
+      'notes': _nullIfEmpty(note),
+      'created_at': now,
+    });
+
+    if (report.reporterUserId != _currentUserId) {
+      final String statusLabel = switch (reportStatus) {
+        'triaged' => 'triaged',
+        'actioned' => 'actioned',
+        'dismissed' => 'dismissed',
+        _ => reportStatus,
+      };
+      final String targetLabel = report.targetType.isEmpty
+          ? 'content'
+          : report.targetType;
+      await _client.from('notifications').insert({
+        'user_id': report.reporterUserId,
+        'actor_user_id': _currentUserId,
+        'type': 'moderation_report_$statusLabel',
+        'entity_id': report.id,
+        'title': 'Report update',
+        'body': 'Your report for $targetLabel has been marked as $statusLabel.',
+        'is_read': false,
+      });
+    }
+  }
+
+  Future<void> assignQueueItemToMe(String queueItemId) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('moderation_queue')
+        .update({
+          'assigned_to': _currentUserId,
+          'status': 'in_review',
+          'updated_at': now,
+        })
+        .eq('id', queueItemId);
+
+    await _client.from('moderation_audit_logs').insert({
+      'moderator_user_id': _currentUserId,
+      'action': 'queue_assigned',
+      'target_type': 'moderation_queue',
+      'target_id': queueItemId,
+      'notes': 'Assigned queue item to current moderator',
+      'created_at': now,
+    });
+  }
+
+  Future<void> updateQueueItemStatus({
+    required String queueItemId,
+    required String status,
+  }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('moderation_queue')
+        .update({'status': status, 'updated_at': now})
+        .eq('id', queueItemId);
+
+    await _client.from('moderation_audit_logs').insert({
+      'moderator_user_id': _currentUserId,
+      'action': 'queue_status_$status',
+      'target_type': 'moderation_queue',
+      'target_id': queueItemId,
+      'notes': 'Queue status changed to $status',
+      'created_at': now,
+    });
+  }
+
+  Future<ModerationTargetPreview?> getTargetPreview({
+    required String targetType,
+    required String? targetId,
+  }) async {
+    final String id = (targetId ?? '').trim();
+    if (id.isEmpty) {
+      return null;
+    }
+
+    try {
+      if (targetType == 'post') {
+        final Map<String, dynamic>? row = await _client
+            .from('community_posts')
+            .select('id, title, plain_text, author_name, created_at')
+            .eq('id', id)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return ModerationTargetPreview(
+          title: row['title']?.toString() ?? 'Post',
+          subtitle: row['author_name']?.toString(),
+          body: row['plain_text']?.toString(),
+          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+        );
+      }
+
+      if (targetType == 'comment') {
+        final Map<String, dynamic>? row = await _client
+            .from('community_comments')
+            .select('id, message, author_name, created_at')
+            .eq('id', id)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return ModerationTargetPreview(
+          title: 'Comment',
+          subtitle: row['author_name']?.toString(),
+          body: row['message']?.toString(),
+          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+        );
+      }
+
+      if (targetType == 'event') {
+        final Map<String, dynamic>? row = await _client
+            .from('events')
+            .select('id, title, description, created_at')
+            .eq('id', id)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return ModerationTargetPreview(
+          title: row['title']?.toString() ?? 'Event',
+          subtitle: null,
+          body: row['description']?.toString(),
+          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+        );
+      }
+
+      if (targetType == 'dm') {
+        final Map<String, dynamic>? row = await _client
+            .from('direct_messages')
+            .select('id, body, sender_id, recipient_id, created_at')
+            .eq('id', id)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return ModerationTargetPreview(
+          title: 'Direct Message',
+          subtitle: '${row['sender_id'] ?? '-'} -> ${row['recipient_id'] ?? '-'}',
+          body: row['body']?.toString(),
+          createdAt: DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc(),
+        );
+      }
+
+      if (targetType == 'user') {
+        final Map<String, dynamic>? row = await _client
+            .from('profiles')
+            .select('id, call_sign, user_code, bio, updated_at')
+            .eq('id', id)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return ModerationTargetPreview(
+          title: row['call_sign']?.toString() ?? 'User',
+          subtitle: row['user_code']?.toString(),
+          body: row['bio']?.toString(),
+          createdAt: DateTime.tryParse((row['updated_at'] ?? '').toString())?.toUtc(),
+        );
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
+  }
+
   String? _nullIfEmpty(String? value) {
     if (value == null) {
       return null;
@@ -470,6 +741,144 @@ class AdminBanRecord {
       revokedBy: json['revoked_by']?.toString(),
     );
   }
+}
+
+class SafetyReportRecord {
+  const SafetyReportRecord({
+    required this.id,
+    required this.reporterUserId,
+    required this.targetType,
+    required this.reasonCategory,
+    required this.status,
+    required this.createdAt,
+    this.targetId,
+    this.details,
+    this.reviewedBy,
+    this.reviewedAt,
+  });
+
+  final String id;
+  final String reporterUserId;
+  final String targetType;
+  final String? targetId;
+  final String reasonCategory;
+  final String? details;
+  final String status;
+  final String? reviewedBy;
+  final DateTime? reviewedAt;
+  final DateTime createdAt;
+
+  factory SafetyReportRecord.fromJson(Map<String, dynamic> json) {
+    return SafetyReportRecord(
+      id: (json['id'] ?? '').toString(),
+      reporterUserId: (json['reporter_user_id'] ?? '').toString(),
+      targetType: (json['target_type'] ?? '').toString(),
+      targetId: json['target_id']?.toString(),
+      reasonCategory: (json['reason_category'] ?? '').toString(),
+      details: json['details']?.toString(),
+      status: (json['status'] ?? '').toString(),
+      reviewedBy: json['reviewed_by']?.toString(),
+      reviewedAt: json['reviewed_at'] == null
+          ? null
+          : DateTime.tryParse(json['reviewed_at'].toString())?.toUtc(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
+    );
+  }
+}
+
+class ModerationQueueRecord {
+  const ModerationQueueRecord({
+    required this.id,
+    required this.targetType,
+    required this.priority,
+    required this.status,
+    required this.createdAt,
+    this.reportId,
+    this.targetId,
+    this.assignedTo,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String? reportId;
+  final String targetType;
+  final String? targetId;
+  final String priority;
+  final String status;
+  final String? assignedTo;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+
+  factory ModerationQueueRecord.fromJson(Map<String, dynamic> json) {
+    return ModerationQueueRecord(
+      id: (json['id'] ?? '').toString(),
+      reportId: json['report_id']?.toString(),
+      targetType: (json['target_type'] ?? '').toString(),
+      targetId: json['target_id']?.toString(),
+      priority: (json['priority'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      assignedTo: json['assigned_to']?.toString(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
+      updatedAt: json['updated_at'] == null
+          ? null
+          : DateTime.tryParse(json['updated_at'].toString())?.toUtc(),
+    );
+  }
+}
+
+class ModerationAuditLogRecord {
+  const ModerationAuditLogRecord({
+    required this.id,
+    required this.action,
+    required this.targetType,
+    required this.createdAt,
+    this.moderatorUserId,
+    this.targetId,
+    this.reportId,
+    this.notes,
+  });
+
+  final String id;
+  final String? moderatorUserId;
+  final String action;
+  final String targetType;
+  final String? targetId;
+  final String? reportId;
+  final String? notes;
+  final DateTime createdAt;
+
+  factory ModerationAuditLogRecord.fromJson(Map<String, dynamic> json) {
+    return ModerationAuditLogRecord(
+      id: (json['id'] ?? '').toString(),
+      moderatorUserId: json['moderator_user_id']?.toString(),
+      action: (json['action'] ?? '').toString(),
+      targetType: (json['target_type'] ?? '').toString(),
+      targetId: json['target_id']?.toString(),
+      reportId: json['report_id']?.toString(),
+      notes: json['notes']?.toString(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
+    );
+  }
+}
+
+class ModerationTargetPreview {
+  const ModerationTargetPreview({
+    required this.title,
+    this.subtitle,
+    this.body,
+    this.createdAt,
+  });
+
+  final String title;
+  final String? subtitle;
+  final String? body;
+  final DateTime? createdAt;
 }
 
 class FieldClaimRequestRecord {

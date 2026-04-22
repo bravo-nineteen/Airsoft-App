@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_image_service.dart';
+import '../safety/safety_repository.dart';
 import 'event_model.dart';
 import '../notifications/notification_writer.dart';
 
@@ -8,11 +9,13 @@ class EventRepository {
   EventRepository({SupabaseClient? client})
     : _client = client,
       _notificationWriter = NotificationWriter(client: client),
-      _imageService = CommunityImageService(client: client);
+      _imageService = CommunityImageService(client: client),
+      _safetyRepository = SafetyRepository(client: client);
 
   final SupabaseClient? _client;
   final NotificationWriter _notificationWriter;
   final CommunityImageService _imageService;
+  final SafetyRepository _safetyRepository;
 
   SupabaseClient get _resolvedClient => _client ?? Supabase.instance.client;
 
@@ -555,13 +558,20 @@ class EventRepository {
         .eq('is_deleted', false)
         .order('created_at', ascending: true);
 
-    final List<EventCommentModel> baseComments = (response as List<dynamic>)
+    List<EventCommentModel> baseComments = (response as List<dynamic>)
         .map(
           (dynamic e) => EventCommentModel.fromJson(
             Map<String, dynamic>.from(e as Map),
           ),
         )
         .toList();
+
+    if (currentUser != null) {
+      final Set<String> hiddenUserIds = await _safetyRepository.getHiddenAuthorIds();
+      baseComments = baseComments.where((EventCommentModel comment) {
+        return !hiddenUserIds.contains(comment.userId);
+      }).toList();
+    }
 
     if (baseComments.isEmpty) {
       return <EventCommentModel>[];

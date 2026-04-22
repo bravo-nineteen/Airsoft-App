@@ -41,7 +41,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
+  final AppContentPreloader? _contentPreloader = _resolvePreloader();
   CommunityRepository? _communityRepository;
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
@@ -54,15 +54,32 @@ class _HomeScreenState extends State<HomeScreen> {
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
   Timer? _backgroundSyncTimer;
 
-  String? get _currentUserId => _communityRepository?.currentUserId ?? CommunityRepository().currentUserId;
+  static AppContentPreloader? _resolvePreloader() {
+    try {
+      return AppContentPreloader.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get _currentUserId {
+    try {
+      return _communityRepository?.currentUserId;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _latestPosts = _contentPreloader.communityPosts.take(6).toList();
-    _upcomingEvents = _nearestUpcomingEvents(_contentPreloader.events);
-    _contentPreloader.communityRevision.addListener(_handleSharedPostsUpdated);
-    _contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
+    final AppContentPreloader? contentPreloader = _contentPreloader;
+    if (contentPreloader != null) {
+      _latestPosts = contentPreloader.communityPosts.take(6).toList();
+      _upcomingEvents = _nearestUpcomingEvents(contentPreloader.events);
+      contentPreloader.communityRevision.addListener(_handleSharedPostsUpdated);
+      contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
+    }
     _loadHomeData();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
@@ -121,10 +138,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
-    _contentPreloader.communityRevision.removeListener(
-      _handleSharedPostsUpdated,
-    );
-    _contentPreloader.eventsRevision.removeListener(_handleSharedEventsUpdated);
+    final AppContentPreloader? contentPreloader = _contentPreloader;
+    if (contentPreloader != null) {
+      contentPreloader.communityRevision.removeListener(
+        _handleSharedPostsUpdated,
+      );
+      contentPreloader.eventsRevision.removeListener(_handleSharedEventsUpdated);
+    }
     super.dispose();
   }
 
@@ -133,7 +153,12 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final List<CommunityPostModel> latest = _contentPreloader.communityPosts
+    final AppContentPreloader? contentPreloader = _contentPreloader;
+    if (contentPreloader == null) {
+      return;
+    }
+
+    final List<CommunityPostModel> latest = contentPreloader.communityPosts
         .take(6)
         .toList();
     if (latest.isEmpty) {
@@ -151,8 +176,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final AppContentPreloader? contentPreloader = _contentPreloader;
+    if (contentPreloader == null) {
+      return;
+    }
+
     setState(() {
-      _upcomingEvents = _nearestUpcomingEvents(_contentPreloader.events);
+      _upcomingEvents = _nearestUpcomingEvents(contentPreloader.events);
     });
   }
 
@@ -162,7 +192,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return loader();
     }
 
-    final List<CommunityPostModel> preloaded = _contentPreloader.communityPosts;
+    final List<CommunityPostModel> preloaded =
+        _contentPreloader?.communityPosts ?? const <CommunityPostModel>[];
     if (preloaded.isNotEmpty) {
       return Future<List<CommunityPostModel>>.value(preloaded);
     }
@@ -197,9 +228,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<CommunityPostModel>> _fetchFriendsTimelinePosts() {
-    final CommunityRepository repository = _communityRepository ??=
-        CommunityRepository();
-    return repository.fetchFriendsTimelinePosts(limit: 6);
+    try {
+      final CommunityRepository repository = _communityRepository ??=
+          CommunityRepository();
+      return repository.fetchFriendsTimelinePosts(limit: 6);
+    } catch (_) {
+      return Future<List<CommunityPostModel>>.value(
+        const <CommunityPostModel>[],
+      );
+    }
   }
 
   Future<void> _openCreateTimelinePost() async {
@@ -226,12 +263,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<EventModel>> _fetchUpcomingEvents() async {
-    final List<EventModel> preloaded = _contentPreloader.events;
+    final List<EventModel> preloaded =
+        _contentPreloader?.events ?? const <EventModel>[];
     if (preloaded.isNotEmpty) {
       return _nearestUpcomingEvents(preloaded);
     }
 
-    final List<EventModel> refreshed = await _contentPreloader.refreshEvents();
+    final AppContentPreloader? contentPreloader = _contentPreloader;
+    if (contentPreloader == null) {
+      return <EventModel>[];
+    }
+
+    final List<EventModel> refreshed = await contentPreloader.refreshEvents();
     return _nearestUpcomingEvents(refreshed);
   }
 

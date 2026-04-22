@@ -8,6 +8,7 @@ import '../notifications/notifications_screen.dart';
 import 'account_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
+import 'safety_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -247,6 +248,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.privacy_tip_outlined,
             title: l10n.t('privacyControls'),
             onTap: () => _navigate(context, const PrivacySettingsScreen()),
+          ),
+          _tile(
+            context: context,
+            icon: Icons.block_outlined,
+            title: l10n.t('blockedUsers'),
+            onTap: () => _navigate(context, const SafetyManagementScreen()),
           ),
 
           _sectionTitle(l10n.t('account')),

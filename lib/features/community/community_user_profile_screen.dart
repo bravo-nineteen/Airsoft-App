@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/localization/app_localizations.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
+import '../safety/safety_repository.dart';
 import '../social/contacts_screen.dart';
 import '../social/contact_repository.dart';
 import '../social/direct_message_screen.dart';
@@ -54,6 +56,7 @@ class _CommunityPublicProfileScreenState
   final CommunityRepository _repository = CommunityRepository();
   final EventRepository _eventRepository = EventRepository();
   final ContactRepository _contactRepository = ContactRepository();
+  final SafetyRepository _safetyRepository = SafetyRepository();
 
   Map<String, dynamic>? _profile;
   List<CommunityPostModel> _timelinePosts = <CommunityPostModel>[];
@@ -347,6 +350,153 @@ class _CommunityPublicProfileScreenState
     );
 
     await _load();
+  }
+
+  Future<void> _reportUser() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+
+    String selectedReason = 'other';
+    final TextEditingController detailsController = TextEditingController();
+    final bool? shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text(l10n.t('reportUser')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedReason,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem(value: 'spam', child: Text(l10n.t('reportReasonSpam'))),
+                      DropdownMenuItem(value: 'harassment', child: Text(l10n.t('reportReasonHarassment'))),
+                      DropdownMenuItem(value: 'hate', child: Text(l10n.t('reportReasonHate'))),
+                      DropdownMenuItem(value: 'scam', child: Text(l10n.t('reportReasonScam'))),
+                      DropdownMenuItem(value: 'other', child: Text(l10n.t('other'))),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        selectedReason = value ?? 'other';
+                      });
+                    },
+                    decoration: InputDecoration(labelText: l10n.t('reason')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: detailsController,
+                    minLines: 2,
+                    maxLines: 5,
+                    decoration: InputDecoration(labelText: l10n.t('detailsOptional')),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(l10n.t('submitReport')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldSubmit != true) {
+      detailsController.dispose();
+      return;
+    }
+
+    try {
+      await _safetyRepository.submitReport(
+        targetType: 'user',
+        targetId: widget.userId,
+        reasonCategory: selectedReason,
+        details: detailsController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('reportSubmitted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Future<void> _blockUser() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.blockUser(widget.userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userBlocked'))),
+      );
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  Future<void> _muteUser() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.muteUser(widget.userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userMuted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
   }
 
   Widget _buildRelationshipActions(ThemeData theme) {
@@ -834,6 +984,35 @@ class _CommunityPublicProfileScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
+        actions: _isSelf
+            ? null
+            : <Widget>[
+                PopupMenuButton<String>(
+                  onSelected: (String value) {
+                    if (value == 'report') {
+                      _reportUser();
+                    } else if (value == 'mute') {
+                      _muteUser();
+                    } else if (value == 'block') {
+                      _blockUser();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'report',
+                      child: Text(AppLocalizations.of(context).t('reportUser')),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'mute',
+                      child: Text(AppLocalizations.of(context).t('muteUser')),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'block',
+                      child: Text(AppLocalizations.of(context).t('blockUser')),
+                    ),
+                  ],
+                ),
+              ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const <Tab>[

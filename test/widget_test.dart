@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'package:airsoft_app/app/localization/app_localizations.dart';
 import 'package:airsoft_app/features/home/home_screen.dart';
 import 'package:airsoft_app/features/community/community_model.dart';
 
@@ -8,6 +10,13 @@ void main() {
   testWidgets('Home screen renders key sections', (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         home: Scaffold(
           body: HomeScreen(
             loadLatestPosts: () async => <CommunityPostModel>[
@@ -48,12 +57,11 @@ void main() {
       ),
     );
 
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('FieldOps News Feed'), findsOneWidget);
     expect(find.text('Recent Posts'), findsOneWidget);
     expect(find.text('Weekend skirmish'), findsOneWidget);
-    expect(find.text('See Posted Events'), findsOneWidget);
-    expect(find.text('Airsoft Blog'), findsOneWidget);
+    expect(find.text('Closest events happening soon'), findsOneWidget);
   });
 }

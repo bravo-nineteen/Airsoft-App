@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../safety/safety_repository.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
 import 'community_repository.dart';
@@ -24,6 +25,7 @@ class CommunityPostDetailsScreen extends StatefulWidget {
 class _CommunityPostDetailsScreenState
     extends State<CommunityPostDetailsScreen> {
   final CommunityRepository _repository = CommunityRepository();
+  final SafetyRepository _safetyRepository = SafetyRepository();
   final CommunityImageService _imageService = CommunityImageService();
   final TextEditingController _commentController = TextEditingController();
   RealtimeChannel? _postChannel;
@@ -801,6 +803,169 @@ class _CommunityPostDetailsScreenState
     }
   }
 
+  Future<void> _reportTarget({
+    required String targetType,
+    required String targetId,
+  }) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+
+    String selectedReason = 'other';
+    final TextEditingController detailsController = TextEditingController();
+    final bool? shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text(l10n.t('reportContent')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedReason,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem(value: 'spam', child: Text(l10n.t('reportReasonSpam'))),
+                      DropdownMenuItem(value: 'harassment', child: Text(l10n.t('reportReasonHarassment'))),
+                      DropdownMenuItem(value: 'hate', child: Text(l10n.t('reportReasonHate'))),
+                      DropdownMenuItem(value: 'scam', child: Text(l10n.t('reportReasonScam'))),
+                      DropdownMenuItem(value: 'other', child: Text(l10n.t('other'))),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        selectedReason = value ?? 'other';
+                      });
+                    },
+                    decoration: InputDecoration(labelText: l10n.t('reason')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: detailsController,
+                    minLines: 2,
+                    maxLines: 5,
+                    decoration: InputDecoration(labelText: l10n.t('detailsOptional')),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(l10n.t('submitReport')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldSubmit != true) {
+      detailsController.dispose();
+      return;
+    }
+
+    try {
+      await _safetyRepository.submitReport(
+        targetType: targetType,
+        targetId: targetId,
+        reasonCategory: selectedReason,
+        details: detailsController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('reportSubmitted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Future<void> _blockUser(String userId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.blockUser(userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userBlocked'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  Future<void> _muteUser(String userId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.muteUser(userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userMuted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  void _muteUserIfPresent(String? userId) {
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    _muteUser(userId);
+  }
+
+  void _blockUserIfPresent(String? userId) {
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    _blockUser(userId);
+  }
+
   Future<void> _copyToClipboard(String value, String successMessage) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) {
@@ -1029,26 +1194,59 @@ class _CommunityPostDetailsScreenState
                       ],
                     ),
                   ),
-                  if (isOwner)
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _editComment(comment);
-                        } else if (value == 'delete') {
-                          _deleteComment(comment);
-                        }
-                      },
-                      itemBuilder: (context) => <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          value: 'edit',
-                          child: Text(l10n.t('edit')),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Text(l10n.t('delete')),
-                        ),
-                      ],
-                    ),
+                  PopupMenuButton<String>(
+                    onSelected: (String value) {
+                      if (value == 'edit') {
+                        _editComment(comment);
+                      } else if (value == 'delete') {
+                        _deleteComment(comment);
+                      } else if (value == 'report') {
+                        _reportTarget(targetType: 'comment', targetId: comment.id);
+                      } else if (value == 'block') {
+                        _blockUserIfPresent(comment.authorId);
+                      } else if (value == 'mute') {
+                        _muteUserIfPresent(comment.authorId);
+                      }
+                    },
+                    itemBuilder: (BuildContext context) {
+                      final List<PopupMenuEntry<String>> items = <PopupMenuEntry<String>>[];
+                      if (isOwner) {
+                        items.add(
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text(l10n.t('edit')),
+                          ),
+                        );
+                        items.add(
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text(l10n.t('delete')),
+                          ),
+                        );
+                      }
+                      if (!isOwner) {
+                        items.add(
+                          PopupMenuItem<String>(
+                            value: 'report',
+                            child: Text(l10n.t('report')),
+                          ),
+                        );
+                        items.add(
+                          PopupMenuItem<String>(
+                            value: 'mute',
+                            child: Text(l10n.t('muteUser')),
+                          ),
+                        );
+                        items.add(
+                          PopupMenuItem<String>(
+                            value: 'block',
+                            child: Text(l10n.t('blockUser')),
+                          ),
+                        );
+                      }
+                      return items;
+                    },
+                  ),
                   IconButton(
                     tooltip: l10n.t('copyComment'),
                     onPressed: () =>
@@ -1221,19 +1419,45 @@ class _CommunityPostDetailsScreenState
             onPressed: post == null ? null : () => _copyPost(post),
             icon: const Icon(Icons.copy_all_outlined),
           ),
-          if (post != null && _isPostOwner(post))
+          if (post != null)
             PopupMenuButton<String>(
               onSelected: (String value) {
                 if (value == 'edit') {
                   _editPost(post);
                 } else if (value == 'delete') {
                   _deletePost(post);
+                } else if (value == 'report') {
+                  _reportTarget(targetType: 'post', targetId: post.id);
+                } else if (value == 'mute') {
+                  _muteUserIfPresent(post.authorId);
+                } else if (value == 'block') {
+                  _blockUserIfPresent(post.authorId);
                 }
               },
-              itemBuilder: (_) => <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(value: 'edit', child: Text(l10n.t('edit'))),
-                PopupMenuItem<String>(value: 'delete', child: Text(l10n.t('delete'))),
-              ],
+              itemBuilder: (_) {
+                final bool isOwner = _isPostOwner(post);
+                final List<PopupMenuEntry<String>> items = <PopupMenuEntry<String>>[];
+                if (isOwner) {
+                  items.add(
+                    PopupMenuItem<String>(value: 'edit', child: Text(l10n.t('edit'))),
+                  );
+                  items.add(
+                    PopupMenuItem<String>(value: 'delete', child: Text(l10n.t('delete'))),
+                  );
+                }
+                if (!isOwner) {
+                  items.add(
+                    PopupMenuItem<String>(value: 'report', child: Text(l10n.t('report'))),
+                  );
+                  items.add(
+                    PopupMenuItem<String>(value: 'mute', child: Text(l10n.t('muteUser'))),
+                  );
+                  items.add(
+                    PopupMenuItem<String>(value: 'block', child: Text(l10n.t('blockUser'))),
+                  );
+                }
+                return items;
+              },
             ),
         ],
       ),

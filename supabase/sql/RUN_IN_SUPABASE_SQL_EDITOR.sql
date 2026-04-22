@@ -615,6 +615,177 @@ drop policy if exists fields_admin_delete on public.fields;
 create policy fields_admin_delete on public.fields for delete to authenticated using (public.is_admin(auth.uid()));
 
 -- ---------------------------------------------------------------
+-- MIGRATION 010 (subset): Trust and Safety foundations
+-- ---------------------------------------------------------------
+
+create table if not exists public.safety_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_user_id uuid not null references auth.users(id) on delete cascade,
+  target_type text not null,
+  target_id uuid,
+  reason_category text not null,
+  details text,
+  status text not null default 'open',
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (target_type in ('user', 'post', 'comment', 'event', 'dm', 'field', 'other')),
+  check (
+    reason_category in (
+      'spam',
+      'harassment',
+      'hate',
+      'nudity',
+      'violence',
+      'illegal',
+      'scam',
+      'self_harm',
+      'other'
+    )
+  ),
+  check (status in ('open', 'triaged', 'actioned', 'dismissed'))
+);
+
+create index if not exists idx_safety_reports_reporter
+  on public.safety_reports (reporter_user_id, created_at desc);
+create index if not exists idx_safety_reports_status
+  on public.safety_reports (status, created_at desc);
+create index if not exists idx_safety_reports_target
+  on public.safety_reports (target_type, target_id);
+
+create table if not exists public.user_blocks (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  blocked_user_id uuid not null references auth.users(id) on delete cascade,
+  reason text,
+  created_at timestamptz not null default now(),
+  primary key (user_id, blocked_user_id),
+  check (user_id <> blocked_user_id)
+);
+
+create index if not exists idx_user_blocks_blocked
+  on public.user_blocks (blocked_user_id, created_at desc);
+
+create table if not exists public.user_mutes (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  muted_user_id uuid not null references auth.users(id) on delete cascade,
+  expires_at timestamptz,
+  reason text,
+  created_at timestamptz not null default now(),
+  primary key (user_id, muted_user_id),
+  check (user_id <> muted_user_id)
+);
+
+create table if not exists public.moderation_queue (
+  id uuid primary key default gen_random_uuid(),
+  report_id uuid references public.safety_reports(id) on delete set null,
+  target_type text not null,
+  target_id uuid,
+  priority text not null default 'normal',
+  status text not null default 'queued',
+  assigned_to uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (priority in ('low', 'normal', 'high', 'critical')),
+  check (status in ('queued', 'in_review', 'resolved'))
+);
+
+create index if not exists idx_moderation_queue_status_priority
+  on public.moderation_queue (status, priority, created_at asc);
+
+create or replace function public.enqueue_safety_report()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.moderation_queue (
+    report_id,
+    target_type,
+    target_id,
+    priority,
+    status
+  )
+  values (
+    new.id,
+    new.target_type,
+    new.target_id,
+    'normal',
+    'queued'
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enqueue_safety_report on public.safety_reports;
+create trigger trg_enqueue_safety_report
+after insert on public.safety_reports
+for each row
+execute function public.enqueue_safety_report();
+
+create table if not exists public.moderation_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  moderator_user_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  target_type text not null,
+  target_id uuid,
+  report_id uuid references public.safety_reports(id) on delete set null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_moderation_audit_logs_created
+  on public.moderation_audit_logs (created_at desc);
+
+alter table public.safety_reports enable row level security;
+alter table public.user_blocks enable row level security;
+alter table public.user_mutes enable row level security;
+alter table public.moderation_queue enable row level security;
+alter table public.moderation_audit_logs enable row level security;
+
+drop policy if exists safety_reports_select_own_or_admin on public.safety_reports;
+create policy safety_reports_select_own_or_admin
+on public.safety_reports for select to authenticated
+using (reporter_user_id = auth.uid() or public.is_admin(auth.uid()));
+
+drop policy if exists safety_reports_insert_reporter on public.safety_reports;
+create policy safety_reports_insert_reporter
+on public.safety_reports for insert to authenticated
+with check (reporter_user_id = auth.uid());
+
+drop policy if exists safety_reports_update_admin on public.safety_reports;
+create policy safety_reports_update_admin
+on public.safety_reports for update to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
+drop policy if exists user_blocks_manage_own on public.user_blocks;
+create policy user_blocks_manage_own
+on public.user_blocks for all to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists user_mutes_manage_own on public.user_mutes;
+create policy user_mutes_manage_own
+on public.user_mutes for all to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists moderation_queue_admin_only on public.moderation_queue;
+create policy moderation_queue_admin_only
+on public.moderation_queue for all to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
+drop policy if exists moderation_audit_logs_admin_only on public.moderation_audit_logs;
+create policy moderation_audit_logs_admin_only
+on public.moderation_audit_logs for all to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
+-- ---------------------------------------------------------------
 -- OPTIONAL SEED: First admin user
 -- Replace the email below with your own login email before running.
 -- ---------------------------------------------------------------
@@ -623,3 +794,82 @@ select u.id, 'admin', u.id
 from auth.users u
 where lower(u.email) = lower('my.computer.83@gmail.com')
 on conflict (user_id) do nothing;
+
+-- ---------------------------------------------------------------
+-- SANITY CHECKS: Trust and Safety trigger + policies
+-- Run these manually after schema setup. Replace placeholders first.
+-- ---------------------------------------------------------------
+
+-- 1) As a regular authenticated user, insert a report.
+-- Expected: insert succeeds.
+-- insert into public.safety_reports (
+--   reporter_user_id,
+--   target_type,
+--   target_id,
+--   reason_category,
+--   details
+-- )
+-- values (
+--   auth.uid(),
+--   'post',
+--   '00000000-0000-0000-0000-000000000000'::uuid,
+--   'spam',
+--   'Sanity-check report row'
+-- )
+-- returning id;
+
+-- 2) Confirm trigger queued moderation work item.
+-- Expected: exactly one queued row tied to report_id.
+-- select mq.*
+-- from public.moderation_queue mq
+-- where mq.report_id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+
+-- 3) Verify reporter read access.
+-- Expected: reporter can read own row.
+-- select *
+-- from public.safety_reports
+-- where id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+
+-- 4) Verify non-admin cannot read moderation queue.
+-- Expected: 0 rows (or permission denied based on client context).
+-- select *
+-- from public.moderation_queue
+-- where report_id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+
+-- 5) As admin, triage report and queue item.
+-- Expected: updates succeed only for admin.
+-- update public.safety_reports
+-- set status = 'triaged', reviewed_by = auth.uid(), reviewed_at = now()
+-- where id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+--
+-- update public.moderation_queue
+-- set status = 'in_review', assigned_to = auth.uid()
+-- where report_id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+
+-- 6) Confirm audit logging path is writable for admin only.
+-- insert into public.moderation_audit_logs (
+--   moderator_user_id,
+--   action,
+--   target_type,
+--   target_id,
+--   report_id,
+--   notes
+-- )
+-- values (
+--   auth.uid(),
+--   'triage',
+--   'post',
+--   '00000000-0000-0000-0000-000000000000'::uuid,
+--   'PASTE_REPORT_ID_FROM_STEP_1'::uuid,
+--   'Sanity-check moderation audit write'
+-- );
+
+-- 7) Cleanup sanity-check data (run as admin when done).
+-- delete from public.moderation_audit_logs
+-- where report_id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+--
+-- delete from public.moderation_queue
+-- where report_id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;
+--
+-- delete from public.safety_reports
+-- where id = 'PASTE_REPORT_ID_FROM_STEP_1'::uuid;

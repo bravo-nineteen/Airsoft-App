@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../safety/safety_repository.dart';
 import 'event_create_screen.dart';
 import 'event_model.dart';
 import 'event_repository.dart';
@@ -19,6 +20,7 @@ class EventDetailsScreen extends StatefulWidget {
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   final EventRepository _repository = EventRepository();
+  final SafetyRepository _safetyRepository = SafetyRepository();
   final TextEditingController _commentController = TextEditingController();
 
   late EventModel _event;
@@ -94,6 +96,171 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   bool get _isLoggedIn => Supabase.instance.client.auth.currentUser != null;
+
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  Future<void> _reportTarget({
+    required String targetType,
+    required String targetId,
+  }) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+
+    String selectedReason = 'other';
+    final TextEditingController detailsController = TextEditingController();
+    final bool? shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text(l10n.t('reportContent')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedReason,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem(value: 'spam', child: Text(l10n.t('reportReasonSpam'))),
+                      DropdownMenuItem(value: 'harassment', child: Text(l10n.t('reportReasonHarassment'))),
+                      DropdownMenuItem(value: 'hate', child: Text(l10n.t('reportReasonHate'))),
+                      DropdownMenuItem(value: 'scam', child: Text(l10n.t('reportReasonScam'))),
+                      DropdownMenuItem(value: 'other', child: Text(l10n.t('other'))),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        selectedReason = value ?? 'other';
+                      });
+                    },
+                    decoration: InputDecoration(labelText: l10n.t('reason')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: detailsController,
+                    minLines: 2,
+                    maxLines: 5,
+                    decoration: InputDecoration(labelText: l10n.t('detailsOptional')),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(l10n.t('submitReport')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldSubmit != true) {
+      detailsController.dispose();
+      return;
+    }
+
+    try {
+      await _safetyRepository.submitReport(
+        targetType: targetType,
+        targetId: targetId,
+        reasonCategory: selectedReason,
+        details: detailsController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('reportSubmitted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Future<void> _blockUser(String userId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.blockUser(userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userBlocked'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  Future<void> _muteUser(String userId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('mustBeLoggedInToReport'))),
+      );
+      return;
+    }
+    try {
+      await _safetyRepository.muteUser(userId);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('userMuted'))),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
+  void _muteUserIfPresent(String? userId) {
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    _muteUser(userId);
+  }
+
+  void _blockUserIfPresent(String? userId) {
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    _blockUser(userId);
+  }
 
   List<EventCommentModel> get _topLevelComments {
     return _comments
@@ -949,27 +1116,59 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ],
                 ),
               ),
-              if (isOwner)
-                PopupMenuButton<String>(
-                  onSelected: (String value) {
-                    if (value == 'edit') {
-                      _editComment(comment);
-                    } else if (value == 'delete') {
-                      _deleteComment(comment);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          value: 'edit',
-                          child: Text(l10n.t('edit')),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Text(l10n.t('delete')),
-                        ),
-                      ],
-                ),
+              PopupMenuButton<String>(
+                onSelected: (String value) {
+                  if (value == 'edit') {
+                    _editComment(comment);
+                  } else if (value == 'delete') {
+                    _deleteComment(comment);
+                  } else if (value == 'report') {
+                    _reportTarget(targetType: 'comment', targetId: comment.id);
+                  } else if (value == 'mute') {
+                    _muteUser(comment.userId);
+                  } else if (value == 'block') {
+                    _blockUser(comment.userId);
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  final List<PopupMenuEntry<String>> items = <PopupMenuEntry<String>>[];
+                  if (isOwner) {
+                    items.add(
+                      PopupMenuItem<String>(
+                        value: 'edit',
+                        child: Text(l10n.t('edit')),
+                      ),
+                    );
+                    items.add(
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Text(l10n.t('delete')),
+                      ),
+                    );
+                  }
+                  if (!isOwner) {
+                    items.add(
+                      PopupMenuItem<String>(
+                        value: 'report',
+                        child: Text(l10n.t('report')),
+                      ),
+                    );
+                    items.add(
+                      PopupMenuItem<String>(
+                        value: 'mute',
+                        child: Text(l10n.t('muteUser')),
+                      ),
+                    );
+                    items.add(
+                      PopupMenuItem<String>(
+                        value: 'block',
+                        child: Text(l10n.t('blockUser')),
+                      ),
+                    );
+                  }
+                  return items;
+                },
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1164,29 +1363,63 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_event.title),
-        actions: _isCurrentUserHost(_event)
-            ? <Widget>[
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _editEvent();
-                    } else if (value == 'delete') {
-                      _deleteEvent();
-                    }
-                  },
-                  itemBuilder: (context) => <PopupMenuEntry<String>>[
-                    PopupMenuItem<String>(
-                      value: 'edit',
-                      child: Text(l10n.t('editEvent')),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text(l10n.t('deleteEventAction')),
-                    ),
-                  ],
-                ),
-              ]
-            : null,
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            onSelected: (String value) {
+              if (value == 'edit') {
+                _editEvent();
+              } else if (value == 'delete') {
+                _deleteEvent();
+              } else if (value == 'report') {
+                _reportTarget(targetType: 'event', targetId: _event.id);
+              } else if (value == 'mute') {
+                _muteUserIfPresent(_event.hostUserId);
+              } else if (value == 'block') {
+                _blockUserIfPresent(_event.hostUserId);
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              final bool isHost = _isCurrentUserHost(_event);
+              final bool isSelf = _event.hostUserId == _currentUserId;
+              final List<PopupMenuEntry<String>> items = <PopupMenuEntry<String>>[];
+              if (isHost) {
+                items.add(
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Text(l10n.t('editEvent')),
+                  ),
+                );
+                items.add(
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Text(l10n.t('deleteEventAction')),
+                  ),
+                );
+              }
+              if (!isSelf) {
+                items.add(
+                  PopupMenuItem<String>(
+                    value: 'report',
+                    child: Text(l10n.t('report')),
+                  ),
+                );
+                items.add(
+                  PopupMenuItem<String>(
+                    value: 'mute',
+                    child: Text(l10n.t('muteUser')),
+                  ),
+                );
+                items.add(
+                  PopupMenuItem<String>(
+                    value: 'block',
+                    child: Text(l10n.t('blockUser')),
+                  ),
+                );
+              }
+              return items;
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: _isLoading

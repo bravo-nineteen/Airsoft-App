@@ -5,16 +5,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
 import '../notifications/notification_writer.dart';
+import '../safety/safety_repository.dart';
 
 class CommunityRepository {
   CommunityRepository({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client,
       _notificationWriter = NotificationWriter(client: client),
-      _imageService = CommunityImageService(client: client);
+      _imageService = CommunityImageService(client: client),
+      _safetyRepository = SafetyRepository(client: client);
 
   final SupabaseClient _client;
   final NotificationWriter _notificationWriter;
   final CommunityImageService _imageService;
+  final SafetyRepository _safetyRepository;
 
   String? get currentUserId => _client.auth.currentUser?.id;
 
@@ -167,12 +170,20 @@ class CommunityRepository {
         .range(offset, offset + limit - 1),
     );
 
-    final List<CommunityPostModel> posts = (response as List<dynamic>)
+    List<CommunityPostModel> posts = (response as List<dynamic>)
         .map(
           (dynamic e) =>
               CommunityPostModel.fromJson(Map<String, dynamic>.from(e as Map)),
         )
         .toList();
+
+    final String? viewerUserId = currentUserId;
+    if (viewerUserId != null) {
+      final Set<String> hiddenUserIds = await _safetyRepository.getHiddenAuthorIds();
+      posts = posts.where((CommunityPostModel post) {
+        return !hiddenUserIds.contains(post.authorId ?? '');
+      }).toList();
+    }
 
     if (posts.isNotEmpty) {
       final List<String> postIds = posts.map((CommunityPostModel p) => p.id).toList();
@@ -379,13 +390,21 @@ class CommunityRepository {
           .order('created_at', ascending: true),
     );
 
-    final comments = (response as List<dynamic>)
+    List<CommunityCommentModel> comments = (response as List<dynamic>)
         .map(
           (dynamic e) => CommunityCommentModel.fromJson(
             Map<String, dynamic>.from(e as Map),
           ),
         )
         .toList();
+
+    final String? viewerUserId = currentUserId;
+    if (viewerUserId != null) {
+      final Set<String> hiddenUserIds = await _safetyRepository.getHiddenAuthorIds();
+      comments = comments.where((CommunityCommentModel comment) {
+        return !hiddenUserIds.contains(comment.authorId ?? '');
+      }).toList();
+    }
 
     final hasLikesTable = await _hasTable('community_comment_likes');
     if (!hasLikesTable) {
