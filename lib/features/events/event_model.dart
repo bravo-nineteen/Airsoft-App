@@ -239,6 +239,50 @@ class EventAttendanceStats {
   final int noShow;
 }
 
+class EventCheckinRecord {
+  const EventCheckinRecord({
+    required this.id,
+    required this.eventId,
+    required this.attendeeUserId,
+    required this.status,
+    required this.createdAt,
+    this.checkedByHostId,
+    this.notes,
+  });
+
+  final String id;
+  final String eventId;
+  final String attendeeUserId;
+  final String status;
+  final String? checkedByHostId;
+  final String? notes;
+  final DateTime createdAt;
+
+  bool get attended => status == 'attended';
+  bool get noShow => status == 'no_show';
+
+  factory EventCheckinRecord.fromJson(Map<String, dynamic> json) {
+    return EventCheckinRecord(
+      id: (json['id'] ?? '').toString(),
+      eventId: (json['event_id'] ?? '').toString(),
+      attendeeUserId: (json['attendee_user_id'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      checkedByHostId: _readNullableString(json['checked_by_host_id']),
+      notes: _readNullableString(json['notes']),
+      createdAt:
+          JapanTime.parseServerTimestamp(json['created_at']) ?? DateTime.now(),
+    );
+  }
+
+  static String? _readNullableString(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    final String text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
 class EventCommentModel {
   const EventCommentModel({
     required this.id,

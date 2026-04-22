@@ -6,6 +6,7 @@ import 'features/fields/fields_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/shops/shops_screen.dart';
 
 class AppRouter {
   static const String home = '/';
@@ -30,6 +31,9 @@ class AppRouter {
 
       case '/settings':
         return _page(const SettingsScreen());
+
+      case '/shops':
+        return _page(const ShopsScreen());
 
       default:
         return _page(const HomeScreen());

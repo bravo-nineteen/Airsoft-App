@@ -260,4 +260,54 @@ class DirectMessageRepository {
 
     return response.length;
   }
+
+  Future<bool> getReadReceiptsPreference() async {
+    final String currentUserId = _currentUserId;
+    try {
+      final Map<String, dynamic>? row = await _client
+          .from('direct_message_read_preferences')
+          .select('send_read_receipts')
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+
+      if (row == null) {
+        return true;
+      }
+      return row['send_read_receipts'] as bool? ?? true;
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'direct_message_read_preferences')) {
+        return true;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> setReadReceiptsPreference(bool enabled) async {
+    final String currentUserId = _currentUserId;
+    try {
+      await _client.from('direct_message_read_preferences').upsert(
+        <String, dynamic>{
+          'user_id': currentUserId,
+          'send_read_receipts': enabled,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'direct_message_read_preferences')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  bool _isMissingTableError(PostgrestException error, String tableName) {
+    if (error.code != '42P01' && error.code != 'PGRST205') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains(tableName.toLowerCase());
+  }
 }

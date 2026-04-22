@@ -461,6 +461,209 @@ class EventRepository {
     );
   }
 
+  Future<int> getEventWaitlistCount(String eventId) async {
+    try {
+      final List<dynamic> response = await _resolvedClient
+          .from('event_waitlist')
+          .select('id')
+          .eq('event_id', eventId)
+          .eq('status', 'queued');
+      return response.length;
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_waitlist')) {
+        return 0;
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> isCurrentUserWaitlisted(String eventId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      return false;
+    }
+
+    try {
+      final Map<String, dynamic>? response = await _resolvedClient
+          .from('event_waitlist')
+          .select('id')
+          .eq('event_id', eventId)
+          .eq('user_id', user.id)
+          .eq('status', 'queued')
+          .maybeSingle();
+      return response != null;
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_waitlist')) {
+        return false;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> joinEventWaitlist(String eventId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to join waitlist.');
+    }
+
+    try {
+      await _resolvedClient.from('event_waitlist').upsert(
+        <String, dynamic>{
+          'event_id': eventId,
+          'user_id': user.id,
+          'status': 'queued',
+          'queued_at': DateTime.now().toUtc().toIso8601String(),
+          'promoted_at': null,
+        },
+        onConflict: 'event_id,user_id',
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_waitlist')) {
+        throw Exception('Waitlist is not available yet.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> leaveEventWaitlist(String eventId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to update waitlist.');
+    }
+
+    try {
+      await _resolvedClient
+          .from('event_waitlist')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_waitlist')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<EventCheckinRecord>> getEventCheckins(String eventId) async {
+    try {
+      final List<dynamic> response = await _resolvedClient
+          .from('event_checkins')
+          .select()
+          .eq('event_id', eventId)
+          .order('created_at', ascending: false);
+
+      return response
+          .map(
+            (dynamic row) => EventCheckinRecord.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ),
+          )
+          .toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_checkins')) {
+        return <EventCheckinRecord>[];
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> hostRecordEventCheckin({
+    required String eventId,
+    required String attendeeUserId,
+    required String status,
+    String? notes,
+  }) async {
+    if (status != 'attended' && status != 'no_show') {
+      throw Exception('Invalid check-in status.');
+    }
+
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in.');
+    }
+
+    final EventModel event = await getEventById(eventId);
+    if (event.hostUserId != user.id) {
+      throw Exception('Only the host can check in attendees.');
+    }
+
+    try {
+      await _resolvedClient.from('event_checkins').upsert(
+        <String, dynamic>{
+          'event_id': eventId,
+          'attendee_user_id': attendeeUserId,
+          'checked_by_host_id': user.id,
+          'status': status,
+          'notes': _nullIfEmpty(notes),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'event_id,attendee_user_id',
+      );
+    } on PostgrestException catch (error) {
+      if (!_isMissingTableError(error, 'event_checkins')) {
+        rethrow;
+      }
+    }
+
+    await hostConfirmAttendance(
+      eventId: eventId,
+      attendeeUserId: attendeeUserId,
+      status: status,
+    );
+  }
+
+  Future<String?> getCurrentUserCalendarExportProvider() async {
+    final User? user = currentUser;
+    if (user == null) {
+      return null;
+    }
+
+    try {
+      final Map<String, dynamic>? row = await _resolvedClient
+          .from('event_calendar_exports')
+          .select('provider')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      return _nullIfEmpty(row?['provider']?.toString());
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_calendar_exports')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> setCurrentUserCalendarExportProvider(String provider) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to update calendar sync.');
+    }
+
+    final String normalizedProvider = provider.trim().toLowerCase();
+    if (normalizedProvider != 'google' &&
+        normalizedProvider != 'apple' &&
+        normalizedProvider != 'ics') {
+      throw Exception('Unsupported calendar provider.');
+    }
+
+    try {
+      await _resolvedClient.from('event_calendar_exports').upsert(
+        <String, dynamic>{
+          'user_id': user.id,
+          'provider': normalizedProvider,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'user_id,provider',
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'event_calendar_exports')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
   bool _isMissingConfirmedAtColumnError(PostgrestException error) {
     if (error.code != 'PGRST204') {
       return false;
@@ -482,6 +685,17 @@ class EventRepository {
         '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
             .toLowerCase();
     return summary.contains('updated_at') && summary.contains('new');
+  }
+
+  bool _isMissingTableError(PostgrestException error, String tableName) {
+    if (error.code != '42P01' && error.code != 'PGRST205') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains(tableName.toLowerCase());
   }
 
   bool _isMissingColumnError(PostgrestException error, String columnName) {

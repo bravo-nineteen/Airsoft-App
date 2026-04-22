@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/time/japan_time.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
 import '../notifications/notification_writer.dart';
@@ -71,6 +72,215 @@ class CommunityRepository {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  bool _isMissingTableError(PostgrestException error, String tableName) {
+    if (error.code != '42P01' && error.code != 'PGRST205') {
+      return false;
+    }
+
+    final String summary =
+        '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+            .toLowerCase();
+    return summary.contains(tableName.toLowerCase());
+  }
+
+  Future<Map<String, dynamic>?> getPostDraft({
+    required String draftKey,
+    String postContext = 'community',
+    String? targetUserId,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return null;
+    }
+
+    try {
+      final Map<String, dynamic>? response = await _client
+          .from('post_drafts')
+          .select()
+          .eq('user_id', userId)
+          .eq('draft_key', draftKey)
+          .maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+      return Map<String, dynamic>.from(response);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_drafts')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> savePostDraft({
+    required String draftKey,
+    required String title,
+    required String bodyText,
+    required String plainText,
+    required List<String> imageUrls,
+    required String language,
+    required String category,
+    String postContext = 'community',
+    String? targetUserId,
+    String? pollQuestion,
+    List<String>? pollOptions,
+    bool pollAllowMultiple = false,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      await _client.from('post_drafts').upsert(
+        <String, dynamic>{
+          'user_id': userId,
+          'draft_key': draftKey,
+          'post_context': postContext,
+          'target_user_id': _nullIfEmpty(targetUserId),
+          'title': title,
+          'body_text': bodyText,
+          'plain_text': plainText,
+          'media_json': imageUrls,
+          'poll_json': <String, dynamic>{
+            'language': language,
+            'category': category,
+            'question': _nullIfEmpty(pollQuestion),
+            'options': (pollOptions ?? <String>[])
+                .map((String value) => value.trim())
+                .where((String value) => value.isNotEmpty)
+                .toList(),
+            'allow_multiple': pollAllowMultiple,
+          },
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'user_id,draft_key',
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_drafts')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> clearPostDraft({required String draftKey}) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      await _client
+          .from('post_drafts')
+          .delete()
+          .eq('user_id', userId)
+          .eq('draft_key', draftKey);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_drafts')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCommentDraft({
+    required String threadType,
+    required String threadId,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return null;
+    }
+
+    try {
+      final List<dynamic> response = await _client
+          .from('comment_drafts')
+          .select()
+          .eq('user_id', userId)
+          .eq('thread_type', threadType)
+          .eq('thread_id', threadId)
+          .order('updated_at', ascending: false)
+          .limit(1);
+
+      if (response.isEmpty) {
+        return null;
+      }
+      return Map<String, dynamic>.from(response.first as Map);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'comment_drafts')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> saveCommentDraft({
+    required String threadType,
+    required String threadId,
+    required String bodyText,
+    String? parentCommentId,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      final String? normalizedParent = _nullIfEmpty(parentCommentId);
+      if (normalizedParent == null) {
+        await _client
+            .from('comment_drafts')
+            .delete()
+            .eq('user_id', userId)
+            .eq('thread_type', threadType)
+            .eq('thread_id', threadId)
+            .not('parent_comment_id', 'is', null);
+      }
+
+      await _client.from('comment_drafts').upsert(
+        <String, dynamic>{
+          'user_id': userId,
+          'thread_type': threadType,
+          'thread_id': threadId,
+          'parent_comment_id': normalizedParent,
+          'body_text': bodyText,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'comment_drafts')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> clearCommentDraft({
+    required String threadType,
+    required String threadId,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      await _client
+          .from('comment_drafts')
+          .delete()
+          .eq('user_id', userId)
+          .eq('thread_type', threadType)
+          .eq('thread_id', threadId);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'comment_drafts')) {
+        return;
+      }
+      rethrow;
     }
   }
 
@@ -444,6 +654,10 @@ class CommunityRepository {
     String language = 'english',
     String postContext = 'community',
     String? targetUserId,
+    String? pollQuestion,
+    List<String>? pollOptions,
+    bool pollAllowMultiple = false,
+    DateTime? pollExpiresAt,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -495,7 +709,16 @@ class CommunityRepository {
         .select('id')
         .single();
 
-    return response['id'].toString();
+    final String postId = response['id'].toString();
+    await _createPollForPost(
+      postId: postId,
+      question: pollQuestion,
+      options: pollOptions,
+      allowMultiple: pollAllowMultiple,
+      expiresAt: pollExpiresAt,
+    );
+
+    return postId;
   }
 
   Future<String> createProfileTimelinePost({
@@ -505,6 +728,10 @@ class CommunityRepository {
     required String plainText,
     required List<String> imageUrls,
     String language = 'english',
+    String? pollQuestion,
+    List<String>? pollOptions,
+    bool pollAllowMultiple = false,
+    DateTime? pollExpiresAt,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -524,7 +751,197 @@ class CommunityRepository {
       category: 'Timeline',
       postContext: 'profile',
       targetUserId: targetUserId,
+      pollQuestion: pollQuestion,
+      pollOptions: pollOptions,
+      pollAllowMultiple: pollAllowMultiple,
+      pollExpiresAt: pollExpiresAt,
     );
+  }
+
+  Future<void> _createPollForPost({
+    required String postId,
+    required String? question,
+    required List<String>? options,
+    required bool allowMultiple,
+    required DateTime? expiresAt,
+  }) async {
+    final String trimmedQuestion = (question ?? '').trim();
+    final List<String> trimmedOptions =
+        (options ?? <String>[])
+            .map((String value) => value.trim())
+            .where((String value) => value.isNotEmpty)
+            .toSet()
+            .toList();
+
+    if (trimmedQuestion.isEmpty || trimmedOptions.length < 2) {
+      return;
+    }
+
+    try {
+      final bool hasPollTable = await _hasTable('post_polls');
+      final bool hasPollOptionsTable = await _hasTable('post_poll_options');
+      if (!hasPollTable || !hasPollOptionsTable) {
+        return;
+      }
+
+      final Map<String, dynamic> pollRow = await _client
+          .from('post_polls')
+          .insert(<String, dynamic>{
+            'post_id': postId,
+            'question': trimmedQuestion,
+            'allow_multiple': allowMultiple,
+            'expires_at': expiresAt?.toUtc().toIso8601String(),
+          })
+          .select('id')
+          .single();
+
+      final String pollId = pollRow['id'].toString();
+      final List<Map<String, dynamic>> optionRows = <Map<String, dynamic>>[];
+      for (int i = 0; i < trimmedOptions.length; i++) {
+        optionRows.add(<String, dynamic>{
+          'poll_id': pollId,
+          'option_text': trimmedOptions[i],
+          'sort_order': i,
+        });
+      }
+      await _client.from('post_poll_options').insert(optionRows);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_polls') ||
+          _isMissingTableError(error, 'post_poll_options')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<CommunityPostPoll?> fetchPostPoll(String postId) async {
+    try {
+      final bool hasPollTable = await _hasTable('post_polls');
+      final bool hasPollOptionsTable = await _hasTable('post_poll_options');
+      final bool hasPollVotesTable = await _hasTable('post_poll_votes');
+      if (!hasPollTable || !hasPollOptionsTable || !hasPollVotesTable) {
+        return null;
+      }
+
+      final Map<String, dynamic>? pollRow = await _client
+          .from('post_polls')
+          .select('id, post_id, question, allow_multiple, expires_at')
+          .eq('post_id', postId)
+          .maybeSingle();
+      if (pollRow == null) {
+        return null;
+      }
+
+      final String pollId = pollRow['id'].toString();
+      final List<dynamic> optionsResponse = await _client
+          .from('post_poll_options')
+          .select('id, poll_id, option_text, sort_order')
+          .eq('poll_id', pollId)
+          .order('sort_order', ascending: true);
+
+      final List<dynamic> votesResponse = await _client
+          .from('post_poll_votes')
+          .select('option_id, user_id')
+          .eq('poll_id', pollId);
+
+      final Map<String, int> voteCountByOptionId = <String, int>{};
+      final Set<String> selectedOptionIds = <String>{};
+      final String? viewerId = currentUserId;
+
+      for (final dynamic row in votesResponse) {
+        final String optionId = row['option_id']?.toString() ?? '';
+        if (optionId.isEmpty) {
+          continue;
+        }
+        voteCountByOptionId[optionId] = (voteCountByOptionId[optionId] ?? 0) + 1;
+        if (viewerId != null && row['user_id']?.toString() == viewerId) {
+          selectedOptionIds.add(optionId);
+        }
+      }
+
+      final List<CommunityPostPollOption> options =
+          optionsResponse.map<CommunityPostPollOption>((dynamic row) {
+            final String optionId = row['id']?.toString() ?? '';
+            return CommunityPostPollOption(
+              id: optionId,
+              pollId: row['poll_id']?.toString() ?? pollId,
+              optionText: row['option_text']?.toString() ?? '',
+              sortOrder: (row['sort_order'] as num?)?.toInt() ?? 0,
+              voteCount: voteCountByOptionId[optionId] ?? 0,
+            );
+          }).toList();
+
+      final int totalVotes = voteCountByOptionId.values.fold<int>(
+        0,
+        (int sum, int value) => sum + value,
+      );
+
+      return CommunityPostPoll(
+        id: pollId,
+        postId: pollRow['post_id']?.toString() ?? postId,
+        question: pollRow['question']?.toString() ?? '',
+        allowMultiple: pollRow['allow_multiple'] == true,
+        options: options,
+        selectedOptionIds: selectedOptionIds,
+        totalVotes: totalVotes,
+        expiresAt: JapanTime.parseServerTimestamp(pollRow['expires_at']),
+      );
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_polls') ||
+          _isMissingTableError(error, 'post_poll_options') ||
+          _isMissingTableError(error, 'post_poll_votes')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> voteOnPostPoll({
+    required CommunityPostPoll poll,
+    required Set<String> optionIds,
+  }) async {
+    final String? userId = currentUserId;
+    if (userId == null) {
+      throw Exception('User not logged in');
+    }
+
+    if (!poll.allowMultiple && optionIds.length > 1) {
+      throw Exception('Only one option is allowed for this poll.');
+    }
+
+    final Set<String> normalizedOptionIds = optionIds
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    try {
+      await _client
+          .from('post_poll_votes')
+          .delete()
+          .eq('poll_id', poll.id)
+          .eq('user_id', userId);
+
+      if (normalizedOptionIds.isEmpty) {
+        return;
+      }
+
+      final List<Map<String, dynamic>> rows = normalizedOptionIds
+          .map(
+            (String optionId) => <String, dynamic>{
+              'poll_id': poll.id,
+              'option_id': optionId,
+              'user_id': userId,
+            },
+          )
+          .toList();
+
+      await _client.from('post_poll_votes').insert(rows);
+    } on PostgrestException catch (error) {
+      if (_isMissingTableError(error, 'post_poll_votes')) {
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<void> incrementPostView(String postId) async {

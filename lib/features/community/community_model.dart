@@ -304,3 +304,90 @@ class CommunityPostsPage {
   final int nextOffset;
   final bool hasMore;
 }
+
+class CommunityPostPoll {
+  const CommunityPostPoll({
+    required this.id,
+    required this.postId,
+    required this.question,
+    required this.allowMultiple,
+    required this.options,
+    required this.selectedOptionIds,
+    required this.totalVotes,
+    this.expiresAt,
+  });
+
+  final String id;
+  final String postId;
+  final String question;
+  final bool allowMultiple;
+  final List<CommunityPostPollOption> options;
+  final Set<String> selectedOptionIds;
+  final int totalVotes;
+  final DateTime? expiresAt;
+
+  bool get isExpired {
+    if (expiresAt == null) {
+      return false;
+    }
+    return JapanTime.now().isAfter(expiresAt!);
+  }
+
+  bool get hasVoted => selectedOptionIds.isNotEmpty;
+
+  CommunityPostPoll copyWith({
+    String? id,
+    String? postId,
+    String? question,
+    bool? allowMultiple,
+    List<CommunityPostPollOption>? options,
+    Set<String>? selectedOptionIds,
+    int? totalVotes,
+    Object? expiresAt = _communityPostNoChange,
+  }) {
+    return CommunityPostPoll(
+      id: id ?? this.id,
+      postId: postId ?? this.postId,
+      question: question ?? this.question,
+      allowMultiple: allowMultiple ?? this.allowMultiple,
+      options: options ?? this.options,
+      selectedOptionIds: selectedOptionIds ?? this.selectedOptionIds,
+      totalVotes: totalVotes ?? this.totalVotes,
+      expiresAt: expiresAt == _communityPostNoChange
+          ? this.expiresAt
+          : expiresAt as DateTime?,
+    );
+  }
+}
+
+class CommunityPostPollOption {
+  const CommunityPostPollOption({
+    required this.id,
+    required this.pollId,
+    required this.optionText,
+    required this.sortOrder,
+    required this.voteCount,
+  });
+
+  final String id;
+  final String pollId;
+  final String optionText;
+  final int sortOrder;
+  final int voteCount;
+
+  CommunityPostPollOption copyWith({
+    String? id,
+    String? pollId,
+    String? optionText,
+    int? sortOrder,
+    int? voteCount,
+  }) {
+    return CommunityPostPollOption(
+      id: id ?? this.id,
+      pollId: pollId ?? this.pollId,
+      optionText: optionText ?? this.optionText,
+      sortOrder: sortOrder ?? this.sortOrder,
+      voteCount: voteCount ?? this.voteCount,
+    );
+  }
+}

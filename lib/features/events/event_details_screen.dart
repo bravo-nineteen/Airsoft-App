@@ -28,9 +28,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   List<EventCommentModel> _comments = <EventCommentModel>[];
   bool _isLoading = true;
   bool _isUpdatingAttendance = false;
+  bool _isUpdatingWaitlist = false;
   bool _isSendingComment = false;
   _CommentSortMode _commentSortMode = _CommentSortMode.mostRecent;
   final Set<String> _busyAttendeeIds = <String>{};
+  int _waitlistCount = 0;
+  bool _isCurrentUserWaitlisted = false;
+  List<EventCheckinRecord> _checkins = <EventCheckinRecord>[];
+  String? _calendarExportProvider;
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
 
@@ -52,11 +57,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       final List<dynamic> results = await Future.wait<dynamic>(<Future<dynamic>>[
         _repository.getEventAttendeesForHost(event.id),
         _repository.getEventComments(event.id),
+        _repository.getEventWaitlistCount(event.id),
+        _repository.isCurrentUserWaitlisted(event.id),
+        _repository.getEventCheckins(event.id),
+        _repository.getCurrentUserCalendarExportProvider(),
       ]);
       final List<EventAttendanceRecord> attendees =
           results[0] as List<EventAttendanceRecord>;
       final List<EventCommentModel> comments =
           results[1] as List<EventCommentModel>;
+      final int waitlistCount = results[2] as int;
+      final bool isCurrentUserWaitlisted = results[3] as bool;
+      final List<EventCheckinRecord> checkins =
+          results[4] as List<EventCheckinRecord>;
+      final String? calendarExportProvider = results[5] as String?;
 
       if (!mounted) {
         return;
@@ -66,6 +80,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         _event = event;
         _attendees = attendees;
         _comments = comments;
+        _waitlistCount = waitlistCount;
+        _isCurrentUserWaitlisted = isCurrentUserWaitlisted;
+        _checkins = checkins;
+        _calendarExportProvider = calendarExportProvider;
         _isLoading = false;
       });
     } catch (error) {
@@ -472,6 +490,151 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  Future<void> _joinWaitlist() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_isUpdatingWaitlist) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingWaitlist = true;
+    });
+
+    try {
+      await _repository.joinEventWaitlist(_event.id);
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingWaitlist = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _leaveWaitlist() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_isUpdatingWaitlist) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingWaitlist = true;
+    });
+
+    try {
+      await _repository.leaveEventWaitlist(_event.id);
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingWaitlist = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _hostCheckIn({
+    required String attendeeUserId,
+    required String status,
+  }) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_busyAttendeeIds.contains(attendeeUserId)) {
+      return;
+    }
+
+    setState(() {
+      _busyAttendeeIds.add(attendeeUserId);
+    });
+
+    try {
+      await _repository.hostRecordEventCheckin(
+        eventId: _event.id,
+        attendeeUserId: attendeeUserId,
+        status: status,
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyAttendeeIds.remove(attendeeUserId);
+        });
+      }
+    }
+  }
+
+  Future<void> _pickCalendarExportProvider() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_isLoggedIn) {
+      return;
+    }
+
+    final String? selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.calendar_month_outlined),
+                title: const Text('Google Calendar'),
+                onTap: () => Navigator.of(sheetContext).pop('google'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Apple Calendar'),
+                onTap: () => Navigator.of(sheetContext).pop('apple'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.file_download_outlined),
+                title: const Text('ICS Export'),
+                onTap: () => Navigator.of(sheetContext).pop('ics'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    try {
+      await _repository.setCurrentUserCalendarExportProvider(selected);
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    }
+  }
+
   Future<void> _hostUpdateStatus({
     required String attendeeUserId,
     required String status,
@@ -729,6 +892,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _buildAttendanceActions() {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String? status = _event.currentUserAttendanceStatus;
+    final bool isFull =
+        _event.maxPlayers != null && _event.attendingCount >= _event.maxPlayers!;
 
     return Card(
       child: Padding(
@@ -758,6 +923,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 _StatusChip(
                   icon: Icons.cancel_outlined,
                   label: l10n.t('cancelledWithCount', args: {'count': '${_event.cancelledCount}'}),
+                ),
+                _StatusChip(
+                  icon: Icons.hourglass_bottom,
+                  label: 'Waitlist: $_waitlistCount',
                 ),
               ],
             ),
@@ -820,23 +989,84 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ],
               ),
             ] else ...[
-              Text(l10n.t('letHostKnowGoing')),
+              Text(
+                isFull
+                    ? 'Event is currently full. You can join the waitlist.'
+                    : l10n.t('letHostKnowGoing'),
+              ),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _isUpdatingAttendance ? null : _attend,
-                      icon: const Icon(Icons.event_available),
-                      label: Text(l10n.t('attend')),
-                    ),
+                    child: isFull
+                        ? FilledButton.icon(
+                            onPressed: (_isUpdatingWaitlist || _isCurrentUserWaitlisted)
+                                ? null
+                                : _joinWaitlist,
+                            icon: const Icon(Icons.schedule_send_outlined),
+                            label: Text(
+                              _isCurrentUserWaitlisted
+                                  ? 'Waitlisted'
+                                  : 'Join Waitlist',
+                            ),
+                          )
+                        : FilledButton.icon(
+                            onPressed: _isUpdatingAttendance ? null : _attend,
+                            icon: const Icon(Icons.event_available),
+                            label: Text(l10n.t('attend')),
+                          ),
                   ),
+                  if (isFull && _isCurrentUserWaitlisted) ...<Widget>[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isUpdatingWaitlist ? null : _leaveWaitlist,
+                        icon: const Icon(Icons.close),
+                        label: const Text('Leave Waitlist'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
+              if (isFull && _isCurrentUserWaitlisted) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  'You will be auto-promoted when a slot opens.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+            if (_isUpdatingWaitlist) ...<Widget>[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(minHeight: 2),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCheckinSummary() {
+    final int attendedCount = _checkins.where((EventCheckinRecord c) => c.attended).length;
+    final int noShowCount = _checkins.where((EventCheckinRecord c) => c.noShow).length;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        _StatusChip(
+          icon: Icons.how_to_reg,
+          label: 'Check-ins: ${_checkins.length}',
+        ),
+        _StatusChip(
+          icon: Icons.verified,
+          label: 'Attended: $attendedCount',
+        ),
+        _StatusChip(
+          icon: Icons.person_off_outlined,
+          label: 'No-show: $noShowCount',
+        ),
+      ],
     );
   }
 
@@ -863,6 +1093,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               l10n.t('confirmAttendeesHelp'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            const SizedBox(height: 12),
+            _buildCheckinSummary(),
             const SizedBox(height: 12),
             if (_attendees.isEmpty)
               Text(l10n.t('noAttendeesYet'))
@@ -953,6 +1185,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     status: 'attending',
                                   ),
                             child: Text(l10n.t('reset')),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: isBusy
+                                ? null
+                                : () => _hostCheckIn(
+                                    attendeeUserId: attendee.userId,
+                                    status: 'attended',
+                                  ),
+                            icon: const Icon(Icons.how_to_reg),
+                            label: const Text('Check-in'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: isBusy
+                                ? null
+                                : () => _hostCheckIn(
+                                    attendeeUserId: attendee.userId,
+                                    status: 'no_show',
+                                  ),
+                            icon: const Icon(Icons.person_off_outlined),
+                            label: const Text('No-show'),
                           ),
                         ],
                       ),
@@ -1322,6 +1574,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  Widget _buildCalendarSyncCard() {
+    final String currentProvider = (_calendarExportProvider ?? 'none').trim();
+    final String providerLabel = switch (currentProvider) {
+      'google' => 'Google Calendar',
+      'apple' => 'Apple Calendar',
+      'ics' => 'ICS Export',
+      _ => 'Not configured',
+    };
+
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.calendar_month_outlined),
+        title: const Text('Calendar sync'),
+        subtitle: Text(providerLabel),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _isLoggedIn ? _pickCalendarExportProvider : null,
+      ),
+    );
+  }
+
   String _readableStatus(String status) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     switch (status) {
@@ -1524,6 +1796,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           subtitle: Text(_event.notes!),
                         ),
                       ),
+                    _buildCalendarSyncCard(),
                     if (_isCurrentUserHost(_event)) ...<Widget>[
                       const SizedBox(height: 12),
                       _buildHostSection(),

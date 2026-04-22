@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +30,7 @@ class _CommunityPostDetailsScreenState
   final SafetyRepository _safetyRepository = SafetyRepository();
   final CommunityImageService _imageService = CommunityImageService();
   final TextEditingController _commentController = TextEditingController();
+  Timer? _commentDraftSaveDebounce;
   RealtimeChannel? _postChannel;
   RealtimeChannel? _commentsChannel;
 
@@ -37,12 +40,16 @@ class _CommunityPostDetailsScreenState
   bool _isRefreshing = false;
   bool _isSendingComment = false;
   bool _isTogglingPostLike = false;
+  bool _isVotingPoll = false;
   bool _showAllComments = false;
   _CommentSortMode _commentSortMode = _CommentSortMode.mostRecent;
   final Set<String> _togglingCommentLikes = <String>{};
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
   String? _pendingCommentImageUrl;
+  CommunityPostPoll? _postPoll;
+  Set<String> _pendingPollSelections = <String>{};
+  bool _isHydratingCommentDraft = false;
 
   String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -212,8 +219,80 @@ class _CommunityPostDetailsScreenState
   @override
   void initState() {
     super.initState();
+    _commentController.addListener(_scheduleCommentDraftSave);
     _subscribeRealtime();
+    _hydrateCommentDraft();
     _load(incrementView: true);
+  }
+
+  Future<void> _hydrateCommentDraft() async {
+    _isHydratingCommentDraft = true;
+    try {
+      final Map<String, dynamic>? draft = await _repository.getCommentDraft(
+        threadType: 'community_post',
+        threadId: widget.postId,
+      );
+      if (!mounted || draft == null) {
+        return;
+      }
+
+      final String bodyText = (draft['body_text'] ?? '').toString();
+      final String? parentCommentId = draft['parent_comment_id']?.toString();
+      _commentController.text = bodyText;
+      if ((parentCommentId ?? '').trim().isNotEmpty) {
+        _replyToCommentId = parentCommentId;
+        final CommunityCommentModel? parent = _commentById(parentCommentId!);
+        _replyToCommentAuthor = parent?.authorName;
+      }
+      setState(() {});
+    } catch (_) {
+      // Keep compose usable even if draft hydration fails.
+    } finally {
+      _isHydratingCommentDraft = false;
+    }
+  }
+
+  void _scheduleCommentDraftSave() {
+    if (_isHydratingCommentDraft) {
+      return;
+    }
+
+    _commentDraftSaveDebounce?.cancel();
+    _commentDraftSaveDebounce = Timer(const Duration(milliseconds: 450), () {
+      unawaited(_saveCommentDraft());
+    });
+  }
+
+  Future<void> _saveCommentDraft() async {
+    if (_isSendingComment) {
+      return;
+    }
+
+    final String bodyText = _commentController.text.trim();
+    final bool hasContent =
+        bodyText.isNotEmpty || (_replyToCommentId ?? '').trim().isNotEmpty;
+
+    if (!hasContent) {
+      await _repository.clearCommentDraft(
+        threadType: 'community_post',
+        threadId: widget.postId,
+      );
+      return;
+    }
+
+    await _repository.saveCommentDraft(
+      threadType: 'community_post',
+      threadId: widget.postId,
+      bodyText: bodyText,
+      parentCommentId: _replyToCommentId,
+    );
+  }
+
+  Future<void> _clearCommentDraft() {
+    return _repository.clearCommentDraft(
+      threadType: 'community_post',
+      threadId: widget.postId,
+    );
   }
 
   void _subscribeRealtime() {
@@ -350,8 +429,15 @@ class _CommunityPostDetailsScreenState
         await _repository.incrementPostView(widget.postId);
       }
 
-      final post = await _repository.fetchPostById(widget.postId);
-      final comments = await _repository.fetchComments(widget.postId);
+      final List<dynamic> loaded = await Future.wait<dynamic>(<Future<dynamic>>[
+        _repository.fetchPostById(widget.postId),
+        _repository.fetchComments(widget.postId),
+        _repository.fetchPostPoll(widget.postId),
+      ]);
+      final CommunityPostModel post = loaded[0] as CommunityPostModel;
+      final List<CommunityCommentModel> comments =
+          loaded[1] as List<CommunityCommentModel>;
+      final CommunityPostPoll? poll = loaded[2] as CommunityPostPoll?;
 
       if (!mounted) {
         return;
@@ -360,6 +446,10 @@ class _CommunityPostDetailsScreenState
       setState(() {
         _post = post;
         _comments = comments;
+        _postPoll = poll;
+        _pendingPollSelections = poll == null
+            ? <String>{}
+            : Set<String>.from(poll.selectedOptionIds);
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -423,6 +513,7 @@ class _CommunityPostDetailsScreenState
       _replyToCommentId = null;
       _replyToCommentAuthor = null;
     });
+    unawaited(_clearCommentDraft());
 
     try {
       await _repository.addComment(
@@ -485,6 +576,7 @@ class _CommunityPostDetailsScreenState
       setState(() {
         _pendingCommentImageUrl = imageUrl;
       });
+      _scheduleCommentDraftSave();
     } catch (error) {
       if (!mounted) {
         return;
@@ -502,6 +594,7 @@ class _CommunityPostDetailsScreenState
     setState(() {
       _pendingCommentImageUrl = null;
     });
+    _scheduleCommentDraftSave();
     _imageService.deleteUploadedImageByPublicUrl(imageUrl);
   }
 
@@ -981,6 +1074,7 @@ class _CommunityPostDetailsScreenState
       _replyToCommentId = comment.id;
       _replyToCommentAuthor = comment.authorName;
     });
+    _scheduleCommentDraftSave();
   }
 
   void _clearReplyTarget() {
@@ -988,6 +1082,7 @@ class _CommunityPostDetailsScreenState
       _replyToCommentId = null;
       _replyToCommentAuthor = null;
     });
+    _scheduleCommentDraftSave();
   }
 
   void _openProfile(String? userId, String fallbackName) {
@@ -1354,6 +1449,9 @@ class _CommunityPostDetailsScreenState
 
   @override
   void dispose() {
+    _commentDraftSaveDebounce?.cancel();
+    _commentController.removeListener(_scheduleCommentDraftSave);
+    unawaited(_saveCommentDraft());
     if (_postChannel != null) {
       Supabase.instance.client.removeChannel(_postChannel!);
     }
@@ -1464,6 +1562,163 @@ class _CommunityPostDetailsScreenState
       body: hasMediaTab
           ? DefaultTabController(length: 2, child: body)
           : body,
+    );
+  }
+
+  void _togglePollSelection(CommunityPostPoll poll, String optionId) {
+    if (_isVotingPoll || poll.isExpired) {
+      return;
+    }
+
+    setState(() {
+      if (poll.allowMultiple) {
+        if (_pendingPollSelections.contains(optionId)) {
+          _pendingPollSelections.remove(optionId);
+        } else {
+          _pendingPollSelections.add(optionId);
+        }
+      } else {
+        if (_pendingPollSelections.contains(optionId)) {
+          _pendingPollSelections.clear();
+        } else {
+          _pendingPollSelections = <String>{optionId};
+        }
+      }
+    });
+  }
+
+  Future<void> _submitPollVote(CommunityPostPoll poll) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_isVotingPoll || poll.isExpired) {
+      return;
+    }
+
+    setState(() {
+      _isVotingPoll = true;
+    });
+
+    try {
+      await _repository.voteOnPostPoll(
+        poll: poll,
+        optionIds: _pendingPollSelections,
+      );
+      await _load(preserveContent: true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVotingPoll = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildPollCard(CommunityPostPoll poll) {
+    final ThemeData theme = Theme.of(context);
+    final int totalVotes = poll.totalVotes;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.poll_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    poll.question,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...poll.options.map((CommunityPostPollOption option) {
+              final bool selected = _pendingPollSelections.contains(option.id);
+              final double percent = totalVotes == 0
+                  ? 0
+                  : option.voteCount / totalVotes;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  onTap: () => _togglePollSelection(poll, option.id),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outlineVariant,
+                      ),
+                      color: selected
+                          ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                          : theme.colorScheme.surface,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: Text(option.optionText)),
+                            const SizedBox(width: 8),
+                            Text('${option.voteCount}'),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        LinearProgressIndicator(
+                          value: percent,
+                          minHeight: 6,
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            Row(
+              children: <Widget>[
+                Text(
+                  '$totalVotes votes',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const Spacer(),
+                if (poll.isExpired)
+                  Text(
+                    'Closed',
+                    style: theme.textTheme.bodySmall,
+                  )
+                else
+                  FilledButton(
+                    onPressed: _isVotingPoll ? null : () => _submitPollVote(poll),
+                    child: _isVotingPoll
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Submit Vote'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1595,6 +1850,10 @@ class _CommunityPostDetailsScreenState
               ),
             ),
           ),
+          if (_postPoll != null) ...<Widget>[
+            const SizedBox(height: 12),
+            _buildPollCard(_postPoll!),
+          ],
           const SizedBox(height: 16),
           Text(
             l10n.t('commentsWithCount', args: {'count': '${_comments.length}'}),

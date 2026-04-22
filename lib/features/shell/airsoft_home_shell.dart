@@ -15,6 +15,8 @@ import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../social/direct_message_repository.dart';
 import '../social/direct_message_threads_screen.dart';
+import '../settings/settings_screen.dart';
+import '../shops/shops_screen.dart';
 
 class AirsoftHomeShell extends StatefulWidget {
   const AirsoftHomeShell({
@@ -55,13 +57,11 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
 
   List<Widget> get _screens => <Widget>[
     HomeScreen(
-      onOpenEventsTab: () => _selectTab(2),
-      onOpenBoardsTab: () => _selectTab(3),
+      onOpenEventsTab: () => _selectTab(1),
+      onOpenBoardsTab: () => _selectTab(2),
     ),
-    const FieldsScreen(),
     const EventsScreen(),
     const CommunityListScreen(),
-    const DirectMessageThreadsScreen(),
     ProfileScreen(
       currentLocale: widget.currentLocale,
       onLocaleChanged: widget.onLocaleChanged,
@@ -271,6 +271,66 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
     await _loadUnreadCounts();
   }
 
+  Future<void> _openMessages() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DirectMessageThreadsScreen()),
+    );
+    await _loadUnreadCounts();
+  }
+
+  void _openHamburgerMenu() {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: Text(l10n.fieldFinder),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const FieldsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: Text(l10n.t('shops')),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ShopsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: Text(l10n.settings),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(
+                      currentLocale: widget.currentLocale,
+                      onLocaleChanged: widget.onLocaleChanged,
+                      currentThemeMode: widget.currentThemeMode,
+                      onThemeModeChanged: widget.onThemeModeChanged,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _badgeIcon({required IconData icon, required int count}) {
     return Stack(
       clipBehavior: Clip.none,
@@ -317,39 +377,40 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               count: _unreadNotifications,
             ),
           ),
+          IconButton(
+            onPressed: _openMessages,
+            icon: _badgeIcon(
+              icon: Icons.mail_outline,
+              count: _unreadMessages,
+            ),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: IndexedStack(index: _index, children: _screens),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openHamburgerMenu,
+        mini: true,
+        tooltip: l10n.t('menu'),
+        child: const Icon(Icons.menu),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _index,
-        onTap: (value) {
-          _selectTab(value);
-
-          if (value == 4) {
-            _requestUnreadRefresh();
-          }
-        },
+        onTap: _selectTab,
         items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.home), label: l10n.home),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.map),
-            label: l10n.fieldFinder,
+            icon: const Icon(Icons.home),
+            label: l10n.home,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.event),
             label: l10n.events,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.campaign),
+            icon: const Icon(Icons.campaign),
             label: l10n.t('boards'),
-          ),
-          BottomNavigationBarItem(
-            icon: _badgeIcon(
-              icon: Icons.mail_outline,
-              count: _unreadMessages,
-            ),
-            label: l10n.messages,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person_outline),

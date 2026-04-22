@@ -5,7 +5,6 @@ import '../../app/localization/app_localizations.dart';
 import '../community/community_user_profile_screen.dart';
 import '../social/contact_model.dart';
 import '../social/contact_repository.dart';
-import '../settings/settings_screen.dart';
 import 'avatar_picker_widget.dart';
 import 'edit_profile_screen.dart';
 import 'profile_model.dart';
@@ -84,24 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingsScreen(
-          currentLocale: widget.currentLocale,
-          onLocaleChanged: widget.onLocaleChanged,
-          currentThemeMode: widget.currentThemeMode,
-          onThemeModeChanged: widget.onThemeModeChanged,
-        ),
-      ),
-    );
 
-    if (!mounted) {
-      return;
-    }
-
-    await _refresh();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,11 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: const Icon(Icons.edit),
                           label: Text(l10n.t('edit')),
                         ),
-                        OutlinedButton.icon(
-                          onPressed: _openSettings,
-                          icon: const Icon(Icons.settings),
-                          label: Text(l10n.settings),
-                        ),
+
                       ],
                     ),
                   ],

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/notifications/notification_settings_screen.dart';
 import '../admin/admin_repository.dart';
 import '../admin/admin_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'account_settings_screen.dart';
-import 'notification_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'safety_management_screen.dart';
 

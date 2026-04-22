@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
@@ -29,11 +31,22 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
+  Timer? _draftSaveDebounce;
 
   bool _isSubmitting = false;
+  bool _isLoadingDraft = true;
   String _selectedCategory = CommunityPostCategories.general;
   String _selectedLanguage = 'english';
   final List<String> _uploadedImageUrls = <String>[];
+  final TextEditingController _pollQuestionController =
+      TextEditingController();
+  final List<TextEditingController> _pollOptionControllers =
+      <TextEditingController>[
+        TextEditingController(),
+        TextEditingController(),
+      ];
+  bool _enablePoll = false;
+  bool _pollAllowMultiple = false;
   bool _didInitLanguage = false;
 
   bool get _isProfilePost => widget.postContext == 'profile';
@@ -43,6 +56,40 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       return CommunityPostCategories.timelineCategories;
     }
     return CommunityPostCategories.communityCategories;
+  }
+
+  String get _draftKey {
+    if (_isProfilePost) {
+      return 'profile:${widget.targetUserId ?? ''}';
+    }
+    return 'community';
+  }
+
+  List<String> get _pollOptions {
+    return _pollOptionControllers
+        .map((TextEditingController controller) => controller.text.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList();
+  }
+
+  bool get _canPublishPoll {
+    if (!_enablePoll) {
+      return true;
+    }
+    return _pollQuestionController.text.trim().isNotEmpty &&
+        _pollOptions.length >= 2;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController.addListener(_onDraftInputsChanged);
+    _bodyController.addListener(_onDraftInputsChanged);
+    _pollQuestionController.addListener(_onDraftInputsChanged);
+    for (final TextEditingController controller in _pollOptionControllers) {
+      controller.addListener(_onDraftInputsChanged);
+    }
+    _loadDraft();
   }
 
   @override
@@ -56,6 +103,132 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
         AppLocalizations.of(context).locale.languageCode == 'ja'
             ? 'japanese'
             : 'english';
+  }
+
+  Future<void> _loadDraft() async {
+    try {
+      final Map<String, dynamic>? draft = await _repository.getPostDraft(
+        draftKey: _draftKey,
+        postContext: widget.postContext,
+        targetUserId: widget.targetUserId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (draft != null) {
+        final String title = (draft['title'] ?? '').toString();
+        final String body = (draft['body_text'] ?? '').toString();
+        final dynamic mediaJson = draft['media_json'];
+        final dynamic pollJson = draft['poll_json'];
+
+        _titleController.text = title;
+        _bodyController.text = body;
+
+        if (mediaJson is List) {
+          _uploadedImageUrls
+            ..clear()
+            ..addAll(
+              mediaJson
+                  .map((dynamic e) => e.toString().trim())
+                  .where((String e) => e.isNotEmpty),
+            );
+        }
+
+        if (pollJson is Map) {
+          final String language = (pollJson['language'] ?? '').toString();
+          final String category = (pollJson['category'] ?? '').toString();
+          final String question = (pollJson['question'] ?? '').toString();
+          final bool allowMultiple = pollJson['allow_multiple'] == true;
+          final List<String> options =
+              (pollJson['options'] as List<dynamic>? ?? <dynamic>[])
+                  .map((dynamic value) => value.toString().trim())
+                  .where((String value) => value.isNotEmpty)
+                  .toList();
+          if (language.isNotEmpty) {
+            _selectedLanguage = language;
+          }
+          if (category.isNotEmpty) {
+            _selectedCategory =
+                CommunityPostCategories.normalizeCommunityCategory(category);
+          }
+
+          _pollQuestionController.text = question;
+          for (final TextEditingController controller in _pollOptionControllers) {
+            controller.removeListener(_onDraftInputsChanged);
+            controller.dispose();
+          }
+          final List<String> normalizedOptions = options.isEmpty
+              ? <String>['', '']
+              : options.length == 1
+                  ? <String>[options.first, '']
+                  : options;
+
+          _pollOptionControllers
+            ..clear()
+            ..addAll(
+              normalizedOptions.map(
+                (String value) => TextEditingController(text: value)
+                  ..addListener(_onDraftInputsChanged),
+              ),
+            );
+
+          _enablePoll = question.trim().isNotEmpty || options.isNotEmpty;
+          _pollAllowMultiple = allowMultiple;
+        }
+      }
+    } catch (_) {
+      // Draft loading should never block compose.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDraft = false;
+        });
+      }
+    }
+  }
+
+  void _onDraftInputsChanged() {
+    _scheduleDraftSave();
+  }
+
+  void _scheduleDraftSave() {
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 550), () {
+      unawaited(_saveDraft());
+    });
+  }
+
+  Future<void> _saveDraft() async {
+    if (_isSubmitting || _isLoadingDraft) {
+      return;
+    }
+
+    final String title = _titleController.text.trim();
+    final String body = _bodyController.text.trim();
+    final bool hasContent =
+        title.isNotEmpty || body.isNotEmpty || _uploadedImageUrls.isNotEmpty;
+
+    if (!hasContent) {
+      await _repository.clearPostDraft(draftKey: _draftKey);
+      return;
+    }
+
+    await _repository.savePostDraft(
+      draftKey: _draftKey,
+      title: title,
+      bodyText: body,
+      plainText: body,
+      imageUrls: _uploadedImageUrls,
+      language: _selectedLanguage,
+      category: _selectedCategory,
+      postContext: widget.postContext,
+      targetUserId: widget.targetUserId,
+      pollQuestion: _enablePoll ? _pollQuestionController.text.trim() : null,
+      pollOptions: _enablePoll ? _pollOptions : null,
+      pollAllowMultiple: _enablePoll ? _pollAllowMultiple : false,
+    );
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -72,6 +245,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
       setState(() {
         _uploadedImageUrls.add(imageUrl);
       });
+      _scheduleDraftSave();
     } catch (error) {
       if (!mounted) {
         return;
@@ -89,17 +263,52 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
     }
   }
 
+  void _togglePoll(bool enabled) {
+    setState(() {
+      _enablePoll = enabled;
+      if (!_enablePoll) {
+        _pollAllowMultiple = false;
+      }
+    });
+    _scheduleDraftSave();
+  }
+
+  void _addPollOption() {
+    if (_pollOptionControllers.length >= 6) {
+      return;
+    }
+    setState(() {
+      final TextEditingController controller = TextEditingController();
+      controller.addListener(_onDraftInputsChanged);
+      _pollOptionControllers.add(controller);
+    });
+    _scheduleDraftSave();
+  }
+
+  void _removePollOption(int index) {
+    if (_pollOptionControllers.length <= 2) {
+      return;
+    }
+    final TextEditingController controller = _pollOptionControllers[index];
+    setState(() {
+      _pollOptionControllers.removeAt(index);
+    });
+    controller.removeListener(_onDraftInputsChanged);
+    controller.dispose();
+    _scheduleDraftSave();
+  }
+
   Future<void> _submit() async {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
 
-    if (title.isEmpty || body.isEmpty || _isSubmitting) {
+    if (title.isEmpty || body.isEmpty || _isSubmitting || !_canPublishPoll) {
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      final String message = !_canPublishPoll
+          ? 'Poll needs a question and at least two options.'
+          : l10n.t('titleAndContentRequired');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).t('titleAndContentRequired'),
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
       return;
     }
@@ -109,6 +318,11 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
     });
 
     try {
+      final String? pollQuestion =
+          _enablePoll ? _pollQuestionController.text.trim() : null;
+      final List<String>? pollOptions = _enablePoll ? _pollOptions : null;
+      final bool pollAllowMultiple = _enablePoll && _pollAllowMultiple;
+
       final postId = _isProfilePost
           ? await _repository.createProfileTimelinePost(
               targetUserId: widget.targetUserId ?? '',
@@ -117,6 +331,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
               plainText: body,
               imageUrls: _uploadedImageUrls,
               language: _selectedLanguage,
+              pollQuestion: pollQuestion,
+              pollOptions: pollOptions,
+              pollAllowMultiple: pollAllowMultiple,
             )
           : await _repository.createPost(
               title: title,
@@ -128,7 +345,12 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                 _selectedCategory,
               ),
               postContext: 'community',
+              pollQuestion: pollQuestion,
+              pollOptions: pollOptions,
+              pollAllowMultiple: pollAllowMultiple,
             );
+
+      await _repository.clearPostDraft(draftKey: _draftKey);
 
       if (!mounted) {
         return;
@@ -164,8 +386,18 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
 
   @override
   void dispose() {
+    _draftSaveDebounce?.cancel();
+    unawaited(_saveDraft());
+    _titleController.removeListener(_onDraftInputsChanged);
+    _bodyController.removeListener(_onDraftInputsChanged);
+    _pollQuestionController.removeListener(_onDraftInputsChanged);
+    for (final TextEditingController controller in _pollOptionControllers) {
+      controller.removeListener(_onDraftInputsChanged);
+      controller.dispose();
+    }
     _titleController.dispose();
     _bodyController.dispose();
+    _pollQuestionController.dispose();
     super.dispose();
   }
 
@@ -190,6 +422,11 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: <Widget>[
+            if (_isLoadingDraft)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -228,6 +465,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                       setState(() {
                         _selectedLanguage = value;
                       });
+                      _scheduleDraftSave();
                     },
                   ),
                   const SizedBox(height: 14),
@@ -253,6 +491,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                             value,
                           );
                         });
+                        _scheduleDraftSave();
                       },
                     )
                   else
@@ -289,6 +528,81 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  SwitchListTile.adaptive(
+                    value: _enablePoll,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Add poll'),
+                    subtitle: const Text('Let operators vote on this post.'),
+                    onChanged: _togglePoll,
+                  ),
+                  if (_enablePoll) ...<Widget>[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _pollQuestionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Poll question',
+                        hintText: 'What should we vote on?',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._pollOptionControllers.asMap().entries.map(
+                      (MapEntry<int, TextEditingController> entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: TextField(
+                                  controller: entry.value,
+                                  decoration: InputDecoration(
+                                    labelText: 'Option ${entry.key + 1}',
+                                  ),
+                                ),
+                              ),
+                              if (_pollOptionControllers.length > 2)
+                                IconButton(
+                                  onPressed: () => _removePollOption(entry.key),
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  tooltip: 'Remove option',
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _pollOptionControllers.length >= 6
+                            ? null
+                            : _addPollOption,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add option'),
+                      ),
+                    ),
+                    SwitchListTile.adaptive(
+                      value: _pollAllowMultiple,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Allow multiple choices'),
+                      onChanged: (bool value) {
+                        setState(() {
+                          _pollAllowMultiple = value;
+                        });
+                        _scheduleDraftSave();
+                      },
+                    ),
+                    if (!_canPublishPoll)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Poll requires a question and two options.',
+                          style: TextStyle(
+                            color: theme.colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -314,6 +628,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
                                   setState(() {
                                     _uploadedImageUrls.remove(imageUrl);
                                   });
+                                  _scheduleDraftSave();
                                 },
                                 icon: const Icon(Icons.close, size: 16),
                                 constraints: const BoxConstraints(

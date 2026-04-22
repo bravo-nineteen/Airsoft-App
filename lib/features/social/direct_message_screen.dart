@@ -50,8 +50,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-    _initialize();
+    _bootstrap();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       if (!mounted || !_isAllowed || _isLoadingMessages || _isSending) {
         return;
@@ -60,13 +59,23 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     });
   }
 
+  Future<void> _bootstrap() async {
+    await _loadSettings();
+    await _initialize();
+  }
+
   Future<void> _loadSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool readReceipts = prefs.getBool('dm.read_receipts') ?? true;
+    try {
+      readReceipts = await _repository.getReadReceiptsPreference();
+    } catch (_) {}
+
     if (!mounted) {
       return;
     }
     setState(() {
-      _readReceiptsEnabled = prefs.getBool('dm.read_receipts') ?? true;
+      _readReceiptsEnabled = readReceipts;
       _expiringPhotosEnabled = prefs.getBool('dm.expiring_photos') ?? true;
     });
   }
@@ -75,6 +84,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final bool next = !_readReceiptsEnabled;
     await prefs.setBool('dm.read_receipts', next);
+    try {
+      await _repository.setReadReceiptsPreference(next);
+    } catch (_) {}
     if (!mounted) {
       return;
     }
