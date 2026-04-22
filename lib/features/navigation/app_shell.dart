@@ -59,7 +59,7 @@ class _AppShellState extends State<AppShell> {
           NavigationDestination(
             icon: const Icon(Icons.forum_outlined),
             selectedIcon: const Icon(Icons.forum),
-            label: l10n.boards,
+            label: l10n.t('boards'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.event_outlined),

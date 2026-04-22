@@ -339,7 +339,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                   ? null
                   : () async {
                       final bool success = await _submitClaimRequest();
-                      if (!mounted || !success) {
+                      if (!dialogContext.mounted || !success) {
                         return;
                       }
                       Navigator.of(dialogContext).pop();

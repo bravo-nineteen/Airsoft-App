@@ -61,6 +61,9 @@ class _FieldBookingInboxScreenState extends State<FieldBookingInboxScreen> {
         return;
       }
       await _refresh();
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Booking marked as $status.')),
       );

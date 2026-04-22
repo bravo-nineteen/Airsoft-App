@@ -1,6 +1,5 @@
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 
 class AppBadgeService {
   AppBadgeService._();

@@ -317,17 +317,6 @@ class _EventsScreenState extends State<EventsScreen> {
     return '$yyyy-$mm-$dd';
   }
 
-  String _buildSubtitle(EventModel event) {
-    final List<String> parts = <String>[
-      _formatDate(event.startsAt),
-      if ((event.prefecture ?? '').isNotEmpty) event.prefecture!,
-      if ((event.location ?? '').isNotEmpty) event.location!,
-      if ((event.eventType ?? '').isNotEmpty) event.eventType!,
-    ];
-
-    return parts.join(' • ');
-  }
-
   String? _statusLabel(AppLocalizations l10n, EventModel event) {
     switch (event.currentUserAttendanceStatus) {
       case 'attending':
@@ -737,37 +726,6 @@ class _FilterDropdown extends StatelessWidget {
           ),
         ],
         onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _MiniInfoChip extends StatelessWidget {
-  const _MiniInfoChip({required this.icon, required this.label, this.color});
-
-  final IconData icon;
-  final String label;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color bg = color != null
-        ? color!.withAlpha(30)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
-    final Color fg = color ?? Theme.of(context).colorScheme.onSurface;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: fg)),
-        ],
       ),
     );
   }
