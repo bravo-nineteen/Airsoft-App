@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/user_avatar.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
@@ -175,23 +176,11 @@ class _CommunityPublicProfileScreenState
   }
 
   Widget _buildAvatar(double size) {
-    final String? avatarUrl = _avatarUrl;
-    if (avatarUrl != null) {
-      return CircleAvatar(
-        radius: size / 2,
-        backgroundImage: NetworkImage(avatarUrl),
-      );
-    }
-
-    final String initial =
-        _displayName.trim().isEmpty ? '?' : _displayName.trim()[0].toUpperCase();
-
-    return CircleAvatar(
+    return UserAvatar(
+      userId: widget.userId,
+      avatarUrl: _avatarUrl,
       radius: size / 2,
-      child: Text(
-        initial,
-        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-      ),
+      initials: _displayName,
     );
   }
 
@@ -268,6 +257,26 @@ class _CommunityPublicProfileScreenState
           _isSendingFriendRequest = false;
         });
       }
+    }
+  }
+
+  Future<void> _acceptIncomingRequest() async {
+    if (_isSendingFriendRequest) return;
+    setState(() => _isSendingFriendRequest = true);
+    try {
+      await _contactRepository.sendRequest(widget.userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Friend request accepted')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to accept request: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingFriendRequest = false);
     }
   }
 
@@ -521,13 +530,9 @@ class _CommunityPublicProfileScreenState
       friendAction = null;
       friendIcon = Icons.schedule;
     } else if (_incomingPending) {
-      friendLabel = 'Respond in Requests';
-      friendAction = () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ContactsScreen()),
-        );
-      };
-      friendIcon = Icons.mark_email_unread_outlined;
+      friendLabel = 'Accept Request';
+      friendAction = _acceptIncomingRequest;
+      friendIcon = Icons.person_add_outlined;
     } else if (_isSendingFriendRequest) {
       friendLabel = 'Sending...';
       friendAction = null;

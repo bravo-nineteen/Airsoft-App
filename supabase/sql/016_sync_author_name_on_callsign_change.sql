@@ -46,3 +46,20 @@ CREATE TRIGGER trg_sync_author_name
   AFTER UPDATE OF call_sign ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_author_name_on_callsign_change();
+
+-- ── One-time backfill ─────────────────────────────────────────────────────────
+-- Fix any existing posts/comments where author_name no longer matches the
+-- user's current call_sign (e.g. because the name was changed before this
+-- trigger existed).
+
+UPDATE public.community_posts AS p
+   SET author_name = pr.call_sign
+  FROM public.profiles AS pr
+ WHERE p.author_id = pr.id
+   AND p.author_name IS DISTINCT FROM pr.call_sign;
+
+UPDATE public.community_comments AS c
+   SET author_name = pr.call_sign
+  FROM public.profiles AS pr
+ WHERE c.author_id = pr.id
+   AND c.author_name IS DISTINCT FROM pr.call_sign;
