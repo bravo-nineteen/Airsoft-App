@@ -195,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const SizedBox(height: 40),
                   Text(
-                    l10n.appTitle,
+                    'FieldOps',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 28,

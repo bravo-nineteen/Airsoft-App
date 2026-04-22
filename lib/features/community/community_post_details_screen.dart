@@ -9,6 +9,8 @@ import 'community_image_service.dart';
 import 'community_repository.dart';
 import 'community_user_profile_screen.dart';
 
+enum _CommentSortMode { mostRecent, allComments, popularComments }
+
 class CommunityPostDetailsScreen extends StatefulWidget {
   const CommunityPostDetailsScreen({super.key, required this.postId});
 
@@ -34,6 +36,7 @@ class _CommunityPostDetailsScreenState
   bool _isSendingComment = false;
   bool _isTogglingPostLike = false;
   bool _showAllComments = false;
+  _CommentSortMode _commentSortMode = _CommentSortMode.mostRecent;
   final Set<String> _togglingCommentLikes = <String>{};
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
@@ -67,6 +70,43 @@ class _CommunityPostDetailsScreenState
         .toList();
   }
 
+  List<CommunityCommentModel> get _sortedTopLevelComments {
+    final List<CommunityCommentModel> comments = _topLevelComments.toList();
+    final Map<String, List<CommunityCommentModel>> descendantsById =
+        <String, List<CommunityCommentModel>>{
+          for (final CommunityCommentModel comment in comments)
+            comment.id: _descendantsFor(comment.id),
+        };
+
+    comments.sort((CommunityCommentModel left, CommunityCommentModel right) {
+      final List<CommunityCommentModel> leftDescendants =
+          descendantsById[left.id] ?? <CommunityCommentModel>[];
+      final List<CommunityCommentModel> rightDescendants =
+          descendantsById[right.id] ?? <CommunityCommentModel>[];
+
+      switch (_commentSortMode) {
+        case _CommentSortMode.mostRecent:
+          return _threadLatestActivity(right, rightDescendants).compareTo(
+            _threadLatestActivity(left, leftDescendants),
+          );
+        case _CommentSortMode.allComments:
+          return left.createdAt.compareTo(right.createdAt);
+        case _CommentSortMode.popularComments:
+          final int popularityDelta =
+              _threadPopularity(right, rightDescendants) -
+              _threadPopularity(left, leftDescendants);
+          if (popularityDelta != 0) {
+            return popularityDelta;
+          }
+          return _threadLatestActivity(right, rightDescendants).compareTo(
+            _threadLatestActivity(left, leftDescendants),
+          );
+      }
+    });
+
+    return comments;
+  }
+
   List<CommunityCommentModel> _childRepliesFor(String parentCommentId) {
     return _comments
         .where((CommunityCommentModel comment) {
@@ -74,6 +114,97 @@ class _CommunityPostDetailsScreenState
           return parentId != null && parentId == parentCommentId;
         })
         .toList();
+  }
+
+  List<CommunityCommentModel> _sortedRepliesFor(String parentCommentId) {
+    final List<CommunityCommentModel> replies =
+        _childRepliesFor(parentCommentId).toList();
+    replies.sort(
+      (CommunityCommentModel left, CommunityCommentModel right) =>
+          left.createdAt.compareTo(right.createdAt),
+    );
+    return replies;
+  }
+
+  List<CommunityCommentModel> _descendantsFor(String rootCommentId) {
+    final List<CommunityCommentModel> descendants = <CommunityCommentModel>[];
+    final List<String> pendingIds = <String>[rootCommentId];
+
+    while (pendingIds.isNotEmpty) {
+      final String parentId = pendingIds.removeLast();
+      final List<CommunityCommentModel> directReplies =
+          _sortedRepliesFor(parentId);
+      descendants.addAll(directReplies);
+      pendingIds.addAll(
+        directReplies.map((CommunityCommentModel reply) => reply.id),
+      );
+    }
+
+    return descendants;
+  }
+
+  CommunityCommentModel? _commentById(String commentId) {
+    for (final CommunityCommentModel comment in _comments) {
+      if (comment.id == commentId) {
+        return comment;
+      }
+    }
+    return null;
+  }
+
+  String? _parentAuthorNameFor(CommunityCommentModel comment) {
+    final String? parentCommentId = comment.parentCommentId?.trim();
+    if (parentCommentId == null || parentCommentId.isEmpty) {
+      return null;
+    }
+
+    return _commentById(parentCommentId)?.authorName;
+  }
+
+  DateTime _threadLatestActivity(
+    CommunityCommentModel rootComment,
+    List<CommunityCommentModel> descendants,
+  ) {
+    DateTime latest = rootComment.createdAt;
+    for (final CommunityCommentModel reply in descendants) {
+      if (reply.createdAt.isAfter(latest)) {
+        latest = reply.createdAt;
+      }
+    }
+    return latest;
+  }
+
+  int _threadPopularity(
+    CommunityCommentModel rootComment,
+    List<CommunityCommentModel> descendants,
+  ) {
+    final int replyLikes = descendants.fold<int>(
+      0,
+      (int total, CommunityCommentModel reply) => total + reply.likeCount,
+    );
+    return rootComment.likeCount + replyLikes + (descendants.length * 2);
+  }
+
+  void _setCommentSortMode(_CommentSortMode mode) {
+    if (_commentSortMode == mode) {
+      return;
+    }
+
+    setState(() {
+      _commentSortMode = mode;
+      _showAllComments = false;
+    });
+  }
+
+  String _commentSortLabel(_CommentSortMode mode, AppLocalizations l10n) {
+    switch (mode) {
+      case _CommentSortMode.mostRecent:
+        return l10n.t('mostRecentComments');
+      case _CommentSortMode.allComments:
+        return l10n.t('allComments');
+      case _CommentSortMode.popularComments:
+        return l10n.t('popularComments');
+    }
   }
 
   @override
@@ -814,17 +945,60 @@ class _CommunityPostDetailsScreenState
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isBusy = _togglingCommentLikes.contains(comment.id);
     final bool isOwner = _isCommentOwner(comment);
+    final String? parentAuthorName =
+        isReply ? _parentAuthorNameFor(comment) : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: isReply
+            ? theme.colorScheme.surfaceContainerHighest
+            : theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
+        border: isReply
+            ? Border(
+                left: BorderSide(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                  width: 3,
+                ),
+              )
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (parentAuthorName != null) ...<Widget>[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.subdirectory_arrow_right_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      l10n.t('inReplyTo', args: {'name': parentAuthorName}),
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           InkWell(
             onTap: () => _openProfile(comment.authorId, comment.authorName),
             borderRadius: BorderRadius.circular(12),
@@ -915,19 +1089,68 @@ class _CommunityPostDetailsScreenState
               ),
             ),
           ],
-          if (!isReply) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _setReplyTarget(comment),
-                icon: const Icon(Icons.reply_outlined),
-                label: Text(l10n.t('reply')),
-              ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _setReplyTarget(comment),
+              icon: const Icon(Icons.reply_outlined),
+              label: Text(l10n.t('reply')),
             ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCommentThread(
+    BuildContext context,
+    ThemeData theme,
+    CommunityCommentModel comment, {
+    int depth = 0,
+  }) {
+    final List<CommunityCommentModel> replies = _sortedRepliesFor(comment.id);
+    final double leftInset = depth <= 0
+        ? 0
+        : depth >= 3
+            ? 42
+            : depth * 14;
+
+    return Padding(
+      padding: EdgeInsets.only(left: leftInset),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _buildCommentCard(
+            context,
+            theme,
+            comment,
+            isReply: depth > 0,
+          ),
+          ...replies.map(
+            (CommunityCommentModel reply) => _buildCommentThread(
+              context,
+              theme,
+              reply,
+              depth: depth + 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentSortChips(AppLocalizations l10n) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _CommentSortMode.values.map(( _CommentSortMode mode) {
+        return ChoiceChip(
+          label: Text(_commentSortLabel(mode, l10n)),
+          selected: _commentSortMode == mode,
+          onSelected: (_) => _setCommentSortMode(mode),
+        );
+      }).toList(),
     );
   }
 
@@ -1023,7 +1246,7 @@ class _CommunityPostDetailsScreenState
   Widget _buildDiscussionTab(CommunityPostModel post) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeData theme = Theme.of(context);
-    final List<CommunityCommentModel> topLevelComments = _topLevelComments;
+    final List<CommunityCommentModel> topLevelComments = _sortedTopLevelComments;
     final List<CommunityCommentModel> visibleTopLevel = _showAllComments
         ? topLevelComments
         : topLevelComments.take(10).toList();
@@ -1156,6 +1379,8 @@ class _CommunityPostDetailsScreenState
             ),
           ),
           const SizedBox(height: 10),
+          _buildCommentSortChips(l10n),
+          const SizedBox(height: 10),
           if (_comments.isEmpty)
             Card(
               child: Padding(
@@ -1165,22 +1390,10 @@ class _CommunityPostDetailsScreenState
             )
           else ...<Widget>[
             ...visibleTopLevel.map((CommunityCommentModel comment) {
-              final List<CommunityCommentModel> replies = _childRepliesFor(comment.id);
-              return Column(
-                children: <Widget>[
-                  _buildCommentCard(context, theme, comment),
-                  ...replies.map(
-                    (CommunityCommentModel reply) => Padding(
-                      padding: const EdgeInsets.only(left: 18),
-                      child: _buildCommentCard(
-                        context,
-                        theme,
-                        reply,
-                        isReply: true,
-                      ),
-                    ),
-                  ),
-                ],
+              return _buildCommentThread(
+                context,
+                theme,
+                comment,
               );
             }),
             if (topLevelComments.length > visibleTopLevel.length)

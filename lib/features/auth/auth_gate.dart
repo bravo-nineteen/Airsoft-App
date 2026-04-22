@@ -6,7 +6,7 @@ import '../admin/banned_screen.dart';
 import '../shell/airsoft_home_shell.dart';
 import 'login_screen.dart';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({
     super.key,
     this.currentLocale,
@@ -21,6 +21,76 @@ class AuthGate extends StatelessWidget {
   final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  final AdminRepository _adminRepository = AdminRepository();
+
+  Session? _session;
+  AdminBanRecord? _activeBan;
+  String? _banLookupUserId;
+  bool _isCheckingBan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = Supabase.instance.client.auth.currentSession;
+    _refreshBanStatus();
+  }
+
+  Future<void> _refreshBanStatus() async {
+    final Session? session = _session;
+    if (session == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeBan = null;
+        _banLookupUserId = null;
+        _isCheckingBan = false;
+      });
+      return;
+    }
+
+    final String userId = session.user.id;
+    if (_isCheckingBan && _banLookupUserId == userId) {
+      return;
+    }
+
+    setState(() {
+      _banLookupUserId = userId;
+      _isCheckingBan = true;
+    });
+
+    try {
+      final AdminBanRecord? ban =
+          await _adminRepository.getActiveBanForCurrentUser();
+      if (!mounted || _session?.user.id != userId) {
+        return;
+      }
+
+      setState(() {
+        _activeBan = ban;
+      });
+    } catch (_) {
+      if (!mounted || _session?.user.id != userId) {
+        return;
+      }
+
+      setState(() {
+        _activeBan = null;
+      });
+    } finally {
+      if (mounted && _session?.user.id == userId) {
+        setState(() {
+          _isCheckingBan = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
@@ -29,30 +99,44 @@ class AuthGate extends StatelessWidget {
         Supabase.instance.client.auth.currentSession,
       ),
       builder: (context, snapshot) {
-        final session = snapshot.data?.session;
+        final Session? session = snapshot.data?.session;
+
+        if (_session?.user.id != session?.user.id) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _session = session;
+              _activeBan = null;
+              _banLookupUserId = session?.user.id;
+            });
+            _refreshBanStatus();
+          });
+        }
 
         if (session == null) {
           return const LoginScreen();
         }
 
-        return FutureBuilder<AdminBanRecord?>(
-          future: AdminRepository().getActiveBanForCurrentUser(),
-          builder: (context, banSnapshot) {
-            if (banSnapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        if (_activeBan != null) {
+          return BannedScreen(ban: _activeBan!);
+        }
 
-            if (banSnapshot.data != null) {
-              return BannedScreen(ban: banSnapshot.data!);
-            }
-
-            return AirsoftHomeShell(
-              currentLocale: currentLocale,
-              onLocaleChanged: onLocaleChanged,
-              currentThemeMode: currentThemeMode,
-              onThemeModeChanged: onThemeModeChanged,
-            );
-          },
+        return Stack(
+          children: <Widget>[
+            AirsoftHomeShell(
+              currentLocale: widget.currentLocale,
+              onLocaleChanged: widget.onLocaleChanged,
+              currentThemeMode: widget.currentThemeMode,
+              onThemeModeChanged: widget.onThemeModeChanged,
+            ),
+            if (_isCheckingBan)
+              const Align(
+                alignment: Alignment.topCenter,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+          ],
         );
       },
     );

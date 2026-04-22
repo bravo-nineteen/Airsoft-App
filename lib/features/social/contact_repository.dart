@@ -3,6 +3,87 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'contact_model.dart';
 import '../notifications/notification_writer.dart';
 
+enum ContactRelationshipAction {
+  add,
+  outgoingPending,
+  incomingPending,
+  friends,
+  self,
+}
+
+class ContactRelationshipState {
+  const ContactRelationshipState({
+    required this.action,
+    this.contact,
+  });
+
+  final ContactRelationshipAction action;
+  final ContactModel? contact;
+
+  bool get canSendRequest => action == ContactRelationshipAction.add;
+  bool get canAcceptRequest =>
+      action == ContactRelationshipAction.incomingPending && contact != null;
+}
+
+ContactRelationshipState deriveContactRelationshipState({
+  required List<ContactModel> contacts,
+  required String currentUserId,
+  required String otherUserId,
+}) {
+  if (currentUserId == otherUserId) {
+    return const ContactRelationshipState(
+      action: ContactRelationshipAction.self,
+    );
+  }
+
+  ContactModel? outgoingPending;
+  ContactModel? incomingPending;
+
+  for (final ContactModel contact in contacts) {
+    final bool matchesPair =
+        (contact.requesterId == currentUserId &&
+            contact.addresseeId == otherUserId) ||
+        (contact.requesterId == otherUserId &&
+            contact.addresseeId == currentUserId);
+    if (!matchesPair) {
+      continue;
+    }
+
+    if (contact.status == 'accepted') {
+      return ContactRelationshipState(
+        action: ContactRelationshipAction.friends,
+        contact: contact,
+      );
+    }
+
+    if (contact.status != 'pending') {
+      continue;
+    }
+
+    if (contact.requesterId == otherUserId) {
+      incomingPending ??= contact;
+    } else {
+      outgoingPending ??= contact;
+    }
+  }
+
+  if (incomingPending != null) {
+    return ContactRelationshipState(
+      action: ContactRelationshipAction.incomingPending,
+      contact: incomingPending,
+    );
+  }
+
+  if (outgoingPending != null) {
+    return ContactRelationshipState(
+      action: ContactRelationshipAction.outgoingPending,
+      contact: outgoingPending,
+    );
+  }
+
+  return const ContactRelationshipState(action: ContactRelationshipAction.add);
+}
+
 class ContactRepository {
   ContactRepository({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client,
@@ -11,18 +92,50 @@ class ContactRepository {
   final SupabaseClient _client;
   final NotificationWriter _notificationWriter;
 
+  String get _currentUserId {
+    final User? user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('Not logged in.');
+    }
+    return user.id;
+  }
+
   Future<List<ContactModel>> getContacts() async {
-    final user = _client.auth.currentUser;
-    if (user == null) throw Exception('Not logged in.');
+    final String userId = _currentUserId;
 
     final List<dynamic> response = await _client
         .from('user_contacts')
-        .select('id, requester_id, addressee_id, status')
-        .or('requester_id.eq.${user.id},addressee_id.eq.${user.id}')
+        .select('id, requester_id, addressee_id, status, created_at')
+        .or('requester_id.eq.$userId,addressee_id.eq.$userId')
         .order('created_at', ascending: false);
 
-    final Set<String> profileIds = <String>{};
+    final List<Map<String, dynamic>> dedupedRows = <Map<String, dynamic>>[];
+    final Map<String, int> pairIndexByKey = <String, int>{};
+
     for (final dynamic row in response) {
+      final Map<String, dynamic> mapped = Map<String, dynamic>.from(row as Map);
+      final String requesterId = mapped['requester_id'].toString();
+      final String addresseeId = mapped['addressee_id'].toString();
+      final List<String> pair = <String>[requesterId, addresseeId]..sort();
+      final String pairKey = pair.join('::');
+      final int? existingIndex = pairIndexByKey[pairKey];
+
+      if (existingIndex == null) {
+        pairIndexByKey[pairKey] = dedupedRows.length;
+        dedupedRows.add(mapped);
+        continue;
+      }
+
+      final Map<String, dynamic> existing = dedupedRows[existingIndex];
+      final String existingStatus = (existing['status'] ?? 'pending').toString();
+      final String nextStatus = (mapped['status'] ?? 'pending').toString();
+      if (existingStatus != 'accepted' && nextStatus == 'accepted') {
+        dedupedRows[existingIndex] = mapped;
+      }
+    }
+
+    final Set<String> profileIds = <String>{};
+    for (final Map<String, dynamic> row in dedupedRows) {
       profileIds.add(row['requester_id'].toString());
       profileIds.add(row['addressee_id'].toString());
     }
@@ -42,18 +155,77 @@ class ContactRepository {
       }
     }
 
-    return response.map<ContactModel>((dynamic row) {
-      final Map<String, dynamic> mapped = Map<String, dynamic>.from(row);
+    return dedupedRows.map<ContactModel>((Map<String, dynamic> mapped) {
       mapped['requester_profile'] = profilesById[mapped['requester_id'].toString()];
       mapped['addressee_profile'] = profilesById[mapped['addressee_id'].toString()];
       return ContactModel.fromJson(mapped);
     }).toList();
   }
 
+  Future<Map<String, ContactRelationshipState>> getRelationshipStates(
+    Iterable<String> otherUserIds,
+  ) async {
+    final String currentUserId = _currentUserId;
+    final List<String> normalizedIds = otherUserIds
+        .map((String id) => id.trim())
+        .where((String id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (normalizedIds.isEmpty) {
+      return <String, ContactRelationshipState>{};
+    }
+
+    final List<ContactModel> contacts = await getContacts();
+    return <String, ContactRelationshipState>{
+      for (final String otherUserId in normalizedIds)
+        otherUserId: deriveContactRelationshipState(
+          contacts: contacts,
+          currentUserId: currentUserId,
+          otherUserId: otherUserId,
+        ),
+    };
+  }
+
   Future<void> sendRequest(String userId) async {
-    final current = _client.auth.currentUser!;
+    final String currentUserId = _currentUserId;
+    if (currentUserId == userId) {
+      throw Exception('You cannot add yourself.');
+    }
+
+    final List<dynamic> existingRows = await _client
+        .from('user_contacts')
+        .select('id, requester_id, addressee_id, status, created_at')
+        .or(
+          'and(requester_id.eq.$currentUserId,addressee_id.eq.$userId),and(requester_id.eq.$userId,addressee_id.eq.$currentUserId)',
+        )
+        .order('created_at', ascending: false);
+
+    final List<ContactModel> existingContacts = existingRows
+        .map(
+          (dynamic row) =>
+              ContactModel.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
+        .toList();
+    final ContactRelationshipState relationshipState =
+        deriveContactRelationshipState(
+          contacts: existingContacts,
+          currentUserId: currentUserId,
+          otherUserId: userId,
+        );
+
+    if (relationshipState.action == ContactRelationshipAction.friends ||
+        relationshipState.action == ContactRelationshipAction.outgoingPending) {
+      return;
+    }
+
+    if (relationshipState.canAcceptRequest) {
+      await acceptRequest(relationshipState.contact!);
+      return;
+    }
+
     await _client.from('user_contacts').insert({
-      'requester_id': current.id,
+      'requester_id': currentUserId,
       'addressee_id': userId,
       'status': 'pending',
     });
@@ -62,7 +234,7 @@ class ContactRepository {
     await _notificationWriter.safeCreateNotification(
       userId: userId,
       type: 'contact_request',
-      entityId: current.id,
+      entityId: currentUserId,
       title: actorName,
       body: 'sent you a contact request.',
     );

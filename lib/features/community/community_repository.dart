@@ -16,6 +16,8 @@ class CommunityRepository {
   final NotificationWriter _notificationWriter;
   final CommunityImageService _imageService;
 
+  String? get currentUserId => _client.auth.currentUser?.id;
+
   bool _isTransient(Object error) {
     final String text = error.toString().toLowerCase();
     return text.contains('502') ||
@@ -307,6 +309,8 @@ class CommunityRepository {
         friendIds.add(requesterId);
       }
     }
+
+    friendIds.add(user.id);
 
     if (friendIds.isEmpty) {
       return <CommunityPostModel>[];

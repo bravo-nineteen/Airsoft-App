@@ -32,7 +32,6 @@ class BootstrapApp extends StatefulWidget {
 }
 
 class _BootstrapAppState extends State<BootstrapApp> {
-  bool _splashDone = false;
   bool _startupDone = false;
   String? _startupError;
 
@@ -42,37 +41,25 @@ class _BootstrapAppState extends State<BootstrapApp> {
   @override
   void initState() {
     super.initState();
-    _startSplashTimer();
     _bootstrap();
-  }
-
-  void _startSplashTimer() {
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!mounted) return;
-      setState(() {
-        _splashDone = true;
-      });
-    });
   }
 
   Future<void> _bootstrap() async {
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-
-      await AppConfig.initializeSupabase();
+      await Future.wait<void>(<Future<void>>[
+        Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        ).then((_) {}),
+        AppConfig.initializeSupabase(),
+      ]);
 
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      await PushNotificationService.init();
-
-      if (Supabase.instance.client.auth.currentSession != null) {
-        unawaited(AppContentPreloader.instance.ensureStarted());
-      }
-
       _authSubscription = Supabase.instance.client.auth.onAuthStateChange
           .listen((data) {
+            if (data.session != null) {
+              unawaited(AppContentPreloader.instance.ensureStarted());
+            }
             if (data.event == AuthChangeEvent.passwordRecovery) {
               final navigator = _navigatorKey.currentState;
               if (navigator == null) return;
@@ -89,6 +76,8 @@ class _BootstrapAppState extends State<BootstrapApp> {
       setState(() {
         _startupDone = true;
       });
+
+      unawaited(_runDeferredStartupWork());
     } catch (error, stackTrace) {
       debugPrint('Startup failed: $error');
       debugPrint('$stackTrace');
@@ -97,6 +86,24 @@ class _BootstrapAppState extends State<BootstrapApp> {
       setState(() {
         _startupError = error.toString();
       });
+    }
+  }
+
+  Future<void> _runDeferredStartupWork() async {
+    try {
+      await PushNotificationService.init().timeout(const Duration(seconds: 8));
+    } catch (error, stackTrace) {
+      debugPrint('Deferred push init failed: $error');
+      debugPrint('$stackTrace');
+    }
+
+    if (Supabase.instance.client.auth.currentSession != null) {
+      try {
+        await AppContentPreloader.instance.ensureStarted();
+      } catch (error, stackTrace) {
+        debugPrint('Deferred content preload failed: $error');
+        debugPrint('$stackTrace');
+      }
     }
   }
 
@@ -112,7 +119,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
       return StartupErrorApp(message: _startupError!);
     }
 
-    if (!_splashDone || !_startupDone) {
+    if (!_startupDone) {
       return const SplashScreen();
     }
 

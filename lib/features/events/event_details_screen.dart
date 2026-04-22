@@ -6,6 +6,8 @@ import 'event_create_screen.dart';
 import 'event_model.dart';
 import 'event_repository.dart';
 
+enum _CommentSortMode { mostRecent, allComments, popularComments }
+
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({super.key, required this.event});
 
@@ -25,6 +27,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _isLoading = true;
   bool _isUpdatingAttendance = false;
   bool _isSendingComment = false;
+  _CommentSortMode _commentSortMode = _CommentSortMode.mostRecent;
   final Set<String> _busyAttendeeIds = <String>{};
   String? _replyToCommentId;
   String? _replyToCommentAuthor;
@@ -102,12 +105,129 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         .toList();
   }
 
+  List<EventCommentModel> get _sortedTopLevelComments {
+    final List<EventCommentModel> comments = _topLevelComments.toList();
+    final Map<String, List<EventCommentModel>> descendantsById =
+        <String, List<EventCommentModel>>{
+          for (final EventCommentModel comment in comments)
+            comment.id: _descendantsFor(comment.id),
+        };
+
+    comments.sort((EventCommentModel left, EventCommentModel right) {
+      final List<EventCommentModel> leftDescendants =
+          descendantsById[left.id] ?? <EventCommentModel>[];
+      final List<EventCommentModel> rightDescendants =
+          descendantsById[right.id] ?? <EventCommentModel>[];
+
+      switch (_commentSortMode) {
+        case _CommentSortMode.mostRecent:
+          return _threadLatestActivity(right, rightDescendants).compareTo(
+            _threadLatestActivity(left, leftDescendants),
+          );
+        case _CommentSortMode.allComments:
+          return left.createdAt.compareTo(right.createdAt);
+        case _CommentSortMode.popularComments:
+          final int popularityDelta =
+              _threadPopularity(rightDescendants) -
+              _threadPopularity(leftDescendants);
+          if (popularityDelta != 0) {
+            return popularityDelta;
+          }
+          return _threadLatestActivity(right, rightDescendants).compareTo(
+            _threadLatestActivity(left, leftDescendants),
+          );
+      }
+    });
+
+    return comments;
+  }
+
   List<EventCommentModel> _childRepliesFor(String parentCommentId) {
     return _comments
         .where(
           (EventCommentModel comment) => comment.parentCommentId == parentCommentId,
         )
         .toList();
+  }
+
+  List<EventCommentModel> _sortedRepliesFor(String parentCommentId) {
+    final List<EventCommentModel> replies =
+        _childRepliesFor(parentCommentId).toList();
+    replies.sort(
+      (EventCommentModel left, EventCommentModel right) =>
+          left.createdAt.compareTo(right.createdAt),
+    );
+    return replies;
+  }
+
+  List<EventCommentModel> _descendantsFor(String rootCommentId) {
+    final List<EventCommentModel> descendants = <EventCommentModel>[];
+    final List<String> pendingIds = <String>[rootCommentId];
+
+    while (pendingIds.isNotEmpty) {
+      final String parentId = pendingIds.removeLast();
+      final List<EventCommentModel> directReplies = _sortedRepliesFor(parentId);
+      descendants.addAll(directReplies);
+      pendingIds.addAll(directReplies.map((EventCommentModel reply) => reply.id));
+    }
+
+    return descendants;
+  }
+
+  EventCommentModel? _commentById(String commentId) {
+    for (final EventCommentModel comment in _comments) {
+      if (comment.id == commentId) {
+        return comment;
+      }
+    }
+    return null;
+  }
+
+  String? _parentAuthorNameFor(EventCommentModel comment) {
+    final String? parentCommentId = comment.parentCommentId?.trim();
+    if (parentCommentId == null || parentCommentId.isEmpty) {
+      return null;
+    }
+
+    return _commentById(parentCommentId)?.displayName;
+  }
+
+  DateTime _threadLatestActivity(
+    EventCommentModel rootComment,
+    List<EventCommentModel> descendants,
+  ) {
+    DateTime latest = rootComment.createdAt;
+    for (final EventCommentModel reply in descendants) {
+      if (reply.createdAt.isAfter(latest)) {
+        latest = reply.createdAt;
+      }
+    }
+    return latest;
+  }
+
+  int _threadPopularity(List<EventCommentModel> descendants) {
+    return descendants.length;
+  }
+
+  void _setCommentSortMode(_CommentSortMode mode) {
+    if (_commentSortMode == mode) {
+      return;
+    }
+
+    setState(() {
+      _commentSortMode = mode;
+    });
+  }
+
+  String _commentSortLabel(_CommentSortMode mode, AppLocalizations l10n) {
+    switch (mode) {
+      case _CommentSortMode.mostRecent:
+        return l10n.t('mostRecentComments');
+      case _CommentSortMode.allComments:
+        return l10n.t('allComments');
+      case _CommentSortMode.popularComments:
+        return l10n.t('popularComments');
+    }
   }
 
   String _formatDateTime(DateTime value) {
@@ -738,17 +858,61 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _buildCommentCard(EventCommentModel comment, {bool isReply = false}) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isOwner = _isCommentOwner(comment);
+    final ThemeData theme = Theme.of(context);
+    final String? parentAuthorName =
+        isReply ? _parentAuthorNameFor(comment) : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: isReply
+            ? theme.colorScheme.surfaceContainerHighest
+            : theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
+        border: isReply
+            ? Border(
+                left: BorderSide(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                  width: 3,
+                ),
+              )
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (parentAuthorName != null) ...<Widget>[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.subdirectory_arrow_right_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      l10n.t('inReplyTo', args: {'name': parentAuthorName}),
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Row(
             children: <Widget>[
               CircleAvatar(
@@ -768,19 +932,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   children: <Widget>[
                     Text(
                       comment.displayName,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       _formatDateTime(comment.createdAt),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall,
                     ),
                     if (comment.updatedAt != null &&
                         comment.updatedAt!.isAfter(comment.createdAt))
                       Text(
                         l10n.t('edited'),
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: theme.textTheme.bodySmall,
                       ),
                   ],
                 ),
@@ -810,23 +974,61 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
           const SizedBox(height: 8),
           Text(comment.body),
-          if (!isReply)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _setReplyTarget(comment),
-                icon: const Icon(Icons.reply_outlined),
-                label: Text(l10n.t('reply')),
-              ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _setReplyTarget(comment),
+              icon: const Icon(Icons.reply_outlined),
+              label: Text(l10n.t('reply')),
             ),
+          ),
         ],
       ),
     );
   }
 
+  Widget _buildCommentThread(EventCommentModel comment, {int depth = 0}) {
+    final List<EventCommentModel> replies = _sortedRepliesFor(comment.id);
+    final double leftInset = depth <= 0
+        ? 0
+        : depth >= 3
+            ? 42
+            : depth * 14;
+
+    return Padding(
+      padding: EdgeInsets.only(left: leftInset),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _buildCommentCard(comment, isReply: depth > 0),
+          ...replies.map(
+            (EventCommentModel reply) => _buildCommentThread(
+              reply,
+              depth: depth + 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentSortChips(AppLocalizations l10n) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _CommentSortMode.values.map((_CommentSortMode mode) {
+        return ChoiceChip(
+          label: Text(_commentSortLabel(mode, l10n)),
+          selected: _commentSortMode == mode,
+          onSelected: (_) => _setCommentSortMode(mode),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildCommentsSection() {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final List<EventCommentModel> topLevel = _topLevelComments;
+    final List<EventCommentModel> topLevel = _sortedTopLevelComments;
 
     return Card(
       child: Padding(
@@ -841,22 +1043,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
+            _buildCommentSortChips(l10n),
+            const SizedBox(height: 10),
             if (topLevel.isEmpty)
               Text(l10n.t('noCommentsYet'))
             else
               ...topLevel.map((EventCommentModel comment) {
-                final List<EventCommentModel> replies = _childRepliesFor(comment.id);
-                return Column(
-                  children: <Widget>[
-                    _buildCommentCard(comment),
-                    ...replies.map(
-                      (EventCommentModel reply) => Padding(
-                        padding: const EdgeInsets.only(left: 18),
-                        child: _buildCommentCard(reply, isReply: true),
-                      ),
-                    ),
-                  ],
-                );
+                return _buildCommentThread(comment);
               }),
             const SizedBox(height: 8),
             if (!_isLoggedIn)

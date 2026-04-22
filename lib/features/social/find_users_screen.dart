@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/localization/app_localizations.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_repository.dart';
+import 'contact_model.dart';
 import 'contact_repository.dart';
 
 class FindUsersScreen extends StatefulWidget {
@@ -18,27 +19,48 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
   final ContactRepository _contactRepository = ContactRepository();
   final TextEditingController _searchController = TextEditingController();
 
-  late Future<List<ProfileModel>> _futureProfiles;
-  bool _isBusy = false;
+  late Future<_FindUsersViewData> _futureData;
+  final Set<String> _busyUserIds = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _futureProfiles = _profileRepository.searchProfiles('');
+    _futureData = _loadViewData('');
   }
 
   Future<void> _search() async {
     setState(() {
-      _futureProfiles = _profileRepository.searchProfiles(_searchController.text);
+      _futureData = _loadViewData(_searchController.text);
     });
-    await _futureProfiles;
+    await _futureData;
+  }
+
+  Future<_FindUsersViewData> _loadViewData(String query) async {
+    final List<ProfileModel> profiles = await _profileRepository.searchProfiles(query);
+    final Map<String, ContactRelationshipState> states =
+        await _contactRepository.getRelationshipStates(
+          profiles.map((ProfileModel profile) => profile.id),
+        );
+    return _FindUsersViewData(
+      profiles: profiles,
+      relationshipStates: states,
+    );
+  }
+
+  Future<void> _refreshResults() async {
+    setState(() {
+      _futureData = _loadViewData(_searchController.text);
+    });
+    await _futureData;
   }
 
   Future<void> _sendRequest(ProfileModel profile) async {
-    if (_isBusy) return;
+    if (_busyUserIds.contains(profile.id)) {
+      return;
+    }
 
     setState(() {
-      _isBusy = true;
+      _busyUserIds.add(profile.id);
     });
 
     try {
@@ -53,6 +75,7 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
           ),
         ),
       );
+      await _refreshResults();
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
@@ -64,7 +87,54 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          _isBusy = false;
+          _busyUserIds.remove(profile.id);
+        });
+      }
+    }
+  }
+
+  Future<void> _acceptRequest(
+    ProfileModel profile,
+    ContactRelationshipState state,
+  ) async {
+    final ContactModel? contact = state.contact;
+    if (contact == null || _busyUserIds.contains(profile.id)) {
+      return;
+    }
+
+    setState(() {
+      _busyUserIds.add(profile.id);
+    });
+
+    try {
+      await _contactRepository.acceptRequest(contact);
+
+      if (!mounted) {
+        return;
+      }
+
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('friendRequestAccepted'))),
+      );
+      await _refreshResults();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            l10n.t('failedAcceptRequest', args: {'error': '$error'}),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyUserIds.remove(profile.id);
         });
       }
     }
@@ -120,8 +190,8 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<ProfileModel>>(
-              future: _futureProfiles,
+            child: FutureBuilder<_FindUsersViewData>(
+              future: _futureData,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());
@@ -142,7 +212,9 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
                   );
                 }
 
-                final profiles = snapshot.data ?? [];
+                final _FindUsersViewData data =
+                    snapshot.data ?? const _FindUsersViewData();
+                final List<ProfileModel> profiles = data.profiles;
 
                 if (profiles.isEmpty) {
                   return Center(child: Text(l10n.t('noUsersFound')));
@@ -154,26 +226,59 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
                   itemBuilder: (context, index) {
                     final profile = profiles[index];
                     final isSelf = profile.id == _currentUserId;
+                    final ContactRelationshipState relationshipState =
+                        data.relationshipStates[profile.id] ??
+                        (isSelf
+                            ? const ContactRelationshipState(
+                                action: ContactRelationshipAction.self,
+                              )
+                            : const ContactRelationshipState(
+                                action: ContactRelationshipAction.add,
+                              ));
+                    final bool isBusy = _busyUserIds.contains(profile.id);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
                         leading: _avatar(profile),
                         title: Text(profile.displayName),
-                        subtitle: Text(
-                          [
-                            if (profile.userCode.trim().isNotEmpty) profile.userCode,
-                            if ((profile.area ?? '').trim().isNotEmpty) profile.area!,
-                            if ((profile.teamName ?? '').trim().isNotEmpty) profile.teamName!,
-                          ].join(' • '),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              [
+                                if (profile.userCode.trim().isNotEmpty)
+                                  profile.userCode,
+                                if ((profile.area ?? '').trim().isNotEmpty)
+                                  profile.area!,
+                                if ((profile.teamName ?? '').trim().isNotEmpty)
+                                  profile.teamName!,
+                              ].join(' • '),
+                            ),
+                            if (!isSelf &&
+                                relationshipState.action !=
+                                    ContactRelationshipAction.add)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text(
+                                    _relationshipLabel(
+                                      context,
+                                      relationshipState.action,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         trailing: isSelf
                             ? const SizedBox.shrink()
-                            : FilledButton(
-                                onPressed: _isBusy
-                                    ? null
-                                    : () => _sendRequest(profile),
-                                child: Text(l10n.t('add')),
+                            : _buildActionButton(
+                                context,
+                                profile,
+                                relationshipState,
+                                isBusy: isBusy,
                               ),
                       ),
                     );
@@ -186,4 +291,68 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
       ),
     );
   }
+
+  Widget _buildActionButton(
+    BuildContext context,
+    ProfileModel profile,
+    ContactRelationshipState state, {
+    required bool isBusy,
+  }) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+
+    switch (state.action) {
+      case ContactRelationshipAction.add:
+        return FilledButton(
+          onPressed: isBusy ? null : () => _sendRequest(profile),
+          child: Text(l10n.t('add')),
+        );
+      case ContactRelationshipAction.incomingPending:
+        return FilledButton.icon(
+          onPressed: isBusy ? null : () => _acceptRequest(profile, state),
+          icon: const Icon(Icons.check),
+          label: Text(l10n.t('accept')),
+        );
+      case ContactRelationshipAction.outgoingPending:
+        return OutlinedButton(
+          onPressed: null,
+          child: Text(l10n.t('requestPending')),
+        );
+      case ContactRelationshipAction.friends:
+        return OutlinedButton(
+          onPressed: null,
+          child: Text(l10n.t('friends')), 
+        );
+      case ContactRelationshipAction.self:
+        return const SizedBox.shrink();
+    }
+  }
+
+  String _relationshipLabel(
+    BuildContext context,
+    ContactRelationshipAction action,
+  ) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    switch (action) {
+      case ContactRelationshipAction.add:
+        return l10n.t('add');
+      case ContactRelationshipAction.outgoingPending:
+        return l10n.t('requestPending');
+      case ContactRelationshipAction.incomingPending:
+        return l10n.t('requestReceived');
+      case ContactRelationshipAction.friends:
+        return l10n.t('friends');
+      case ContactRelationshipAction.self:
+        return l10n.t('profile');
+    }
+  }
+}
+
+class _FindUsersViewData {
+  const _FindUsersViewData({
+    this.profiles = const <ProfileModel>[],
+    this.relationshipStates = const <String, ContactRelationshipState>{},
+  });
+
+  final List<ProfileModel> profiles;
+  final Map<String, ContactRelationshipState> relationshipStates;
 }

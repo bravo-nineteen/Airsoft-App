@@ -4,6 +4,7 @@ class ContactModel {
     required this.requesterId,
     required this.addresseeId,
     required this.status,
+    this.createdAt,
     this.requesterCallSign,
     this.addresseeCallSign,
   });
@@ -12,6 +13,7 @@ class ContactModel {
   final String requesterId;
   final String addresseeId;
   final String status;
+  final DateTime? createdAt;
   final String? requesterCallSign;
   final String? addresseeCallSign;
 
@@ -21,6 +23,7 @@ class ContactModel {
       requesterId: json['requester_id'].toString(),
       addresseeId: json['addressee_id'].toString(),
       status: (json['status'] ?? 'pending').toString(),
+      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()),
       requesterCallSign: _readNestedDisplayName(json['requester_profile']),
       addresseeCallSign: _readNestedDisplayName(json['addressee_profile']),
     );

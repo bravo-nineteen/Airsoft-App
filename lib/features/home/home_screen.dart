@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
+import '../community/community_create_post_screen.dart';
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
 import '../community/community_post_details_screen.dart';
@@ -52,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isRefreshing = false;
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
   Timer? _backgroundSyncTimer;
+
+  String? get _currentUserId => _communityRepository?.currentUserId ?? CommunityRepository().currentUserId;
 
   @override
   void initState() {
@@ -199,6 +202,29 @@ class _HomeScreenState extends State<HomeScreen> {
     return repository.fetchFriendsTimelinePosts(limit: 6);
   }
 
+  Future<void> _openCreateTimelinePost() async {
+    final String? currentUserId = _currentUserId;
+    if (currentUserId == null || currentUserId.trim().isEmpty) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CommunityCreatePostScreen(
+          postContext: 'profile',
+          targetUserId: currentUserId,
+          appBarTitle: AppLocalizations.of(context).t('newTimelinePost'),
+        ),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await _loadHomeData();
+  }
+
   Future<List<EventModel>> _fetchUpcomingEvents() async {
     final List<EventModel> preloaded = _contentPreloader.events;
     if (preloaded.isNotEmpty) {
@@ -344,6 +370,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     _SectionHeader(
                       title: l10n.t('friendsTimeline'),
                       subtitle: l10n.t('friendsTimelineSubtitle'),
+                      trailing: _currentUserId == null
+                          ? null
+                          : FilledButton.icon(
+                              onPressed: _openCreateTimelinePost,
+                              icon: const Icon(Icons.add),
+                              label: Text(l10n.t('post')),
+                            ),
                     ),
                     const SizedBox(height: 12),
                     if (_friendsTimelinePosts.isEmpty)
@@ -511,11 +544,13 @@ class _SectionHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onViewAll,
+    this.trailing,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback? onViewAll;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -540,7 +575,9 @@ class _SectionHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (onViewAll != null)
+        if (trailing != null)
+          trailing!
+        else if (onViewAll != null)
           TextButton(onPressed: onViewAll, child: Text(l10n.t('viewAll'))),
       ],
     );
@@ -641,7 +678,6 @@ class _HomePostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final imageUrl = post.primaryImageUrl;
     final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
@@ -897,81 +933,6 @@ class _BlogPostCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoFeedCard extends StatelessWidget {
-  const _InfoFeedCard({
-    required this.title,
-    required this.subtitle,
-    required this.meta,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final String meta;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.14)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: theme.colorScheme.surfaceContainerHighest,
-                ),
-                child: Icon(icon),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _MiniBadge(
-                      text: meta,
-                      color: theme.colorScheme.tertiaryContainer,
-                      textColor: theme.colorScheme.onTertiaryContainer,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: theme.textTheme.bodyMedium),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
             ],
           ),
         ),
