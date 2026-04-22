@@ -35,6 +35,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
 
   List<FieldReviewModel> _reviews = <FieldReviewModel>[];
   List<FieldBookingOptionModel> _bookingOptions = <FieldBookingOptionModel>[];
+  List<String> _photos = <String>[];
   final Set<String> _selectedBookingOptionIds = <String>{};
   bool _loadingReviews = true;
   bool _loadingBookingOptions = true;
@@ -58,6 +59,22 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     super.initState();
     _loadReviews();
     _loadBookingOptions();
+    _loadPhotos();
+  }
+
+  Future<void> _loadPhotos() async {
+    try {
+      final urls = await _repository.getFieldPhotos(field.id);
+      // Prepend the main image_url if not already in the list.
+      final main = (field.imageUrl ?? '').trim();
+      final all = <String>{
+        if (main.isNotEmpty) main,
+        ...urls,
+      }.toList();
+      if (mounted) setState(() => _photos = all);
+    } catch (_) {
+      // Non-fatal — gallery just won't show.
+    }
   }
 
   Future<void> _loadBookingOptions() async {
@@ -592,17 +609,22 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
 
           final imagePanel = ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: AspectRatio(
-              aspectRatio: isTablet ? 4 / 5 : 16 / 9,
-              child: (field.imageUrl ?? '').isNotEmpty
-                  ? Image.network(
-                      field.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          _FieldImagePlaceholder(name: field.name),
-                    )
-                  : _FieldImagePlaceholder(name: field.name),
-            ),
+            child: _photos.isEmpty
+                ? AspectRatio(
+                    aspectRatio: isTablet ? 4 / 5 : 16 / 9,
+                    child: (field.imageUrl ?? '').isNotEmpty
+                        ? Image.network(
+                            field.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                _FieldImagePlaceholder(name: field.name),
+                          )
+                        : _FieldImagePlaceholder(name: field.name),
+                  )
+                : AspectRatio(
+                    aspectRatio: isTablet ? 4 / 5 : 16 / 9,
+                    child: _FieldPhotoGallery(photos: _photos),
+                  ),
           );
 
           final detailsPanel = Column(
@@ -1109,6 +1131,67 @@ class _BulletSection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FieldPhotoGallery extends StatefulWidget {
+  const _FieldPhotoGallery({required this.photos});
+  final List<String> photos;
+
+  @override
+  State<_FieldPhotoGallery> createState() => _FieldPhotoGalleryState();
+}
+
+class _FieldPhotoGalleryState extends State<_FieldPhotoGallery> {
+  final PageController _pageController = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: widget.photos.length,
+          onPageChanged: (i) => setState(() => _page = i),
+          itemBuilder: (_, i) => Image.network(
+            widget.photos[i],
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: const Icon(Icons.broken_image, size: 48),
+            ),
+          ),
+        ),
+        if (widget.photos.length > 1)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.photos.length, (i) {
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: _page == i ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _page == i ? Colors.white : Colors.white54,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
     );
   }
 }

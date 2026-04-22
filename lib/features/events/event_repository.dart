@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/notifications/event_reminder_service.dart';
 import '../community/community_image_service.dart';
 import '../safety/safety_repository.dart';
 import 'event_model.dart';
@@ -327,6 +328,14 @@ class EventRepository {
       title: actorName,
       body: 'is attending ${eventRecord?['title'] ?? 'your event'}.',
     );
+
+    // Schedule local reminders for this event.
+    try {
+      final EventModel event = await getEventById(eventId);
+      await EventReminderService.instance.scheduleReminders(event);
+    } catch (_) {
+      // Best-effort — never break RSVP because of reminder scheduling.
+    }
   }
 
   Future<void> cancelAttendance(String eventId) async {
@@ -387,6 +396,9 @@ class EventRepository {
       title: actorName,
       body: 'cancelled attendance for ${eventRecord?['title'] ?? 'your event'}.',
     );
+
+    // Cancel any scheduled local reminders.
+    await EventReminderService.instance.cancelReminders(eventId);
   }
 
   Future<void> hostConfirmAttendance({

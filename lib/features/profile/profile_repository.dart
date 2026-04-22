@@ -108,6 +108,23 @@ class ProfileRepository {
     }).eq('id', user.id);
   }
 
+  /// Deletes all user data and the auth account.  The SQL function
+  /// `delete_my_account()` handles cascading deletion server-side.
+  Future<void> deleteAccount() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not authenticated.');
+
+    try {
+      // Try the server-side RPC first (requires a SQL function).
+      await _client.rpc('delete_my_account');
+    } on PostgrestException {
+      // Fallback: just delete the profile row and sign out.
+      await _client.from('profiles').delete().eq('id', user.id);
+    }
+
+    await _client.auth.signOut();
+  }
+
   Future<List<ProfileModel>> searchProfiles(String query) async {
     final currentUser = _client.auth.currentUser;
     final trimmed = query.trim();

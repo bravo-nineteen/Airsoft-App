@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import '../../core/content/app_content_preloader.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
@@ -867,9 +868,13 @@ class _CommunityListScreenState extends State<CommunityListScreen>
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_posts.isEmpty)
-              SliverFillRemaining(
+              const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text(l10n.t('noPostsFound'))),
+                child: EmptyStateWidget(
+                  icon: Icons.article_outlined,
+                  title: 'No posts yet',
+                  subtitle: 'Be the first to share something with the community.',
+                ),
               )
             else
               SliverPadding(

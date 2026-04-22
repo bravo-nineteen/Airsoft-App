@@ -35,7 +35,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
 
   List<DirectMessageModel> _messages = <DirectMessageModel>[];
   RealtimeChannel? _channel;
+  RealtimeChannel? _presenceChannel;
   Timer? _backgroundSyncTimer;
+  Timer? _typingDebounce;
   bool _isSending = false;
   bool _isAllowed = false;
   bool _loadingPermission = true;
@@ -43,6 +45,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   bool _isRefreshingMessages = false;
   bool _readReceiptsEnabled = true;
   bool _expiringPhotosEnabled = true;
+  bool _otherIsTyping = false;
   String? _pendingPhotoUrl;
 
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
@@ -132,6 +135,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
         },
       );
 
+      // Presence channel for typing indicators.
+      _setupPresenceChannel();
+
       if (_readReceiptsEnabled) {
         await _repository.markThreadRead(widget.otherUserId);
       }
@@ -147,6 +153,45 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
       setState(() {
         _loadingPermission = false;
         _isAllowed = false;
+      });
+    }
+  }
+
+  void _setupPresenceChannel() {
+    final ids = [_currentUserId, widget.otherUserId]..sort();
+    final channelName = 'dm_typing_${ids.join('_')}';
+    _presenceChannel = Supabase.instance.client.channel(channelName);
+
+    _presenceChannel!
+        .onPresenceSync((_) {
+          final state = _presenceChannel!.presenceState();
+          bool otherTyping = false;
+          for (final presence in state) {
+            final presences = presence.presences;
+            if (presences.any((p) =>
+                (p.payload['user_id'] as String?) == widget.otherUserId &&
+                (p.payload['typing'] as bool? ?? false))) {
+              otherTyping = true;
+              break;
+            }
+          }
+          if (mounted) setState(() => _otherIsTyping = otherTyping);
+        })
+        .subscribe((status, [err]) async {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            await _presenceChannel!.track({'user_id': _currentUserId, 'typing': false});
+          }
+        });
+  }
+
+  void _onMessageFieldChanged(String _) {
+    final isTyping = _messageController.text.isNotEmpty;
+    _typingDebounce?.cancel();
+    _presenceChannel?.track({'user_id': _currentUserId, 'typing': isTyping});
+    if (isTyping) {
+      // Auto-clear typing after 3 seconds without changes.
+      _typingDebounce = Timer(const Duration(seconds: 3), () {
+        _presenceChannel?.track({'user_id': _currentUserId, 'typing': false});
       });
     }
   }
@@ -505,10 +550,14 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
+    _typingDebounce?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     if (_channel != null) {
       Supabase.instance.client.removeChannel(_channel!);
+    }
+    if (_presenceChannel != null) {
+      Supabase.instance.client.removeChannel(_presenceChannel!);
     }
     super.dispose();
   }
@@ -723,6 +772,17 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                         ],
                       ),
                     ),
+                  if (_otherIsTyping)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: Text(
+                        '${widget.otherDisplayName} is typing…',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                      ),
+                    ),
                   Row(
                     children: <Widget>[
                       IconButton(
@@ -735,6 +795,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                           controller: _messageController,
                           minLines: 1,
                           maxLines: 4,
+                          onChanged: _onMessageFieldChanged,
                           decoration: InputDecoration(
                             hintText: l10n.t('writeMessage'),
                           ),

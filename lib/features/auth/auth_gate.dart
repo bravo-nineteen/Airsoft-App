@@ -5,6 +5,7 @@ import '../admin/admin_repository.dart';
 import '../admin/banned_screen.dart';
 import '../shell/airsoft_home_shell.dart';
 import 'login_screen.dart';
+import 'onboarding_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({
@@ -31,12 +32,20 @@ class _AuthGateState extends State<AuthGate> {
   AdminBanRecord? _activeBan;
   String? _banLookupUserId;
   bool _isCheckingBan = false;
+  bool _needsOnboarding = false;
 
   @override
   void initState() {
     super.initState();
     _session = Supabase.instance.client.auth.currentSession;
     _refreshBanStatus();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final needed = await OnboardingScreen.needsOnboarding();
+    if (!mounted) return;
+    setState(() => _needsOnboarding = needed);
   }
 
   Future<void> _refreshBanStatus() async {
@@ -110,8 +119,10 @@ class _AuthGateState extends State<AuthGate> {
               _session = session;
               _activeBan = null;
               _banLookupUserId = session?.user.id;
+              _needsOnboarding = false;
             });
             _refreshBanStatus();
+            _checkOnboarding();
           });
         }
 
@@ -121,6 +132,14 @@ class _AuthGateState extends State<AuthGate> {
 
         if (_activeBan != null) {
           return BannedScreen(ban: _activeBan!);
+        }
+
+        if (_needsOnboarding) {
+          return OnboardingScreen(
+            onComplete: () {
+              if (mounted) setState(() => _needsOnboarding = false);
+            },
+          );
         }
 
         return Stack(

@@ -287,6 +287,40 @@ class FieldRepository {
     final String trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
   }
+
+  /// Returns a list of photo URLs for the given field.
+  /// Queries the `field_photos` table if it exists; falls back to the
+  /// single `image_url` column on the field row.
+  Future<List<String>> getFieldPhotos(String fieldId) async {
+    try {
+      final rows = await _client
+          .from('field_photos')
+          .select('photo_url')
+          .eq('field_id', fieldId)
+          .order('created_at', ascending: true);
+      final urls = rows
+          .map<String>((r) => (r['photo_url'] ?? '').toString())
+          .where((u) => u.isNotEmpty)
+          .toList();
+      return urls;
+    } on PostgrestException catch (e) {
+      // Table does not exist yet — return empty list gracefully.
+      if (e.code == '42P01' || e.code == 'PGRST205') return const [];
+      rethrow;
+    }
+  }
+
+  /// Uploads a photo for a field (field managers only).
+  Future<void> addFieldPhoto({
+    required String fieldId,
+    required String photoUrl,
+  }) async {
+    await _client.from('field_photos').insert({
+      'field_id': fieldId,
+      'photo_url': photoUrl,
+      'uploaded_by': _currentUserId,
+    });
+  }
 }
 
 class FieldBookingOptionModel {

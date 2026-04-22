@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'notification_nav_service.dart';
 import 'push_token_repository.dart';
 
 class PushNotificationService {
@@ -76,16 +77,26 @@ class PushNotificationService {
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint('Foreground push received: ${message.messageId}');
-      debugPrint('Title: ${message.notification?.title}');
-      debugPrint('Body: ${message.notification?.body}');
-      debugPrint('Data: ${message.data}');
       await _showForegroundNotification(message);
     });
 
+    // App in background → user taps notification.
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('Push opened app: ${message.messageId}');
-      debugPrint('Open data: ${message.data}');
+      final target = NotificationNavTarget.fromMessage(message);
+      if (target != null) {
+        NotificationNavService.instance.push(target);
+      }
     });
+
+    // App was terminated → user tapped notification to launch app.
+    final RemoteMessage? initialMessage =
+        await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      final target = NotificationNavTarget.fromMessage(initialMessage);
+      if (target != null) {
+        NotificationNavService.instance.storeColdStart(target);
+      }
+    }
   }
 
   static Future<void> _registerCurrentToken() async {

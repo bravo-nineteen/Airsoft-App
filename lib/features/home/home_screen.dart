@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
@@ -81,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
       contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
     }
     _loadHomeData();
+    _loadSavedFilter();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
         return;
@@ -362,6 +364,20 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedFilter = filter;
     });
+    SharedPreferences.getInstance().then(
+      (p) => p.setString('home_interest_filter', filter.name),
+    );
+  }
+
+  Future<void> _loadSavedFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('home_interest_filter');
+    if (saved == null || !mounted) return;
+    final filter = HomeInterestFilter.values.firstWhere(
+      (f) => f.name == saved,
+      orElse: () => HomeInterestFilter.all,
+    );
+    setState(() => _selectedFilter = filter);
   }
 
   @override

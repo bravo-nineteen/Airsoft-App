@@ -5,15 +5,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/content/app_content_preloader.dart';
 import '../../core/notifications/app_badge_service.dart';
+import '../../core/notifications/notification_nav_service.dart';
 import '../../app/localization/app_localizations.dart';
 import '../community/community_list_screen.dart';
+import '../community/community_post_details_screen.dart';
+import '../search/search_screen.dart';
+import '../community/community_user_profile_screen.dart';
+import '../events/event_details_screen.dart';
+import '../events/event_repository.dart';
 import '../events/events_screen.dart';
 import '../fields/fields_screen.dart';
 import '../home/home_screen.dart';
 import '../notifications/notification_repository.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
+import '../social/contacts_screen.dart';
 import '../social/direct_message_repository.dart';
+import '../social/direct_message_screen.dart';
 import '../social/direct_message_threads_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shops/shops_screen.dart';
@@ -64,6 +72,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   bool _pendingUnreadRefresh = false;
   Timer? _unreadRefreshDebounce;
   DateTime? _lastBackgroundContentRefreshAt;
+  StreamSubscription<NotificationNavTarget>? _navSubscription;
 
   List<Widget> get _screens => <Widget>[
     HomeScreen(
@@ -99,6 +108,18 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       _restartRealtimeBadgeListeners(nextUserId: nextUserId);
     });
     _loadUnreadCounts();
+
+    // Subscribe to push notification deep-links.
+    _navSubscription =
+        NotificationNavService.instance.stream.listen(_handleNavTarget);
+
+    // Process cold-start (app launched from a terminated state via push tap).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = NotificationNavService.instance.consumeColdStart();
+      if (target != null && mounted) {
+        _handleNavTarget(target);
+      }
+    });
   }
 
   @override
@@ -281,15 +302,90 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _unreadRefreshDebounce?.cancel();
+    _navSubscription?.cancel();
     _disposeRealtimeBadgeListeners();
     super.dispose();
+  }
+
+  /// Handles a push notification deep-link target by navigating to the
+  /// relevant screen.
+  Future<void> _handleNavTarget(NotificationNavTarget target) async {
+    if (!mounted) return;
+    final String type = target.type.trim().toLowerCase();
+    final String? entityId = target.entityId;
+
+    if (type == 'direct_message') {
+      if (entityId != null && entityId.isNotEmpty) {
+        // entityId for DM notifications is the sender's user_id.
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DirectMessageScreen(
+              otherUserId: entityId,
+              otherDisplayName: 'Message',
+            ),
+          ),
+        );
+      } else {
+        _openUtilityPanel(_UtilityPanel.messages);
+      }
+    } else if (type == 'contact_request' ||
+        type == 'contact_request_accepted' ||
+        type == 'friend_request') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
+      );
+    } else if (type.contains('event')) {
+      if (entityId != null && entityId.isNotEmpty) {
+        try {
+          final event =
+              await EventRepository().getEventById(entityId);
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => EventDetailsScreen(event: event),
+            ),
+          );
+        } catch (_) {
+          // Ignore broken event links.
+        }
+      } else {
+        setState(() => _index = 1);
+      }
+    } else if (type.contains('community_post') ||
+        type.contains('post') ||
+        type.contains('comment')) {
+      if (entityId != null && entityId.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => CommunityPostDetailsScreen(postId: entityId),
+          ),
+        );
+      } else {
+        setState(() => _index = 2);
+      }
+    } else if (type.contains('profile') || type.contains('user')) {
+      if (entityId != null && entityId.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => CommunityUserProfileScreen(
+              userId: entityId,
+              fallbackName: 'Operator',
+            ),
+          ),
+        );
+      }
+    } else {
+      // Fallback: open notifications panel.
+      _openUtilityPanel(_UtilityPanel.notifications);
+    }
+
+    unawaited(_loadUnreadCounts());
   }
 
   Future<void> _openNotifications() async {
     _openUtilityPanel(_UtilityPanel.notifications);
     await _loadUnreadCounts();
   }
-
   Future<void> _openMessages() async {
     _openUtilityPanel(_UtilityPanel.messages);
     await _loadUnreadCounts();
@@ -404,6 +500,15 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       appBar: showingPrimaryTabs
           ? AppBar(
               actions: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const GlobalSearchScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search',
+                ),
                 IconButton(
                   onPressed: _openNotifications,
                   icon: _badgeIcon(

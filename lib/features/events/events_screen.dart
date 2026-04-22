@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import '../../core/content/app_content_preloader.dart';
 import 'event_create_screen.dart';
 import 'event_details_screen.dart';
@@ -417,11 +418,10 @@ class _EventsScreenState extends State<EventsScreen> {
                       .toList();
 
                   if (events.isEmpty) {
-                    return ListView(
-                      children: <Widget>[
-                        const SizedBox(height: 160),
-                        Center(child: Text(l10n.t('noEventsFound'))),
-                      ],
+                    return const EmptyStateWidget(
+                      icon: Icons.event_outlined,
+                      title: 'No events yet',
+                      subtitle: 'Check back soon for upcoming airsoft events.',
                     );
                   }
 
@@ -431,7 +431,11 @@ class _EventsScreenState extends State<EventsScreen> {
                       children: <Widget>[
                         _buildSearchAndFilters(l10n, events),
                         const SizedBox(height: 18),
-                        Center(child: Text(l10n.t('noMatchingEventsFound'))),
+                        const EmptyStateWidget(
+                          icon: Icons.search_off_outlined,
+                          title: 'No matching events',
+                          subtitle: 'Try adjusting your search or filters.',
+                        ),
                       ],
                     );
                   }

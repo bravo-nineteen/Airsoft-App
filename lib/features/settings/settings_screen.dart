@@ -6,6 +6,7 @@ import '../../core/notifications/notification_settings_screen.dart';
 import '../admin/admin_repository.dart';
 import '../admin/admin_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../profile/profile_repository.dart';
 import 'account_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'safety_management_screen.dart';
@@ -32,8 +33,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const Set<String> _supportedLanguageCodes = <String>{'en', 'ja'};
 
   final AdminRepository _adminRepository = AdminRepository();
+  final ProfileRepository _profileRepository = ProfileRepository();
   late ThemeMode _selectedThemeMode;
   String? _selectedLanguageCode;
+  bool _isDeletingAccount = false;
 
   @override
   void initState() {
@@ -78,6 +81,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (shouldLogout == true && context.mounted) {
       await _logout(context);
+    }
+  }
+
+  Future<void> _confirmAndDeleteAccount(BuildContext context) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: const Text(
+            'This will permanently delete your account and all associated data. '
+            'This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete My Account'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !context.mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await _profileRepository.deleteAccount();
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete account: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
     }
   }
 
@@ -296,6 +344,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.logout,
             title: l10n.t('logout'),
             onTap: () => _confirmAndLogout(context),
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.delete_forever_outlined,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              'Delete Account',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            trailing: _isDeletingAccount
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.chevron_right),
+            onTap: _isDeletingAccount
+                ? null
+                : () => _confirmAndDeleteAccount(context),
           ),
           const SizedBox(height: 16),
         ],

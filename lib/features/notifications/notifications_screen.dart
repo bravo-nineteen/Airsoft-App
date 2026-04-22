@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/shimmer_loading.dart';
 import '../community/community_post_details_screen.dart';
 import '../community/community_user_profile_screen.dart';
 import '../events/event_details_screen.dart';
@@ -430,7 +432,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const SingleChildScrollView(
+                child: ShimmerList(count: 8),
+              );
             }
 
             if (snapshot.hasError) {
@@ -456,11 +460,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             final items = snapshot.data ?? [];
 
             if (items.isEmpty) {
-              return ListView(
-                children: [
-                  SizedBox(height: 160),
-                  Center(child: Text(l10n.t('noNotificationsYet'))),
-                ],
+              return EmptyStateWidget(
+                icon: Icons.notifications_none_outlined,
+                title: l10n.t('noNotificationsYet'),
+                subtitle: 'Activity from the community will appear here.',
               );
             }
 

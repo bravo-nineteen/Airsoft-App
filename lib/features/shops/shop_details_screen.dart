@@ -2,15 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
 import 'shop_model.dart';
+import 'shop_repository.dart';
+import 'shop_review_model.dart';
 
-class ShopDetailsScreen extends StatelessWidget {
+class ShopDetailsScreen extends StatefulWidget {
   const ShopDetailsScreen({super.key, required this.shop});
 
   final ShopModel shop;
+
+  @override
+  State<ShopDetailsScreen> createState() => _ShopDetailsScreenState();
+}
+
+class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
+  final ShopRepository _repository = ShopRepository();
+  late Future<List<ShopReviewModel>> _reviewsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reviewsFuture = _repository.getShopReviews(widget.shop.id);
+  }
+
+  ShopModel get shop => widget.shop;
+
+  void _reloadReviews() {
+    setState(() {
+      _reviewsFuture = _repository.getShopReviews(shop.id);
+    });
+  }
 
   Future<void> _callPhone(BuildContext context, String phone) async {
     final uri = Uri.parse('tel:$phone');
@@ -25,6 +50,85 @@ class ShopDetailsScreen extends StatelessWidget {
     );
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _showWriteReviewDialog() async {
+    int selectedRating = 0;
+    final bodyController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Write a Review'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Rating'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: List.generate(5, (i) {
+                      final star = i + 1;
+                      return IconButton(
+                        onPressed: () =>
+                            setDialogState(() => selectedRating = star),
+                        icon: Icon(
+                          star <= selectedRating
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: bodyController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Share your experience (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: selectedRating == 0
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != true || !mounted) return;
+    try {
+      await _repository.submitShopReview(
+        shopId: shop.id,
+        rating: selectedRating,
+        body: bodyController.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Review submitted.')),
+      );
+      _reloadReviews();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
 
@@ -232,6 +336,115 @@ class ShopDetailsScreen extends StatelessWidget {
               ),
             ),
           ],
+
+          // Reviews
+          const SizedBox(height: 8),
+          FutureBuilder<List<ShopReviewModel>>(
+            future: _reviewsFuture,
+            builder: (context, snapshot) {
+              final reviews = snapshot.data ?? [];
+              final currentUserId =
+                  Supabase.instance.client.auth.currentUser?.id ?? '';
+              final hasReviewed =
+                  reviews.any((r) => r.userId == currentUserId);
+
+              double avgRating = 0;
+              if (reviews.isNotEmpty) {
+                avgRating = reviews.fold(0, (s, r) => s + r.rating) /
+                    reviews.length;
+              }
+
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.reviews_outlined),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Reviews',
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          if (reviews.isNotEmpty)
+                            Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    color: Colors.amber, size: 16),
+                                const SizedBox(width: 2),
+                                Text(avgRating.toStringAsFixed(1)),
+                                Text(' (${reviews.length})'),
+                              ],
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (snapshot.connectionState != ConnectionState.done)
+                        const LinearProgressIndicator(minHeight: 2)
+                      else if (reviews.isEmpty)
+                        const Text('No reviews yet. Be the first!')
+                      else
+                        ...reviews.map((r) => _ReviewTile(review: r)),
+                      const SizedBox(height: 8),
+                      if (!hasReviewed)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _showWriteReviewDialog,
+                            icon: const Icon(Icons.rate_review_outlined),
+                            label: const Text('Write a Review'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review});
+  final ShopReviewModel review;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                review.callSign ?? 'Anonymous',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              ...List.generate(
+                5,
+                (i) => Icon(
+                  i < review.rating ? Icons.star : Icons.star_border,
+                  size: 14,
+                  color: Colors.amber,
+                ),
+              ),
+            ],
+          ),
+          if ((review.body ?? '').trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(review.body!),
+            ),
+          const Divider(),
         ],
       ),
     );

@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/shimmer_loading.dart';
 import '../community/community_user_profile_screen.dart';
+import '../events/event_model.dart';
+import '../events/event_details_screen.dart';
+import '../events/event_repository.dart';
 import '../social/contact_model.dart';
 import '../social/contact_repository.dart';
 import 'avatar_picker_widget.dart';
@@ -31,23 +35,29 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileRepository _repository = ProfileRepository();
   final ContactRepository _contactRepository = ContactRepository();
+  final EventRepository _eventRepository = EventRepository();
   late Future<ProfileModel?> _future;
   late Future<List<ContactModel>> _friendsFuture;
+  late Future<List<EventModel>> _eventsFuture;
 
   @override
   void initState() {
     super.initState();
     _future = _repository.getCurrentProfile();
     _friendsFuture = _contactRepository.getAcceptedFriends();
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+    _eventsFuture = _eventRepository.getUserAttendingEvents(uid);
   }
 
   Future<void> _refresh() async {
     if (!mounted) {
       return;
     }
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
     setState(() {
       _future = _repository.getCurrentProfile();
       _friendsFuture = _contactRepository.getAcceptedFriends();
+      _eventsFuture = _eventRepository.getUserAttendingEvents(uid);
     });
     await _future;
   }
@@ -93,8 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
+          return const SingleChildScrollView(
+            child: ShimmerList(count: 6),
           );
         }
 
@@ -221,6 +231,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             },
                           );
                         }),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            FutureBuilder<List<EventModel>>(
+              future: _eventsFuture,
+              builder: (BuildContext context, AsyncSnapshot<List<EventModel>> evSnap) {
+                if (evSnap.connectionState != ConnectionState.done) {
+                  return const SizedBox.shrink();
+                }
+                final List<EventModel> events = evSnap.data ?? <EventModel>[];
+                if (events.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
+                          child: Text(
+                            'My Events',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        ...events.take(5).map((EventModel ev) => ListTile(
+                          leading: const Icon(Icons.event_outlined),
+                          title: Text(ev.title),
+                          subtitle: Text(
+                              '${ev.startsAt.year}/${ev.startsAt.month.toString().padLeft(2,'0')}/${ev.startsAt.day.toString().padLeft(2,'0')}'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EventDetailsScreen(event: ev),
+                            ),
+                          ),
+                        )),
+                        if (events.length > 5)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                            child: Text(
+                              '+${events.length - 5} more',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
                       ],
                     ),
                   ),
