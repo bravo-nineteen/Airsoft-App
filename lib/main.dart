@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -16,11 +17,46 @@ import 'firebase_options.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint('Background message: ${message.messageId}');
+
+  final notification = message.notification;
+  if (notification == null) return;
+
+  final plugin = FlutterLocalNotificationsPlugin();
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(
+    const InitializationSettings(android: androidSettings),
+  );
+  await plugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'fieldops_push_foreground',
+          'FieldOps Push Notifications',
+          description: 'Notifications shown while app is in foreground',
+          importance: Importance.high,
+        ),
+      );
+  await plugin.show(
+    message.messageId.hashCode,
+    notification.title,
+    notification.body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'fieldops_push_foreground',
+        'FieldOps Push Notifications',
+        channelDescription: 'Notifications shown while app is in foreground',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    ),
+  );
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   runApp(const BootstrapApp());
 }
 
@@ -46,14 +82,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
   Future<void> _bootstrap() async {
     try {
-      await Future.wait<void>(<Future<void>>[
-        Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        ).then((_) {}),
-        AppConfig.initializeSupabase(),
-      ]);
-
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      await AppConfig.initializeSupabase();
 
       _authSubscription = Supabase.instance.client.auth.onAuthStateChange
           .listen((data) {

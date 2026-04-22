@@ -6,7 +6,9 @@ import '../events/event_create_screen.dart';
 import '../events/event_model.dart';
 import '../fields/field_model.dart';
 import '../profile/profile_model.dart';
+import '../shops/shop_model.dart';
 import 'admin_create_field_screen.dart';
+import 'admin_create_shop_screen.dart';
 import 'admin_repository.dart';
 
 class AdminScreen extends StatefulWidget {
@@ -95,6 +97,7 @@ class _AdminScreenState extends State<AdminScreen>
       _repository.getRecentEvents(),
       _repository.getRecentFields(),
       _repository.getRecentBans(),
+      _repository.getRecentShops(),
     ]);
 
     return _AdminDashboardData(
@@ -103,6 +106,7 @@ class _AdminScreenState extends State<AdminScreen>
       events: results[2] as List<EventModel>,
       fields: results[3] as List<FieldModel>,
       bans: results[4] as List<AdminBanRecord>,
+      shops: results[5] as List<ShopModel>,
     );
   }
 
@@ -529,6 +533,20 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
+  Future<void> _openOfficialShop() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AdminCreateShopScreen()),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (created == true) {
+      await _refresh();
+    }
+  }
+
   Future<void> _editEvent(EventModel event) async {
     final bool? updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -552,6 +570,22 @@ class _AdminScreenState extends State<AdminScreen>
     final bool? updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => AdminCreateFieldScreen(existingField: field),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (updated == true) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _editShop(ShopModel shop) async {
+    final bool? updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminCreateShopScreen(existingShop: shop),
       ),
     );
 
@@ -860,6 +894,17 @@ class _AdminScreenState extends State<AdminScreen>
                 onTap: _openOfficialField,
               ),
             ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.storefront),
+                title: const Text('Create Official Shop Listing'),
+                subtitle: const Text(
+                  'Add an official shop entry to the directory.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openOfficialShop,
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               'Recent Events',
@@ -906,6 +951,31 @@ class _AdminScreenState extends State<AdminScreen>
                   trailing: IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => _editField(field),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Recent Shops',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            ...data.shops.map(
+              (shop) => Card(
+                child: ListTile(
+                  leading: shop.isOfficial
+                      ? const Icon(Icons.verified, color: Colors.blue)
+                      : const Icon(Icons.storefront),
+                  title: Text(shop.name),
+                  subtitle: Text(
+                    shop.locationDisplay,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _editShop(shop),
                   ),
                 ),
               ),
@@ -1331,6 +1401,7 @@ class _AdminDashboardData {
     required this.events,
     required this.fields,
     required this.bans,
+    required this.shops,
   });
 
   final List<CommunityPostModel> posts;
@@ -1338,4 +1409,5 @@ class _AdminDashboardData {
   final List<EventModel> events;
   final List<FieldModel> fields;
   final List<AdminBanRecord> bans;
+  final List<ShopModel> shops;
 }

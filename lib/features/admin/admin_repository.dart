@@ -4,6 +4,7 @@ import '../community/community_model.dart';
 import '../events/event_model.dart';
 import '../fields/field_model.dart';
 import '../profile/profile_model.dart';
+import '../shops/shop_model.dart';
 
 class AdminRepository {
   AdminRepository({SupabaseClient? client})
@@ -152,6 +153,21 @@ class AdminRepository {
         .map(
           (dynamic row) =>
               FieldModel.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
+        .toList();
+  }
+
+  Future<List<ShopModel>> getRecentShops({int limit = 25}) async {
+    final response = await _client
+        .from('shops')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) =>
+              ShopModel.fromJson(Map<String, dynamic>.from(row as Map)),
         )
         .toList();
   }
