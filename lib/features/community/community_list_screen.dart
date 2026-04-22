@@ -331,6 +331,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
       return;
     }
 
+    final bool wasRefreshing = _posts.isNotEmpty;
     if (_posts.isEmpty) {
       setState(() {
         _isLoading = true;
@@ -374,6 +375,14 @@ class _CommunityListScreenState extends State<CommunityListScreen>
         _isRefreshing = false;
       });
       _cachePosts();
+      if (wasRefreshing && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Updated'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted) {
         return;

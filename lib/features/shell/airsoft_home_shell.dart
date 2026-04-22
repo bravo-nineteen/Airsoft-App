@@ -25,6 +25,7 @@ import '../social/direct_message_screen.dart';
 import '../social/direct_message_threads_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shops/shops_screen.dart';
+import '../teams/teams_list_screen.dart';
 
 enum _UtilityPanel {
   none,
@@ -414,6 +415,18 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               onTap: () {
                 Navigator.of(ctx).pop();
                 _openUtilityPanel(_UtilityPanel.shops);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('Teams'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TeamsListScreen(),
+                  ),
+                );
               },
             ),
             ListTile(

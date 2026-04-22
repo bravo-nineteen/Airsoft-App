@@ -53,6 +53,14 @@ class _EventsScreenState extends State<EventsScreen> {
       _future = _contentPreloader.refreshEvents();
     });
     await _future;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Updated'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   void _handleSharedEventsUpdated() {

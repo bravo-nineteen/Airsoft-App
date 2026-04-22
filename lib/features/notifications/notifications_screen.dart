@@ -63,6 +63,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _future = _repository.getNotifications();
     });
     await _future;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Updated'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   @override
