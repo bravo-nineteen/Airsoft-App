@@ -18,6 +18,15 @@ import '../social/direct_message_threads_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shops/shops_screen.dart';
 
+enum _UtilityPanel {
+  none,
+  notifications,
+  messages,
+  fields,
+  shops,
+  settings,
+}
+
 class AirsoftHomeShell extends StatefulWidget {
   const AirsoftHomeShell({
     super.key,
@@ -39,6 +48,7 @@ class AirsoftHomeShell extends StatefulWidget {
 class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   with WidgetsBindingObserver {
   int _index = 0;
+  _UtilityPanel _utilityPanel = _UtilityPanel.none;
   final NotificationRepository _notificationRepository =
       NotificationRepository();
   final DirectMessageRepository _directMessageRepository =
@@ -195,8 +205,20 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   }
 
   void _selectTab(int value) {
+    if (value == 4) {
+      _openHamburgerMenu();
+      return;
+    }
+
     setState(() {
       _index = value;
+      _utilityPanel = _UtilityPanel.none;
+    });
+  }
+
+  void _openUtilityPanel(_UtilityPanel panel) {
+    setState(() {
+      _utilityPanel = panel;
     });
   }
 
@@ -264,17 +286,12 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   }
 
   Future<void> _openNotifications() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-
+    _openUtilityPanel(_UtilityPanel.notifications);
     await _loadUnreadCounts();
   }
 
   Future<void> _openMessages() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DirectMessageThreadsScreen()),
-    );
+    _openUtilityPanel(_UtilityPanel.messages);
     await _loadUnreadCounts();
   }
 
@@ -292,9 +309,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               title: Text(l10n.fieldFinder),
               onTap: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FieldsScreen()),
-                );
+                _openUtilityPanel(_UtilityPanel.fields);
               },
             ),
             ListTile(
@@ -302,9 +317,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               title: Text(l10n.t('shops')),
               onTap: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ShopsScreen()),
-                );
+                _openUtilityPanel(_UtilityPanel.shops);
               },
             ),
             ListTile(
@@ -312,16 +325,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               title: Text(l10n.settings),
               onTap: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => SettingsScreen(
-                      currentLocale: widget.currentLocale,
-                      onLocaleChanged: widget.onLocaleChanged,
-                      currentThemeMode: widget.currentThemeMode,
-                      onThemeModeChanged: widget.onThemeModeChanged,
-                    ),
-                  ),
-                );
+                _openUtilityPanel(_UtilityPanel.settings);
               },
             ),
             const SizedBox(height: 8),
@@ -366,38 +370,62 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool showingPrimaryTabs = _utilityPanel == _UtilityPanel.none;
+
+    Widget body = IndexedStack(index: _index, children: _screens);
+    if (!showingPrimaryTabs) {
+      switch (_utilityPanel) {
+        case _UtilityPanel.notifications:
+          body = const NotificationsScreen();
+          break;
+        case _UtilityPanel.messages:
+          body = const DirectMessageThreadsScreen();
+          break;
+        case _UtilityPanel.fields:
+          body = const FieldsScreen();
+          break;
+        case _UtilityPanel.shops:
+          body = const ShopsScreen();
+          break;
+        case _UtilityPanel.settings:
+          body = SettingsScreen(
+            currentLocale: widget.currentLocale,
+            onLocaleChanged: widget.onLocaleChanged,
+            currentThemeMode: widget.currentThemeMode,
+            onThemeModeChanged: widget.onThemeModeChanged,
+          );
+          break;
+        case _UtilityPanel.none:
+          break;
+      }
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        actions: [
-          IconButton(
-            onPressed: _openNotifications,
-            icon: _badgeIcon(
-              icon: Icons.notifications_outlined,
-              count: _unreadNotifications,
-            ),
-          ),
-          IconButton(
-            onPressed: _openMessages,
-            icon: _badgeIcon(
-              icon: Icons.mail_outline,
-              count: _unreadMessages,
-            ),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: IndexedStack(index: _index, children: _screens),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openHamburgerMenu,
-        mini: true,
-        tooltip: l10n.t('menu'),
-        child: const Icon(Icons.menu),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
+      appBar: showingPrimaryTabs
+          ? AppBar(
+              actions: [
+                IconButton(
+                  onPressed: _openNotifications,
+                  icon: _badgeIcon(
+                    icon: Icons.notifications_outlined,
+                    count: _unreadNotifications,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _openMessages,
+                  icon: _badgeIcon(
+                    icon: Icons.mail_outline,
+                    count: _unreadMessages,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            )
+          : null,
+      body: body,
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        currentIndex: _index,
+        currentIndex: showingPrimaryTabs ? _index : 4,
         onTap: _selectTab,
         items: [
           BottomNavigationBarItem(
@@ -415,6 +443,10 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
           BottomNavigationBarItem(
             icon: const Icon(Icons.person_outline),
             label: l10n.profile,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.menu),
+            label: l10n.t('menu'),
           ),
         ],
       ),

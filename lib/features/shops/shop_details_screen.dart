@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
@@ -14,6 +16,15 @@ class ShopDetailsScreen extends StatelessWidget {
     final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
+    }
+  }
+
+  Future<void> _openExternalMap(double latitude, double longitude) async {
+    final Uri uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -92,6 +103,74 @@ class ShopDetailsScreen extends StatelessWidget {
                 ? null
                 : const Icon(Icons.copy, size: 18),
           ),
+
+          if (shop.latitude != null && shop.longitude != null) ...[
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 220,
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(shop.latitude!, shop.longitude!),
+                        initialZoom: 14,
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.all,
+                        ),
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.airsoftonlinejapan.fieldops',
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(shop.latitude!, shop.longitude!),
+                              width: 52,
+                              height: 52,
+                              child: const Icon(
+                                Icons.location_pin,
+                                size: 42,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.map_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Map location',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _openExternalMap(
+                            shop.latitude!,
+                            shop.longitude!,
+                          ),
+                          icon: const Icon(Icons.open_in_new, size: 16),
+                          label: const Text('Open Maps'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
 
           // Opening times
           _DetailCard(
