@@ -122,6 +122,50 @@ class TeamMapRouteModel {
   }
 }
 
+class TeamMapZoneModel {
+  const TeamMapZoneModel({
+    required this.id,
+    required this.mapId,
+    required this.points,
+    this.label,
+    this.colorHex,
+    required this.createdBy,
+  });
+
+  final String id;
+  final String mapId;
+  final List<Map<String, double>> points;
+  final String? label;
+  final String? colorHex;
+  final String createdBy;
+
+  factory TeamMapZoneModel.fromJson(Map<String, dynamic> json) {
+    final dynamic rawPoints = json['points'];
+    final List<Map<String, double>> parsed = <Map<String, double>>[];
+    if (rawPoints is List) {
+      for (final dynamic entry in rawPoints) {
+        if (entry is Map) {
+          final double x = (entry['x'] as num?)?.toDouble() ?? 0;
+          final double y = (entry['y'] as num?)?.toDouble() ?? 0;
+          parsed.add(<String, double>{'x': x, 'y': y});
+        }
+      }
+    }
+    return TeamMapZoneModel(
+      id: (json['id'] ?? '').toString(),
+      mapId: (json['map_id'] ?? '').toString(),
+      points: parsed,
+      label: (json['label'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['label'] ?? '').toString().trim(),
+      colorHex: (json['color_hex'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['color_hex'] ?? '').toString().trim(),
+      createdBy: (json['created_by'] ?? '').toString(),
+    );
+  }
+}
+
 class TeamMessageModel {
   const TeamMessageModel({
     required this.id,
@@ -304,6 +348,52 @@ class TeamCollabRepository {
 
   Future<void> deleteMarker(String markerId) async {
     await _client.from('team_map_markers').delete().eq('id', markerId);
+  }
+
+  Future<void> updateMarkerPosition(String markerId, double x, double y) async {
+    await _client
+        .from('team_map_markers')
+        .update(<String, dynamic>{'x': x, 'y': y})
+        .eq('id', markerId);
+  }
+
+  Future<void> deleteRoute(String routeId) async {
+    await _client.from('team_map_routes').delete().eq('id', routeId);
+  }
+
+  Future<void> addZone({
+    required String mapId,
+    required List<Map<String, double>> points,
+    String? label,
+    String? colorHex,
+  }) async {
+    if (points.length < 3) {
+      throw Exception('Zone requires at least three points.');
+    }
+    await _client.from('team_map_zones').insert(<String, dynamic>{
+      'map_id': mapId,
+      'points': points,
+      'label': label?.trim().isEmpty == true ? null : label?.trim(),
+      'color_hex': colorHex,
+      'created_by': _uid,
+    });
+  }
+
+  Future<void> deleteZone(String zoneId) async {
+    await _client.from('team_map_zones').delete().eq('id', zoneId);
+  }
+
+  Stream<List<TeamMapZoneModel>> watchZones(String mapId) {
+    return _client
+        .from('team_map_zones')
+        .stream(primaryKey: <String>['id'])
+        .eq('map_id', mapId)
+        .order('created_at')
+        .map((List<Map<String, dynamic>> rows) {
+          return rows
+              .map((Map<String, dynamic> row) => TeamMapZoneModel.fromJson(row))
+              .toList();
+        });
   }
 
   Future<void> sendTeamMessage({

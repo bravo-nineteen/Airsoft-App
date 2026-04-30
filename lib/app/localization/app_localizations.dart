@@ -499,6 +499,9 @@ class AppLocalizations {
         'mapModeClear': 'Clear',
         'mapSaveRoute': 'Save',
         'mapToolsLabel': 'Tools',
+        'addLabel': 'Add label',
+        'skip': 'Skip',
+        'done': 'Done',
         'teamChat': 'Team Chat',
         // ── Team Chat ────────────────────────────────────────────────────────
         'teamChatTitle': '{teamName} Chat',
@@ -995,6 +998,9 @@ class AppLocalizations {
       'mapModeRoute': 'ルート',
       'mapModeClear': 'クリア',
       'mapSaveRoute': '保存',
+      'addLabel': 'ラベルを追加',
+      'skip': 'スキップ',
+      'done': '完了',
       'mapToolsLabel': 'ツール',
       'teamChat': 'チャット',
       // ── Team Chat ────────────────────────────────────────────────────────
