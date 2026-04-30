@@ -333,9 +333,8 @@ class FieldRepository {
     String? description,
     double? latitude,
     double? longitude,
-    String? notes,
   }) async {
-    final payload = <String, dynamic>{
+    await _client.from('fields').insert(<String, dynamic>{
       'name': name.trim(),
       'location_name': locationName.trim(),
       'description': (description ?? '').trim(),
@@ -344,17 +343,7 @@ class FieldRepository {
       'prefecture': _nullIfEmpty(prefecture),
       'city': _nullIfEmpty(city),
       'field_type': _nullIfEmpty(fieldType),
-    };
-    try {
-      await _client.from('fields').insert(payload);
-    } on PostgrestException catch (e) {
-      if (!_isMissingColumnError(e)) rethrow;
-      // Strip optional columns if the schema migration hasn't run yet.
-      payload.remove('prefecture');
-      payload.remove('city');
-      payload.remove('field_type');
-      await _client.from('fields').insert(payload);
-    }
+    });
   }
 
   /// Returns the current user's own field submissions (pending / rejected).

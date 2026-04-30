@@ -1817,6 +1817,8 @@ class _AdminScreenState extends State<AdminScreen>
             title: const Text('Admin Area'),
             bottom: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: const [
                 Tab(text: 'Moderation'),
                 Tab(text: 'Safety'),

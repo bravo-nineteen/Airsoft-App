@@ -60,11 +60,18 @@ CREATE TRIGGER enforce_shops_submission_status
 -- ─── RLS: fields ─────────────────────────────────────────────────────────────
 
 -- SELECT: approved rows are public; users can also see their own pending/rejected.
+-- Admins can see every row (needed for the pending submissions review tab).
 DROP POLICY IF EXISTS "Fields are readable by everyone" ON public.fields;
 CREATE POLICY "Fields are readable by everyone"
   ON public.fields FOR SELECT
   TO authenticated, anon
   USING (status = 'approved' OR submitted_by_user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Admins can read all fields" ON public.fields;
+CREATE POLICY "Admins can read all fields"
+  ON public.fields FOR SELECT
+  TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.admin_roles WHERE user_id = auth.uid()));
 
 -- INSERT: any authenticated user may submit; trigger enforces status.
 DROP POLICY IF EXISTS "Authenticated users can submit fields" ON public.fields;
@@ -93,6 +100,12 @@ CREATE POLICY "shops are publicly readable"
   ON public.shops FOR SELECT
   TO authenticated, anon
   USING (status = 'approved' OR submitted_by_user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Admins can read all shops" ON public.shops;
+CREATE POLICY "Admins can read all shops"
+  ON public.shops FOR SELECT
+  TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.admin_roles WHERE user_id = auth.uid()));
 
 DROP POLICY IF EXISTS "Authenticated users can submit shops" ON public.shops;
 CREATE POLICY "Authenticated users can submit shops"
