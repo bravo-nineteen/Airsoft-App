@@ -37,6 +37,7 @@ dependencies:
   app_badge_plus: ^1.2.9
 
   url_launcher: ^6.3.0
+  google_mobile_ads: ^5.0.0
 
 dev_dependencies:
   flutter_test:

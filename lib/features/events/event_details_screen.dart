@@ -1591,14 +1591,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
-  String _avatarInitial(String value) {
-    final String trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return '?';
-    }
-    return trimmed.substring(0, 1).toUpperCase();
-  }
-
   @override
   void dispose() {
     _commentController.dispose();

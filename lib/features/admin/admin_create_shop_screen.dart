@@ -67,7 +67,6 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
   }
 
   Future<void> _save() async {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_nameController.text.trim().isEmpty ||
         _addressController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

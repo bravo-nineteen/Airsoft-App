@@ -25,7 +25,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   final TextEditingController _claimIdController = TextEditingController();
   final TextEditingController _claimPhoneController = TextEditingController();
   final TextEditingController _claimEmailController = TextEditingController();
-  final TextEditingController _claimPaymentRefController =
+  final TextEditingController _claimNoteController =
       TextEditingController();
   final TextEditingController _bookingNameController = TextEditingController();
   final TextEditingController _bookingPhoneController = TextEditingController();
@@ -273,7 +273,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
         officialIdNumber: idNumber,
         officialPhone: phone,
         officialEmail: email,
-        paymentReference: _claimPaymentRefController.text,
+        verificationNote: _claimNoteController.text,
       );
       if (!mounted) {
         return false;
@@ -281,7 +281,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Claim request sent. Our team will contact you to verify and unlock field tools after payment confirmation (¥5000).',
+            'Claim request sent. Admin will review your request first. If approved, they will send a Google Play payment request (¥5000/year).',
           ),
         ),
       );
@@ -313,6 +313,10 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                const Text(
+                  'Submit your field staff verification details. Payment is requested only after admin approval.',
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _claimStaffNameController,
                   decoration: const InputDecoration(labelText: 'Staff name'),
@@ -338,9 +342,11 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: _claimPaymentRefController,
+                  controller: _claimNoteController,
+                  minLines: 2,
+                  maxLines: 4,
                   decoration: const InputDecoration(
-                    labelText: 'Google Play payment reference (optional)',
+                    labelText: 'Message to admin (optional)',
                   ),
                 ),
               ],
@@ -534,7 +540,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     _claimIdController.dispose();
     _claimPhoneController.dispose();
     _claimEmailController.dispose();
-    _claimPaymentRefController.dispose();
+    _claimNoteController.dispose();
     _bookingNameController.dispose();
     _bookingPhoneController.dispose();
     _bookingEmailController.dispose();
@@ -861,7 +867,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               )
             else
               const Text(
-                'Staff can claim this field by submitting official ID, phone, email, then paying ¥5000 for verification/unlock.',
+                'Staff can claim this field by submitting official ID, phone, and email. Admin reviews first and sends the ¥5000/year Google Play request only after approval.',
               ),
             const SizedBox(height: 12),
             Row(

@@ -763,6 +763,138 @@ class AdminRepository {
     return null;
   }
 
+  // ── Membership requests ──────────────────────────────────────────────────
+
+  Future<List<MembershipRequestRecord>> getMembershipRequests({
+    int limit = 50,
+  }) async {
+    final response = await _client
+        .from('ad_free_membership_requests')
+        .select()
+        .inFilter('status', <String>['pending', 'payment_requested'])
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => MembershipRequestRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<MembershipRequestRecord>> getReviewedMembershipRequests({
+    int limit = 100,
+  }) async {
+    final response = await _client
+        .from('ad_free_membership_requests')
+        .select()
+        .inFilter('status', <String>['approved', 'rejected', 'active', 'expired'])
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => MembershipRequestRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> sendMembershipPaymentRequest(
+    String requestId, {
+    String? adminNote,
+  }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    final Map<String, dynamic> payload = {
+      'status': 'payment_requested',
+      'reviewed_by': _currentUserId,
+      'reviewed_at': now,
+      'payment_request_sent_at': now,
+    };
+    if ((adminNote ?? '').trim().isNotEmpty) {
+      payload['admin_note'] = adminNote!.trim();
+    }
+    await _client
+        .from('ad_free_membership_requests')
+        .update(payload)
+        .eq('id', requestId);
+  }
+
+  Future<void> rejectMembershipRequest(
+    String requestId, {
+    String? adminNote,
+  }) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    final Map<String, dynamic> payload = {
+      'status': 'rejected',
+      'reviewed_by': _currentUserId,
+      'reviewed_at': now,
+    };
+    if ((adminNote ?? '').trim().isNotEmpty) {
+      payload['admin_note'] = adminNote!.trim();
+    }
+    await _client
+        .from('ad_free_membership_requests')
+        .update(payload)
+        .eq('id', requestId);
+  }
+
+  Future<void> activateMembership(String requestId) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    final String expiresAt = DateTime.now()
+        .toUtc()
+        .add(const Duration(days: 365))
+        .toIso8601String();
+    await _client
+        .from('ad_free_membership_requests')
+        .update({
+          'status': 'active',
+          'activated_at': now,
+          'expires_at': expiresAt,
+          'reviewed_by': _currentUserId,
+          'reviewed_at': now,
+        })
+        .eq('id', requestId);
+  }
+
+  // ── Field claim payment step ──────────────────────────────────────────────
+
+  Future<void> requestFieldClaimPayment(String claimId) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('field_claim_requests')
+        .update({
+          'verification_status': 'approved',
+          'payment_status': 'payment_requested',
+          'reviewed_by': _currentUserId,
+          'reviewed_at': now,
+        })
+        .eq('id', claimId);
+  }
+
+  Future<List<FieldClaimRequestRecord>> getPaymentRequestedFieldClaimRequests({
+    int limit = 50,
+  }) async {
+    final response = await _client
+        .from('field_claim_requests')
+        .select('*, fields:field_id(name)')
+        .eq('verification_status', 'approved')
+        .eq('payment_status', 'payment_requested')
+        .order('reviewed_at', ascending: false)
+        .limit(limit);
+
+    return (response as List<dynamic>)
+        .map(
+          (dynamic row) => FieldClaimRequestRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
   String? _nullIfEmpty(String? value) {
     if (value == null) {
       return null;
@@ -1015,6 +1147,71 @@ class FieldClaimRequestRecord {
       officialEmail: (json['official_email'] ?? '').toString(),
       verificationStatus: (json['verification_status'] ?? '').toString(),
       paymentStatus: (json['payment_status'] ?? '').toString(),
+      reviewedBy: json['reviewed_by']?.toString(),
+      reviewedAt: json['reviewed_at'] == null
+          ? null
+          : DateTime.tryParse(json['reviewed_at'].toString())?.toUtc(),
+      createdAt:
+          DateTime.tryParse((json['created_at'] ?? '').toString())?.toUtc() ??
+          DateTime.now().toUtc(),
+    );
+  }
+}
+
+class MembershipRequestRecord {
+  const MembershipRequestRecord({
+    required this.id,
+    required this.requesterUserId,
+    required this.fullName,
+    required this.contactEmail,
+    required this.annualFeeYen,
+    required this.status,
+    required this.createdAt,
+    this.notes,
+    this.adminNote,
+    this.paymentRequestSentAt,
+    this.activatedAt,
+    this.expiresAt,
+    this.reviewedBy,
+    this.reviewedAt,
+  });
+
+  final String id;
+  final String requesterUserId;
+  final String fullName;
+  final String contactEmail;
+  final String? notes;
+  final int annualFeeYen;
+  final String status;
+  final String? adminNote;
+  final DateTime? paymentRequestSentAt;
+  final DateTime? activatedAt;
+  final DateTime? expiresAt;
+  final String? reviewedBy;
+  final DateTime? reviewedAt;
+  final DateTime createdAt;
+
+  factory MembershipRequestRecord.fromJson(Map<String, dynamic> json) {
+    return MembershipRequestRecord(
+      id: (json['id'] ?? '').toString(),
+      requesterUserId: (json['requester_user_id'] ?? '').toString(),
+      fullName: (json['full_name'] ?? '').toString(),
+      contactEmail: (json['contact_email'] ?? '').toString(),
+      notes: json['notes']?.toString(),
+      annualFeeYen: (json['annual_fee_yen'] as num?)?.toInt() ?? 5000,
+      status: (json['status'] ?? '').toString(),
+      adminNote: json['admin_note']?.toString(),
+      paymentRequestSentAt: json['payment_request_sent_at'] == null
+          ? null
+          : DateTime.tryParse(
+              json['payment_request_sent_at'].toString(),
+            )?.toUtc(),
+      activatedAt: json['activated_at'] == null
+          ? null
+          : DateTime.tryParse(json['activated_at'].toString())?.toUtc(),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.tryParse(json['expires_at'].toString())?.toUtc(),
       reviewedBy: json['reviewed_by']?.toString(),
       reviewedAt: json['reviewed_at'] == null
           ? null

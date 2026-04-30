@@ -23,7 +23,7 @@ class _AdminScreenState extends State<AdminScreen>
   final AdminRepository _repository = AdminRepository();
   final TextEditingController _userSearchController = TextEditingController();
   late final TabController _tabController = TabController(
-    length: 5,
+    length: 6,
     vsync: this,
   );
   late Future<bool> _isAdminFuture;
@@ -31,6 +31,9 @@ class _AdminScreenState extends State<AdminScreen>
   late Future<List<ProfileModel>> _profilesFuture;
   late Future<List<FieldClaimRequestRecord>> _claimRequestsFuture;
   late Future<List<FieldClaimRequestRecord>> _claimHistoryFuture;
+  late Future<List<FieldClaimRequestRecord>> _paymentRequestedClaimsFuture;
+  late Future<List<MembershipRequestRecord>> _membershipRequestsFuture;
+  late Future<List<MembershipRequestRecord>> _reviewedMembershipFuture;
   late Future<List<SafetyReportRecord>> _safetyReportsFuture;
   late Future<List<ModerationQueueRecord>> _moderationQueueFuture;
   late Future<List<ModerationAuditLogRecord>> _moderationAuditFuture;
@@ -44,6 +47,10 @@ class _AdminScreenState extends State<AdminScreen>
     _profilesFuture = _repository.searchProfiles('');
     _claimRequestsFuture = _repository.getPendingFieldClaimRequests();
     _claimHistoryFuture = _repository.getReviewedFieldClaimRequests();
+    _paymentRequestedClaimsFuture =
+        _repository.getPaymentRequestedFieldClaimRequests();
+    _membershipRequestsFuture = _repository.getMembershipRequests();
+    _reviewedMembershipFuture = _repository.getReviewedMembershipRequests();
     _safetyReportsFuture = _repository.getSafetyReports(limit: 100);
     _moderationQueueFuture = _repository.getModerationQueue(limit: 100);
     _moderationAuditFuture = _repository.getModerationAuditLogs(limit: 100);
@@ -119,6 +126,10 @@ class _AdminScreenState extends State<AdminScreen>
       _profilesFuture = _repository.searchProfiles(_userSearchController.text);
       _claimRequestsFuture = _repository.getPendingFieldClaimRequests();
       _claimHistoryFuture = _repository.getReviewedFieldClaimRequests();
+      _paymentRequestedClaimsFuture =
+          _repository.getPaymentRequestedFieldClaimRequests();
+      _membershipRequestsFuture = _repository.getMembershipRequests();
+      _reviewedMembershipFuture = _repository.getReviewedMembershipRequests();
       _safetyReportsFuture = _repository.getSafetyReports(limit: 100);
       _moderationQueueFuture = _repository.getModerationQueue(limit: 100);
       _moderationAuditFuture = _repository.getModerationAuditLogs(limit: 100);
@@ -128,6 +139,9 @@ class _AdminScreenState extends State<AdminScreen>
       _profilesFuture,
       _claimRequestsFuture,
       _claimHistoryFuture,
+      _paymentRequestedClaimsFuture,
+      _membershipRequestsFuture,
+      _reviewedMembershipFuture,
       _safetyReportsFuture,
       _moderationQueueFuture,
       _moderationAuditFuture,
@@ -598,6 +612,228 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
+  Future<void> _requestClaimPayment(FieldClaimRequestRecord request) async {
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.requestFieldClaimPayment(request.id);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payment requested for ${request.staffName}. Contact at ${request.officialEmail}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request payment failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _sendMembershipPaymentRequest(
+    MembershipRequestRecord request,
+  ) async {
+    final TextEditingController noteController = TextEditingController();
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Send Payment Request'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Send a Google Play payment request for ¥${request.annualFeeYen} '
+              'to ${request.fullName} (${request.contactEmail})?',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Admin note / payment link (optional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Send Request'),
+          ),
+        ],
+      ),
+    );
+    final String note = noteController.text;
+    noteController.dispose();
+    if (ok != true) {
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.sendMembershipPaymentRequest(
+        request.id,
+        adminNote: note,
+      );
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payment request sent.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _rejectMembership(MembershipRequestRecord request) async {
+    final TextEditingController noteController = TextEditingController();
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: Text('Reject ${request.fullName}\'s membership request?'),
+        content: TextField(
+          controller: noteController,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reason / admin note (optional)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    final String note = noteController.text;
+    noteController.dispose();
+    if (ok != true) {
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.rejectMembershipRequest(request.id, adminNote: note);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Membership request rejected.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _activateMembership(MembershipRequestRecord request) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: Text('Activate membership for ${request.fullName}?'),
+        content: const Text(
+          'This will grant ad-free access for 1 year. Only confirm after payment has been received.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm & Activate'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) {
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+    });
+    try {
+      await _repository.activateMembership(request.id);
+      await _refresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Membership activated for ${request.fullName}. Expires in 1 year.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Activation failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
+  }
+
   Future<void> _approveClaim(FieldClaimRequestRecord request) async {
     setState(() {
       _isBusy = true;
@@ -990,6 +1226,7 @@ class _AdminScreenState extends State<AdminScreen>
     return FutureBuilder<List<dynamic>>(
       future: Future.wait<List<FieldClaimRequestRecord>>([
         _claimRequestsFuture,
+        _paymentRequestedClaimsFuture,
         _claimHistoryFuture,
       ]),
       builder: (BuildContext context, AsyncSnapshot<List<dynamic>> snapshot) {
@@ -1012,8 +1249,11 @@ class _AdminScreenState extends State<AdminScreen>
         final List<FieldClaimRequestRecord> requests = packed.isNotEmpty
             ? (packed[0] as List<FieldClaimRequestRecord>)
             : <FieldClaimRequestRecord>[];
-        final List<FieldClaimRequestRecord> history = packed.length > 1
+        final List<FieldClaimRequestRecord> paymentPending = packed.length > 1
             ? (packed[1] as List<FieldClaimRequestRecord>)
+            : <FieldClaimRequestRecord>[];
+        final List<FieldClaimRequestRecord> history = packed.length > 2
+            ? (packed[2] as List<FieldClaimRequestRecord>)
             : <FieldClaimRequestRecord>[];
 
         return ListView(
@@ -1052,7 +1292,9 @@ class _AdminScreenState extends State<AdminScreen>
                         Text('Email: ${request.officialEmail}'),
                         Text('Requested by user: ${request.requesterUserId}'),
                         const SizedBox(height: 10),
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: <Widget>[
                             FilledButton.tonalIcon(
                               onPressed:
@@ -1060,12 +1302,55 @@ class _AdminScreenState extends State<AdminScreen>
                               icon: const Icon(Icons.close),
                               label: const Text('Reject'),
                             ),
-                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _requestClaimPayment(request),
+                              icon: const Icon(Icons.payment_outlined),
+                              label: const Text('Request Payment'),
+                            ),
                             FilledButton.icon(
                               onPressed:
                                   _isBusy ? null : () => _approveClaim(request),
-                              icon: const Icon(Icons.check),
-                              label: const Text('Approve'),
+                              icon: const Icon(Icons.verified_outlined),
+                              label: const Text('Approve & Verify'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            const SizedBox(height: 16),
+            Text('Awaiting Payment', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (paymentPending.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No claims awaiting payment.'),
+                ),
+              )
+            else
+              ...paymentPending.map((FieldClaimRequestRecord request) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(request.fieldName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('Claimant: ${request.claimantName ?? request.claimantUserId}'),
+                        Text('Payment status: ${request.paymentStatus ?? 'payment_requested'}'),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            ElevatedButton(
+                              onPressed: () => _approveClaim(request.id),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                              child: const Text('Confirm Payment & Approve'),
                             ),
                           ],
                         ),
@@ -1119,6 +1404,161 @@ class _AdminScreenState extends State<AdminScreen>
                         ),
                       ),
                     ),
+                  ),
+                );
+              }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMembershipsTab() {
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        _membershipRequestsFuture,
+        _reviewedMembershipFuture,
+      ]),
+      builder: (BuildContext context, AsyncSnapshot<List<dynamic>> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Failed to load memberships: ${snapshot.error}'),
+            ),
+          );
+        }
+
+        final List<dynamic> packed = snapshot.data ?? <dynamic>[];
+        final List<MembershipRequestRecord> active = packed.isNotEmpty
+            ? (packed[0] as List<MembershipRequestRecord>)
+            : <MembershipRequestRecord>[];
+        final List<MembershipRequestRecord> history = packed.length > 1
+            ? (packed[1] as List<MembershipRequestRecord>)
+            : <MembershipRequestRecord>[];
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: <Widget>[
+            Text(
+              'Pending Membership Requests',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (active.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No pending membership requests.'),
+                ),
+              )
+            else
+              ...active.map((MembershipRequestRecord req) {
+                final bool isPaymentRequested = req.status == 'payment_requested';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                req.fullName,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            _MembershipStatusBadge(status: req.status),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Email: ${req.contactEmail}'),
+                        Text('Fee: ¥${req.annualFeeYen}/year'),
+                        if ((req.notes ?? '').trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text('User note: ${req.notes!}'),
+                          ),
+                        if ((req.adminNote ?? '').trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text('Admin note: ${req.adminNote!}'),
+                          ),
+                        if (req.paymentRequestSentAt != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Payment requested: ${req.paymentRequestSentAt!.toLocal()}',
+                            ),
+                          ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: <Widget>[
+                            if (!isPaymentRequested)
+                              FilledButton.icon(
+                                onPressed: _isBusy
+                                    ? null
+                                    : () => _sendMembershipPaymentRequest(req),
+                                icon: const Icon(Icons.send_outlined, size: 16),
+                                label: const Text('Send Payment Request'),
+                              ),
+                            if (isPaymentRequested)
+                              FilledButton.icon(
+                                onPressed: _isBusy
+                                    ? null
+                                    : () => _activateMembership(req),
+                                icon: const Icon(Icons.check_circle_outline, size: 16),
+                                label: const Text('Activate (payment received)'),
+                              ),
+                            FilledButton.tonalIcon(
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _rejectMembership(req),
+                              icon: const Icon(Icons.close, size: 16),
+                              label: const Text('Reject'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            const SizedBox(height: 16),
+            Text(
+              'Membership History',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (history.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No reviewed membership requests.'),
+                ),
+              )
+            else
+              ...history.map((MembershipRequestRecord req) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(req.fullName),
+                    subtitle: Text(
+                      '${req.contactEmail}\n¥${req.annualFeeYen}/year'
+                      '${req.expiresAt != null ? '\nExpires: ${req.expiresAt!.toLocal()}' : ''}',
+                    ),
+                    isThreeLine: true,
+                    trailing: _MembershipStatusBadge(status: req.status),
                   ),
                 );
               }),
@@ -1375,6 +1815,7 @@ class _AdminScreenState extends State<AdminScreen>
                 Tab(text: 'Users'),
                 Tab(text: 'Official'),
                 Tab(text: 'Claims'),
+                Tab(text: 'Memberships'),
               ],
             ),
           ),
@@ -1386,10 +1827,46 @@ class _AdminScreenState extends State<AdminScreen>
               _buildUsersTab(),
               _buildOfficialTab(),
               _buildClaimsTab(),
+              _buildMembershipsTab(),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _MembershipStatusBadge extends StatelessWidget {
+  const _MembershipStatusBadge({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color bg, Color fg) = switch (status) {
+      'active' => (Colors.green.withAlpha(38), Colors.green.shade800),
+      'payment_requested' => (Colors.blue.withAlpha(28), Colors.blue.shade700),
+      'approved' => (Colors.teal.withAlpha(28), Colors.teal.shade700),
+      'rejected' || 'expired' => (Colors.red.withAlpha(28), Colors.red.shade700),
+      _ => (
+          Theme.of(context).colorScheme.surfaceContainerHighest,
+          Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.replaceAll('_', ' '),
+        style: TextStyle(
+          color: fg,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }

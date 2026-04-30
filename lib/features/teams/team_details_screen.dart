@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/admin/admin_repository.dart';
 import '../../shared/widgets/user_avatar.dart';
+import 'team_chat_screen.dart';
+import 'team_map_screen.dart';
 import 'team_model.dart';
 import 'team_repository.dart';
 
@@ -306,21 +308,78 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
     if (_uid == null) {
       return const SizedBox.shrink();
     }
+
+    Widget collaborationButtons() {
+      return Row(
+        children: <Widget>[
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TeamMapScreen(
+                      teamId: team.id,
+                      teamName: team.name,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Map'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TeamChatScreen(
+                      teamId: team.id,
+                      teamName: team.name,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Live Chat'),
+            ),
+          ),
+        ],
+      );
+    }
+
     if (_isLeader) {
-      return OutlinedButton.icon(
-        onPressed: null,
-        icon: const Icon(Icons.star_outline),
-        label: const Text('You are the leader'),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.star_outline),
+            label: const Text('You are the leader'),
+          ),
+          const SizedBox(height: 8),
+          collaborationButtons(),
+        ],
       );
     }
+
     if (_isMember) {
-      return OutlinedButton.icon(
-        onPressed: _acting ? null : _leaveTeam,
-        icon: const Icon(Icons.exit_to_app),
-        label: const Text('Leave Team'),
-        style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          collaborationButtons(),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _acting ? null : _leaveTeam,
+            icon: const Icon(Icons.exit_to_app),
+            label: const Text('Leave Team'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+          ),
+        ],
       );
     }
+
     if (_isPending) {
       return OutlinedButton.icon(
         onPressed: null,
@@ -328,6 +387,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
         label: const Text('Application Pending'),
       );
     }
+
     return FilledButton.icon(
       onPressed: _acting ? null : _applyToJoin,
       icon: const Icon(Icons.group_add),

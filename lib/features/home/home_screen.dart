@@ -8,7 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/ads/ad_access_repository.dart';
+import '../../core/ads/ad_config.dart';
 import '../../core/content/app_content_preloader.dart';
+import '../../shared/widgets/ad_inline_banner.dart';
 import '../community/community_create_post_screen.dart';
 import '../community/community_list_screen.dart';
 import '../community/community_model.dart';
@@ -43,6 +46,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final AppContentPreloader? _contentPreloader = _resolvePreloader();
+  final AdAccessRepository _adAccessRepository = AdAccessRepository();
   CommunityRepository? _communityRepository;
 
   List<CommunityPostModel> _latestPosts = <CommunityPostModel>[];
@@ -52,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _showAds = false;
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
   Timer? _backgroundSyncTimer;
 
@@ -83,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _loadHomeData();
     _loadSavedFilter();
+    _loadAdVisibility();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
         return;
@@ -380,6 +386,71 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _selectedFilter = filter);
   }
 
+  Future<void> _loadAdVisibility() async {
+    if (!AdConfig.isConfigured) {
+      if (mounted) {
+        setState(() {
+          _showAds = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final bool showAds = await _adAccessRepository.shouldShowAds();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showAds = showAds;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _showAds = AdConfig.isConfigured;
+        });
+      }
+    }
+  }
+
+  List<Widget> _interleavePostCards(List<CommunityPostModel> posts) {
+    final List<Widget> widgets = <Widget>[];
+    for (int i = 0; i < posts.length; i++) {
+      final CommunityPostModel post = posts[i];
+      widgets.add(
+        _HomePostCard(
+          post: post,
+          onTap: () => _openPost(post),
+        ),
+      );
+      if (_showAds &&
+          (i + 1) % AdConfig.feedAdFrequency == 0 &&
+          i != posts.length - 1) {
+        widgets.add(const AdInlineBanner());
+      }
+    }
+    return widgets;
+  }
+
+  List<Widget> _interleaveEventCards(List<EventModel> events) {
+    final List<Widget> widgets = <Widget>[];
+    for (int i = 0; i < events.length; i++) {
+      final EventModel event = events[i];
+      widgets.add(
+        _HomeEventCard(
+          event: event,
+          onTap: () => _openEventDetails(event),
+        ),
+      );
+      if (_showAds &&
+          (i + 1) % AdConfig.feedAdFrequency == 0 &&
+          i != events.length - 1) {
+        widgets.add(const AdInlineBanner());
+      }
+    }
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -419,12 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         text: l10n.t('noPostsYet'),
                       )
                     else
-                      ..._latestPosts.map((CommunityPostModel post) {
-                        return _HomePostCard(
-                          post: post,
-                          onTap: () => _openPost(post),
-                        );
-                      }),
+                      ..._interleavePostCards(_latestPosts),
                     const SizedBox(height: 20),
                     _SectionHeader(
                       title: l10n.t('friendsTimeline'),
@@ -444,12 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         text: l10n.t('noFriendTimelinePostsYet'),
                       )
                     else
-                      ..._friendsTimelinePosts.map((CommunityPostModel post) {
-                        return _HomePostCard(
-                          post: post,
-                          onTap: () => _openPost(post),
-                        );
-                      }),
+                      ..._interleavePostCards(_friendsTimelinePosts),
                     const SizedBox(height: 20),
                   ],
                   if (_selectedFilter == HomeInterestFilter.all ||
@@ -466,12 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         text: l10n.t('noUpcomingEvents'),
                       )
                     else
-                      ..._upcomingEvents.map((EventModel event) {
-                        return _HomeEventCard(
-                          event: event,
-                          onTap: () => _openEventDetails(event),
-                        );
-                      }),
+                      ..._interleaveEventCards(_upcomingEvents),
                     const SizedBox(height: 20),
                   ],
                   if (_selectedFilter == HomeInterestFilter.all ||

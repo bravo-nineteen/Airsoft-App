@@ -8,6 +8,7 @@ import '../admin/admin_repository.dart';
 import '../admin/admin_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_repository.dart';
+import '../membership/membership_request_screen.dart';
 import 'account_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'safety_management_screen.dart';
@@ -312,6 +313,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.manage_accounts_outlined,
             title: l10n.t('viewSignedInEmail'),
             onTap: () => _navigate(context, const AccountSettingsScreen()),
+          ),
+          _tile(
+            context: context,
+            icon: Icons.workspace_premium_outlined,
+            title: 'Ad-free annual membership',
+            onTap: () => _navigate(context, const MembershipRequestScreen()),
           ),
           FutureBuilder<bool>(
             future: _adminRepository.isCurrentUserAdmin(),

@@ -169,7 +169,6 @@ class FieldRepository {
     required String officialEmail,
     String? verificationNote,
     String paymentPlatform = 'google_play',
-    String? paymentReference,
   }) async {
     final String requesterId = _currentUserId;
 
@@ -183,7 +182,6 @@ class FieldRepository {
       'verification_note': _nullIfEmpty(verificationNote),
       'payment_amount_yen': 5000,
       'payment_platform': paymentPlatform,
-      'payment_reference': _nullIfEmpty(paymentReference),
       'payment_status': 'pending',
       'verification_status': 'pending',
     });

@@ -456,6 +456,55 @@ class AppLocalizations {
         'viewAll': 'View all',
         'locationTbd': 'Location TBD',
         'openArticle': 'Open article',
+        // ── Membership ──────────────────────────────────────────────────────
+        'annualMembership': 'Ad-free annual membership',
+        'annualPlan': 'Annual plan: ¥5,000/year',
+        'membershipProcess': 'Process: submit request → admin review → Google Play payment request → ads removed after activation.',
+        'membershipFullName': 'Full name',
+        'membershipContactEmail': 'Contact email',
+        'membershipNotesHint': 'Notes for admin (optional)',
+        'membershipSubmitting': 'Submitting...',
+        'membershipRequestBtn': 'Request annual membership',
+        'membershipRequestSent': 'Request sent. Admin will review first, then send a Google Play payment request for ¥5,000/year if approved.',
+        'membershipSubmitFailed': 'Could not submit request: {error}',
+        'membershipNameEmailRequired': 'Please provide your name and email.',
+        'membershipStatusNone': 'No active request',
+        'membershipStatusPending': 'Pending review',
+        'membershipStatusApproved': 'Approved',
+        'membershipStatusRejected': 'Rejected',
+        'membershipStatusPaymentRequested': 'Payment requested',
+        'membershipStatusActive': 'Active',
+        'membershipStatusExpired': 'Expired',
+        'membershipAdminNote': 'Admin note: {note}',
+        'membershipExpires': 'Expires: {date}',
+        // ── Team Map ─────────────────────────────────────────────────────────
+        'teamMap': '{teamName} Map',
+        'tacticalMap': 'Tactical Map',
+        'uploadMap': 'Upload map',
+        'createTacticalMap': 'Create tactical map',
+        'mapTitle': 'Map title',
+        'noTeamMapsYet': 'No team maps yet. Upload a tactical image map to start plotting respawns, targets, and routes.',
+        'createFirstMap': 'Create first map',
+        'uploadMapBtn': 'Upload',
+        'mapUploadSuccess': 'Map uploaded and shared with team.',
+        'mapUploadFailed': 'Failed to create map: {error}',
+        'addMarkerFailed': 'Failed to add marker: {error}',
+        'routeSaved': 'Route saved to team map.',
+        'routeSaveFailed': 'Failed to save route: {error}',
+        'mapModeRespawn': 'Respawn',
+        'mapModeTarget': 'Target',
+        'mapModeObjective': 'Objective',
+        'mapModeWaypoint': 'Waypoint',
+        'mapModeRoute': 'Route',
+        'mapModeClear': 'Clear',
+        'mapSaveRoute': 'Save',
+        'mapToolsLabel': 'Tools',
+        'teamChat': 'Team Chat',
+        // ── Team Chat ────────────────────────────────────────────────────────
+        'teamChatTitle': '{teamName} Chat',
+        'noTeamMessagesYet': 'No team messages yet. Start the conversation.',
+        'teamMessageHint': 'Message your team in real-time',
+        'teamMessageSendFailed': 'Failed to send message: {error}',
     },
     'ja': {
       'appTitle': 'エアソフトアプリ',
@@ -887,6 +936,55 @@ class AppLocalizations {
       'viewAll': 'すべて見る',
       'locationTbd': '場所未定',
       'openArticle': '記事を開く',
+      // ── Membership ──────────────────────────────────────────────────────
+      'annualMembership': '広告非表示 年間メンバーシップ',
+      'annualPlan': '年間プラン: ¥5,000/年',
+      'membershipProcess': '手順: リクエスト送信 → 管理者審査 → Google Play 決済リクエスト → 有効化後に広告非表示',
+      'membershipFullName': '氏名',
+      'membershipContactEmail': '連絡用メールアドレス',
+      'membershipNotesHint': '管理者へのメモ（任意）',
+      'membershipSubmitting': '送信中...',
+      'membershipRequestBtn': '年間メンバーシップを申請',
+      'membershipRequestSent': 'リクエストを送信しました。承認後、管理者よりGoogle Play決済リクエスト（¥5,000/年）が届きます。',
+      'membershipSubmitFailed': 'リクエストを送信できませんでした: {error}',
+      'membershipNameEmailRequired': '氏名とメールアドレスを入力してください。',
+      'membershipStatusNone': 'リクエストなし',
+      'membershipStatusPending': '審査待ち',
+      'membershipStatusApproved': '承認済み',
+      'membershipStatusRejected': '却下',
+      'membershipStatusPaymentRequested': '決済リクエスト済み',
+      'membershipStatusActive': '有効',
+      'membershipStatusExpired': '期限切れ',
+      'membershipAdminNote': '管理者メモ: {note}',
+      'membershipExpires': '有効期限: {date}',
+      // ── Team Map ─────────────────────────────────────────────────────────
+      'teamMap': '{teamName} マップ',
+      'tacticalMap': 'タクティカルマップ',
+      'uploadMap': 'マップをアップロード',
+      'createTacticalMap': 'タクティカルマップを作成',
+      'mapTitle': 'マップタイトル',
+      'noTeamMapsYet': 'マップがまだありません。戦術マップ画像をアップロードして、リスポーン・目標・ルートを計画しましょう。',
+      'createFirstMap': '最初のマップを作成',
+      'uploadMapBtn': 'アップロード',
+      'mapUploadSuccess': 'マップをアップロードしてチームに共有しました。',
+      'mapUploadFailed': 'マップの作成に失敗しました: {error}',
+      'addMarkerFailed': 'マーカーの追加に失敗しました: {error}',
+      'routeSaved': 'ルートをチームマップに保存しました。',
+      'routeSaveFailed': 'ルートの保存に失敗しました: {error}',
+      'mapModeRespawn': 'リスポーン',
+      'mapModeTarget': 'ターゲット',
+      'mapModeObjective': '目標',
+      'mapModeWaypoint': 'ウェイポイント',
+      'mapModeRoute': 'ルート',
+      'mapModeClear': 'クリア',
+      'mapSaveRoute': '保存',
+      'mapToolsLabel': 'ツール',
+      'teamChat': 'チャット',
+      // ── Team Chat ────────────────────────────────────────────────────────
+      'teamChatTitle': '{teamName} チャット',
+      'noTeamMessagesYet': 'チームメッセージはまだありません。会話を始めましょう。',
+      'teamMessageHint': 'チームにリアルタイムでメッセージ',
+      'teamMessageSendFailed': 'メッセージ送信に失敗しました: {error}',
     },
   };
 
@@ -951,6 +1049,48 @@ class AppLocalizations {
   String get messages => _text('messages');
   String get addContact => _text('addContact');
   String get contactRequests => _text('contactRequests');
+
+  // ── Membership ──────────────────────────────────────────────────────────
+  String get annualMembership => _text('annualMembership');
+  String get annualPlan => _text('annualPlan');
+  String get membershipProcess => _text('membershipProcess');
+  String get membershipFullName => _text('membershipFullName');
+  String get membershipContactEmail => _text('membershipContactEmail');
+  String get membershipNotesHint => _text('membershipNotesHint');
+  String get membershipSubmitting => _text('membershipSubmitting');
+  String get membershipRequestBtn => _text('membershipRequestBtn');
+  String get membershipRequestSent => _text('membershipRequestSent');
+  String get membershipNameEmailRequired => _text('membershipNameEmailRequired');
+  String get membershipStatusNone => _text('membershipStatusNone');
+  String get membershipStatusPending => _text('membershipStatusPending');
+  String get membershipStatusApproved => _text('membershipStatusApproved');
+  String get membershipStatusRejected => _text('membershipStatusRejected');
+  String get membershipStatusPaymentRequested => _text('membershipStatusPaymentRequested');
+  String get membershipStatusActive => _text('membershipStatusActive');
+  String get membershipStatusExpired => _text('membershipStatusExpired');
+
+  // ── Team Map ─────────────────────────────────────────────────────────────
+  String get tacticalMap => _text('tacticalMap');
+  String get uploadMap => _text('uploadMap');
+  String get createTacticalMap => _text('createTacticalMap');
+  String get mapTitle => _text('mapTitle');
+  String get noTeamMapsYet => _text('noTeamMapsYet');
+  String get createFirstMap => _text('createFirstMap');
+  String get uploadMapBtn => _text('uploadMapBtn');
+  String get mapUploadSuccess => _text('mapUploadSuccess');
+  String get routeSaved => _text('routeSaved');
+  String get mapModeRespawn => _text('mapModeRespawn');
+  String get mapModeTarget => _text('mapModeTarget');
+  String get mapModeObjective => _text('mapModeObjective');
+  String get mapModeWaypoint => _text('mapModeWaypoint');
+  String get mapModeRoute => _text('mapModeRoute');
+  String get mapModeClear => _text('mapModeClear');
+  String get mapSaveRoute => _text('mapSaveRoute');
+  String get teamChat => _text('teamChat');
+
+  // ── Team Chat ─────────────────────────────────────────────────────────────
+  String get noTeamMessagesYet => _text('noTeamMessagesYet');
+  String get teamMessageHint => _text('teamMessageHint');
 }
 
 class _AppLocalizationsDelegate

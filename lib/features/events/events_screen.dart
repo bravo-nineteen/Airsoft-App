@@ -5,6 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/ads/ad_access_repository.dart';
+import '../../core/ads/ad_config.dart';
+import '../../shared/widgets/ad_inline_banner.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../core/content/app_content_preloader.dart';
 import 'event_create_screen.dart';
@@ -22,6 +25,7 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen> {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final EventRepository _repository = EventRepository();
+  final AdAccessRepository _adAccessRepository = AdAccessRepository();
   final TextEditingController _searchController = TextEditingController();
   late Future<List<EventModel>> _future;
   List<EventModel> _cachedEvents = <EventModel>[];
@@ -30,6 +34,7 @@ class _EventsScreenState extends State<EventsScreen> {
   String? _selectedEventType;
   String? _selectedLanguage;
   String? _selectedSkillLevel;
+  bool _showAds = false;
 
   @override
   void initState() {
@@ -37,6 +42,7 @@ class _EventsScreenState extends State<EventsScreen> {
     _cachedEvents = _contentPreloader.events;
     _contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
     _future = _contentPreloader.loadEvents();
+    _loadAdVisibility();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
         return;
@@ -311,6 +317,33 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
+  Future<void> _loadAdVisibility() async {
+    if (!AdConfig.isConfigured) {
+      if (mounted) {
+        setState(() {
+          _showAds = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final bool showAds = await _adAccessRepository.shouldShowAds();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showAds = showAds;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _showAds = AdConfig.isConfigured;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _backgroundSyncTimer?.cancel();
@@ -451,9 +484,19 @@ class _EventsScreenState extends State<EventsScreen> {
                   final String? currentUserId =
                       Supabase.instance.client.auth.currentUser?.id;
 
+                  final List<Object> feedItems = <Object>[];
+                  for (int i = 0; i < filteredEvents.length; i++) {
+                    feedItems.add(filteredEvents[i]);
+                    if (_showAds &&
+                        (i + 1) % AdConfig.feedAdFrequency == 0 &&
+                        i != filteredEvents.length - 1) {
+                      feedItems.add(const _EventAdSlot());
+                    }
+                  }
+
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                    itemCount: filteredEvents.length + 2,
+                    itemCount: feedItems.length + 2,
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (BuildContext context, int index) {
                       if (index == 0) {
@@ -467,7 +510,12 @@ class _EventsScreenState extends State<EventsScreen> {
                         return _buildSearchAndFilters(l10n, events);
                       }
 
-                      final EventModel event = filteredEvents[index - 2];
+                      final Object entry = feedItems[index - 2];
+                      if (entry is _EventAdSlot) {
+                        return const AdInlineBanner();
+                      }
+
+                      final EventModel event = entry as EventModel;
                       final String? statusLabel = _statusLabel(l10n, event);
                       final bool canEdit =
                           currentUserId != null &&
@@ -702,6 +750,10 @@ class _EventsScreenState extends State<EventsScreen> {
       ],
     );
   }
+}
+
+class _EventAdSlot {
+  const _EventAdSlot();
 }
 
 class _FilterDropdown extends StatelessWidget {

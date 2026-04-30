@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/ads/ad_access_repository.dart';
+import '../../core/ads/ad_config.dart';
+import '../../shared/widgets/ad_inline_banner.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/user_avatar.dart';
 import '../../core/content/app_content_preloader.dart';
@@ -27,6 +30,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     with WidgetsBindingObserver {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final CommunityRepository _repository = CommunityRepository();
+  final AdAccessRepository _adAccessRepository = AdAccessRepository();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   RealtimeChannel? _postsChannel;
@@ -39,6 +43,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
   bool _isInitialLoading = true;
   bool _isRefreshing = false;
   bool _isLoading = false;
+  bool _showAds = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
   bool _didInitLanguagePreference = false;
@@ -71,6 +76,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     _restoreCachedPosts();
     _subscribeRealtime();
     _startBackgroundSync();
+    _loadAdVisibility();
   }
 
   void _primeFromSharedFeed() {
@@ -707,6 +713,46 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     );
   }
 
+  Future<void> _loadAdVisibility() async {
+    if (!AdConfig.isConfigured) {
+      if (mounted) {
+        setState(() {
+          _showAds = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final bool showAds = await _adAccessRepository.shouldShowAds();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showAds = showAds;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _showAds = AdConfig.isConfigured;
+        });
+      }
+    }
+  }
+
+  List<Object> _buildFeedItems() {
+    final List<Object> items = <Object>[];
+    for (int i = 0; i < _posts.length; i++) {
+      items.add(_posts[i]);
+      if (_showAds &&
+          (i + 1) % AdConfig.feedAdFrequency == 0 &&
+          i != _posts.length - 1) {
+        items.add(const _CommunityAdSlot());
+      }
+    }
+    return items;
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -760,6 +806,8 @@ class _CommunityListScreenState extends State<CommunityListScreen>
       'japanese' => l10n.t('preferJapanesePosts'),
       _ => l10n.t('allPosts'),
     };
+
+    final List<Object> feedItems = _buildFeedItems();
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
@@ -890,9 +938,14 @@ class _CommunityListScreenState extends State<CommunityListScreen>
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
                 sliver: SliverList.builder(
-                  itemCount: _posts.length,
+                  itemCount: feedItems.length,
                   itemBuilder: (BuildContext context, int index) {
-                    final post = _posts[index];
+                    final Object entry = feedItems[index];
+                    if (entry is _CommunityAdSlot) {
+                      return const AdInlineBanner();
+                    }
+
+                    final CommunityPostModel post = entry as CommunityPostModel;
 
                     return _CompactPostCard(
                       post: post,
@@ -923,6 +976,10 @@ class _CommunityListScreenState extends State<CommunityListScreen>
       ),
     );
   }
+}
+
+class _CommunityAdSlot {
+  const _CommunityAdSlot();
 }
 
 class _CompactPostCard extends StatelessWidget {
