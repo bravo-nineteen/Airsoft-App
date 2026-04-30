@@ -6,6 +6,7 @@ import '../admin/admin_repository.dart';
 import 'shop_details_screen.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
+import 'user_submit_shop_screen.dart';
 
 class ShopsScreen extends StatefulWidget {
   const ShopsScreen({super.key});
@@ -120,6 +121,12 @@ class _ShopsScreenState extends State<ShopsScreen> {
     _refresh();
   }
 
+  Future<void> _openSubmitShopScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UserSubmitShopScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -160,19 +167,28 @@ class _ShopsScreenState extends State<ShopsScreen> {
               FutureBuilder<bool>(
                 future: _isAdminFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.data != true) {
-                    return const SizedBox.shrink();
+                  if (snapshot.data == true) {
+                    return Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _openCreateShopScreen,
+                        icon: const Icon(Icons.store_mall_directory),
+                        label: const Text('Add Shop (Admin)'),
+                      ),
+                    );
                   }
 
+                  // Regular users can submit a shop for review.
                   return Align(
                     alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _openCreateShopScreen,
-                      icon: const Icon(Icons.store_mall_directory),
-                      label: const Text('Add Shop (Admin)'),
+                    child: OutlinedButton.icon(
+                      onPressed: _openSubmitShopScreen,
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: Text(l10n.t('submitShop')),
                     ),
                   );
                 },
+              ),
               ),
             ],
           ),

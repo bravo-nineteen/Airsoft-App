@@ -22,6 +22,8 @@ class FieldModel {
     this.bookingContactName,
     this.bookingPhone,
     this.bookingEmail,
+    this.status = 'approved',
+    this.submittedByUserId,
   });
 
   final String id;
@@ -46,6 +48,8 @@ class FieldModel {
   final String? bookingContactName;
   final String? bookingPhone;
   final String? bookingEmail;
+  final String status;
+  final String? submittedByUserId;
 
   factory FieldModel.fromJson(Map<String, dynamic> json) {
     return FieldModel(
@@ -77,6 +81,8 @@ class FieldModel {
       bookingContactName: _readNullableString(json['booking_contact_name']),
       bookingPhone: _readNullableString(json['booking_phone']),
       bookingEmail: _readNullableString(json['booking_email']),
+      status: (json['status'] ?? 'approved').toString(),
+      submittedByUserId: _readNullableString(json['submitted_by_user_id']),
     );
   }
 

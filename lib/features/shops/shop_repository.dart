@@ -95,4 +95,55 @@ class ShopRepository {
   Future<void> deleteShopReview({required String reviewId}) async {
     await _client.from('shop_reviews').delete().eq('id', reviewId);
   }
+
+  // ─── User submissions ──────────────────────────────────────────────────────
+
+  /// Submit a new shop for admin review (status will be set to 'pending' by
+  /// the database trigger).
+  Future<void> submitShop({
+    required String name,
+    required String address,
+    String? prefecture,
+    String? city,
+    String? phoneNumber,
+    String? openingTimes,
+    double? latitude,
+    double? longitude,
+  }) async {
+    await _client.from('shops').insert(<String, dynamic>{
+      'name': name.trim(),
+      'address': address.trim(),
+      'prefecture': _nullIfEmpty(prefecture),
+      'city': _nullIfEmpty(city),
+      'phone_number': _nullIfEmpty(phoneNumber),
+      'opening_times': _nullIfEmpty(openingTimes),
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+  }
+
+  /// Returns the current user's own shop submissions (pending / rejected).
+  Future<List<ShopModel>> getMyShopSubmissions() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    try {
+      final response = await _client
+          .from('shops')
+          .select()
+          .eq('submitted_by_user_id', user.id)
+          .order('created_at', ascending: false);
+      return (response as List<dynamic>)
+          .map<ShopModel>((e) => ShopModel.fromJson(e))
+          .toList();
+    } on PostgrestException catch (e) {
+      if (_isMissingTableError(e)) return const [];
+      rethrow;
+    }
+  }
+
+  String? _nullIfEmpty(String? value) {
+    if (value == null) return null;
+    final t = value.trim();
+    return t.isEmpty ? null : t;
+  }
 }

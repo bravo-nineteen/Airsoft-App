@@ -12,6 +12,8 @@ class ShopModel {
     this.latitude,
     this.longitude,
     this.isOfficial = false,
+    this.status = 'approved',
+    this.submittedByUserId,
   });
 
   final String id;
@@ -26,6 +28,8 @@ class ShopModel {
   final double? latitude;
   final double? longitude;
   final bool isOfficial;
+  final String status;
+  final String? submittedByUserId;
 
   factory ShopModel.fromJson(Map<String, dynamic> json) {
     return ShopModel(
@@ -41,6 +45,8 @@ class ShopModel {
       latitude: _readDouble(json['latitude']),
       longitude: _readDouble(json['longitude']),
       isOfficial: (json['is_official'] as bool?) ?? false,
+      status: (json['status'] ?? 'approved').toString(),
+      submittedByUserId: _readNullable(json['submitted_by_user_id']),
     );
   }
 

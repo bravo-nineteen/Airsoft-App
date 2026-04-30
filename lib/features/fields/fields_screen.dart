@@ -11,6 +11,7 @@ import 'field_details_screen.dart';
 import 'field_map_screen.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
+import 'user_submit_field_screen.dart';
 
 class FieldsScreen extends StatefulWidget {
   const FieldsScreen({super.key});
@@ -119,6 +120,12 @@ class _FieldsScreenState extends State<FieldsScreen> {
     }
 
     _refreshFields();
+  }
+
+  Future<void> _openSubmitFieldScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UserSubmitFieldScreen()),
+    );
   }
 
   @override
@@ -243,16 +250,24 @@ class _FieldsScreenState extends State<FieldsScreen> {
               FutureBuilder<bool>(
                 future: _isAdminFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.data != true) {
-                    return const SizedBox.shrink();
+                  if (snapshot.data == true) {
+                    return Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _openCreateFieldScreen,
+                        icon: const Icon(Icons.add_business),
+                        label: const Text('Add Field (Admin)'),
+                      ),
+                    );
                   }
 
+                  // Regular users can submit a field for review.
                   return Align(
                     alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _openCreateFieldScreen,
-                      icon: const Icon(Icons.add_business),
-                      label: const Text('Add Field (Admin)'),
+                    child: OutlinedButton.icon(
+                      onPressed: _openSubmitFieldScreen,
+                      icon: const Icon(Icons.add_location_alt_outlined),
+                      label: Text(l10n.t('submitField')),
                     ),
                   );
                 },

@@ -319,6 +319,61 @@ class FieldRepository {
       'uploaded_by': _currentUserId,
     });
   }
+
+  // ─── User submissions ──────────────────────────────────────────────────────
+
+  /// Submit a new field for admin review (status will be set to 'pending' by
+  /// the database trigger).
+  Future<void> submitField({
+    required String name,
+    required String locationName,
+    String? prefecture,
+    String? city,
+    String? fieldType,
+    String? description,
+    double? latitude,
+    double? longitude,
+    String? notes,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': name.trim(),
+      'location_name': locationName.trim(),
+      'description': (description ?? '').trim(),
+      'latitude': latitude ?? 0.0,
+      'longitude': longitude ?? 0.0,
+      'prefecture': _nullIfEmpty(prefecture),
+      'city': _nullIfEmpty(city),
+      'field_type': _nullIfEmpty(fieldType),
+    };
+    try {
+      await _client.from('fields').insert(payload);
+    } on PostgrestException catch (e) {
+      if (!_isMissingColumnError(e)) rethrow;
+      // Strip optional columns if the schema migration hasn't run yet.
+      payload.remove('prefecture');
+      payload.remove('city');
+      payload.remove('field_type');
+      await _client.from('fields').insert(payload);
+    }
+  }
+
+  /// Returns the current user's own field submissions (pending / rejected).
+  Future<List<FieldModel>> getMyFieldSubmissions() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final response = await _client
+        .from('fields')
+        .select()
+        .eq('submitted_by_user_id', user.id)
+        .order('created_at', ascending: false);
+    return (response as List<dynamic>)
+        .map<FieldModel>((e) => FieldModel.fromJson(e))
+        .toList();
+  }
+
+  static bool _isMissingColumnError(PostgrestException e) {
+    return e.code == '42703' || e.code == 'PGRST205';
+  }
 }
 
 class FieldBookingOptionModel {

@@ -914,6 +914,63 @@ class AdminRepository {
         summary.contains('pros_list') ||
         summary.contains('cons_list');
   }
+
+  // ─── User-submitted listing review ──────────────────────────────────────────
+
+  Future<List<FieldModel>> getPendingFieldSubmissions() async {
+    final response = await _client
+        .from('fields')
+        .select()
+        .eq('status', 'pending')
+        .order('created_at', ascending: true);
+    return (response as List<dynamic>)
+        .map<FieldModel>((e) => FieldModel.fromJson(e))
+        .toList();
+  }
+
+  Future<List<ShopModel>> getPendingShopSubmissions() async {
+    try {
+      final response = await _client
+          .from('shops')
+          .select()
+          .eq('status', 'pending')
+          .order('created_at', ascending: true);
+      return (response as List<dynamic>)
+          .map<ShopModel>((e) => ShopModel.fromJson(e))
+          .toList();
+    } on PostgrestException catch (e) {
+      if (e.code == '42P01' || e.code == 'PGRST205') return const [];
+      rethrow;
+    }
+  }
+
+  Future<void> approveFieldSubmission(String fieldId) async {
+    await _client
+        .from('fields')
+        .update({'status': 'approved'})
+        .eq('id', fieldId);
+  }
+
+  Future<void> rejectFieldSubmission(String fieldId) async {
+    await _client
+        .from('fields')
+        .update({'status': 'rejected'})
+        .eq('id', fieldId);
+  }
+
+  Future<void> approveShopSubmission(String shopId) async {
+    await _client
+        .from('shops')
+        .update({'status': 'approved'})
+        .eq('id', shopId);
+  }
+
+  Future<void> rejectShopSubmission(String shopId) async {
+    await _client
+        .from('shops')
+        .update({'status': 'rejected'})
+        .eq('id', shopId);
+  }
 }
 
 class AdminBanRecord {

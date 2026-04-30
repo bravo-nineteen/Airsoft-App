@@ -23,7 +23,7 @@ class _AdminScreenState extends State<AdminScreen>
   final AdminRepository _repository = AdminRepository();
   final TextEditingController _userSearchController = TextEditingController();
   late final TabController _tabController = TabController(
-    length: 6,
+    length: 8,
     vsync: this,
   );
   late Future<bool> _isAdminFuture;
@@ -34,6 +34,8 @@ class _AdminScreenState extends State<AdminScreen>
   late Future<List<FieldClaimRequestRecord>> _paymentRequestedClaimsFuture;
   late Future<List<MembershipRequestRecord>> _membershipRequestsFuture;
   late Future<List<MembershipRequestRecord>> _reviewedMembershipFuture;
+  late Future<List<FieldModel>> _pendingFieldSubmissionsFuture;
+  late Future<List<ShopModel>> _pendingShopSubmissionsFuture;
   late Future<List<SafetyReportRecord>> _safetyReportsFuture;
   late Future<List<ModerationQueueRecord>> _moderationQueueFuture;
   late Future<List<ModerationAuditLogRecord>> _moderationAuditFuture;
@@ -51,6 +53,8 @@ class _AdminScreenState extends State<AdminScreen>
         _repository.getPaymentRequestedFieldClaimRequests();
     _membershipRequestsFuture = _repository.getMembershipRequests();
     _reviewedMembershipFuture = _repository.getReviewedMembershipRequests();
+    _pendingFieldSubmissionsFuture = _repository.getPendingFieldSubmissions();
+    _pendingShopSubmissionsFuture = _repository.getPendingShopSubmissions();
     _safetyReportsFuture = _repository.getSafetyReports(limit: 100);
     _moderationQueueFuture = _repository.getModerationQueue(limit: 100);
     _moderationAuditFuture = _repository.getModerationAuditLogs(limit: 100);
@@ -130,6 +134,8 @@ class _AdminScreenState extends State<AdminScreen>
           _repository.getPaymentRequestedFieldClaimRequests();
       _membershipRequestsFuture = _repository.getMembershipRequests();
       _reviewedMembershipFuture = _repository.getReviewedMembershipRequests();
+      _pendingFieldSubmissionsFuture = _repository.getPendingFieldSubmissions();
+      _pendingShopSubmissionsFuture = _repository.getPendingShopSubmissions();
       _safetyReportsFuture = _repository.getSafetyReports(limit: 100);
       _moderationQueueFuture = _repository.getModerationQueue(limit: 100);
       _moderationAuditFuture = _repository.getModerationAuditLogs(limit: 100);
@@ -142,6 +148,8 @@ class _AdminScreenState extends State<AdminScreen>
       _paymentRequestedClaimsFuture,
       _membershipRequestsFuture,
       _reviewedMembershipFuture,
+      _pendingFieldSubmissionsFuture,
+      _pendingShopSubmissionsFuture,
       _safetyReportsFuture,
       _moderationQueueFuture,
       _moderationAuditFuture,
@@ -1816,6 +1824,8 @@ class _AdminScreenState extends State<AdminScreen>
                 Tab(text: 'Official'),
                 Tab(text: 'Claims'),
                 Tab(text: 'Memberships'),
+                Tab(text: 'Field Sub.'),
+                Tab(text: 'Shop Sub.'),
               ],
             ),
           ),
@@ -1828,8 +1838,292 @@ class _AdminScreenState extends State<AdminScreen>
               _buildOfficialTab(),
               _buildClaimsTab(),
               _buildMembershipsTab(),
+              _buildFieldSubmissionsTab(),
+              _buildShopSubmissionsTab(),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  // ─── Field Submissions ────────────────────────────────────────────────────
+
+  Future<void> _approveFieldSubmission(String fieldId) async {
+    if (_isBusy) return;
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Approve Field'),
+        content: const Text('Make this field visible to all users?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _isBusy = true);
+    try {
+      await _repository.approveFieldSubmission(fieldId);
+      if (mounted) await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _rejectFieldSubmission(String fieldId) async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    try {
+      await _repository.rejectFieldSubmission(fieldId);
+      if (mounted) await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _approveShopSubmission(String shopId) async {
+    if (_isBusy) return;
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Approve Shop'),
+        content: const Text('Make this shop visible to all users?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _isBusy = true);
+    try {
+      await _repository.approveShopSubmission(shopId);
+      if (mounted) await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _rejectShopSubmission(String shopId) async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    try {
+      await _repository.rejectShopSubmission(shopId);
+      if (mounted) await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Widget _buildFieldSubmissionsTab() {
+    return FutureBuilder<List<FieldModel>>(
+      future: _pendingFieldSubmissionsFuture,
+      builder: (BuildContext context, AsyncSnapshot<List<FieldModel>> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Failed to load: ${snapshot.error}'),
+            ),
+          );
+        }
+        final List<FieldModel> items = snapshot.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: <Widget>[
+            Text(
+              'Pending Field Submissions (${items.length})',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (items.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No pending field submissions.'),
+                ),
+              )
+            else
+              ...items.map((FieldModel field) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          field.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(field.locationName),
+                        if ((field.prefecture ?? '').isNotEmpty)
+                          Text('Prefecture: ${field.prefecture}'),
+                        if ((field.city ?? '').isNotEmpty)
+                          Text('City: ${field.city}'),
+                        if ((field.fieldType ?? '').isNotEmpty)
+                          Text('Type: ${field.fieldType}'),
+                        if (field.description.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 4),
+                          Text(
+                            field.description,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            OutlinedButton(
+                              onPressed: () => _rejectFieldSubmission(field.id),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text('Reject'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () =>
+                                  _approveFieldSubmission(field.id),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              child: const Text('Approve'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildShopSubmissionsTab() {
+    return FutureBuilder<List<ShopModel>>(
+      future: _pendingShopSubmissionsFuture,
+      builder: (BuildContext context, AsyncSnapshot<List<ShopModel>> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Failed to load: ${snapshot.error}'),
+            ),
+          );
+        }
+        final List<ShopModel> items = snapshot.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: <Widget>[
+            Text(
+              'Pending Shop Submissions (${items.length})',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (items.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No pending shop submissions.'),
+                ),
+              )
+            else
+              ...items.map((ShopModel shop) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          shop.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(shop.address),
+                        if ((shop.prefecture ?? '').isNotEmpty)
+                          Text('Prefecture: ${shop.prefecture}'),
+                        if ((shop.city ?? '').isNotEmpty)
+                          Text('City: ${shop.city}'),
+                        if ((shop.phoneNumber ?? '').isNotEmpty)
+                          Text('Phone: ${shop.phoneNumber}'),
+                        if ((shop.openingTimes ?? '').isNotEmpty)
+                          Text('Hours: ${shop.openingTimes}'),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            OutlinedButton(
+                              onPressed: () => _rejectShopSubmission(shop.id),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text('Reject'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () =>
+                                  _approveShopSubmission(shop.id),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              child: const Text('Approve'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
         );
       },
     );
