@@ -522,9 +522,6 @@ class AppLocalizations {
         'statusRejected': 'Rejected',
         'fieldNameLabel': 'Field Name',
         'shopNameLabel': 'Shop Name',
-        'locationName': 'Location Name',
-        'latitude': 'Latitude',
-        'longitude': 'Longitude',
     },
     'ja': {
       'appTitle': 'エアソフトアプリ',
@@ -1022,9 +1019,6 @@ class AppLocalizations {
       'statusRejected': '却下',
       'fieldNameLabel': 'フィールド名',
       'shopNameLabel': 'ショップ名',
-      'locationName': '場所名',
-      'latitude': '緯度',
-      'longitude': '経度',
     },
   };
 

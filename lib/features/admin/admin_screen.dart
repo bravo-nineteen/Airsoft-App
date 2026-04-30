@@ -1349,14 +1349,14 @@ class _AdminScreenState extends State<AdminScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(request.fieldName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Claimant: ${request.claimantName ?? request.claimantUserId}'),
+                        Text(request.fieldName ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('Claimant: ${request.staffName} (${request.requesterUserId})'),  
                         Text('Payment status: ${request.paymentStatus ?? 'payment_requested'}'),
                         const SizedBox(height: 8),
                         Row(
                           children: <Widget>[
                             ElevatedButton(
-                              onPressed: () => _approveClaim(request.id),
+                              onPressed: () => _approveClaim(request),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                               child: const Text('Confirm Payment & Approve'),
                             ),

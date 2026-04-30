@@ -125,7 +125,7 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
-                                        message.senderName ?? AppLocalizations.of(context).operator,
+                                        message.senderName ?? AppLocalizations.of(context).t('operator'),
                                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                                       ),
                                     ),

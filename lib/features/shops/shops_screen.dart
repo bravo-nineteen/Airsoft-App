@@ -189,7 +189,6 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   );
                 },
               ),
-              ),
             ],
           ),
         ),
