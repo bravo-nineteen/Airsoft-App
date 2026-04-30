@@ -45,7 +45,7 @@ class _ShimmerBoxState extends State<ShimmerBox>
     final base = Theme.of(context).colorScheme.surfaceContainerHighest;
     return AnimatedBuilder(
       animation: _animation,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(

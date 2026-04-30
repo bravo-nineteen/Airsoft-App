@@ -46,8 +46,8 @@ class _TeamsListScreenState extends State<TeamsListScreen>
       ]);
       if (!mounted) return;
       setState(() {
-        _allTeams = results[0] as List<TeamModel>;
-        _myTeams = results[1] as List<TeamModel>;
+        _allTeams = results[0];
+        _myTeams = results[1];
         _loading = false;
       });
     } catch (_) {

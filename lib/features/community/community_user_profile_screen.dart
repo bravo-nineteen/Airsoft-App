@@ -9,7 +9,6 @@ import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
 import '../events/event_repository.dart';
 import '../safety/safety_repository.dart';
-import '../social/contacts_screen.dart';
 import '../social/contact_repository.dart';
 import '../social/direct_message_screen.dart';
 import 'community_create_post_screen.dart';
