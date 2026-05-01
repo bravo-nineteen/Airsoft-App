@@ -292,6 +292,57 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     });
   }
 
+  void _translateRoute(String routeId, double deltaX, double deltaY) {
+    final int routeIndex = _draftRoutes.indexWhere((TeamMapRouteModel route) => route.id == routeId);
+    if (routeIndex == -1) {
+      return;
+    }
+    final TeamMapRouteModel route = _draftRoutes[routeIndex];
+    final List<Map<String, double>> points = route.points.map((Map<String, double> point) {
+      return <String, double>{
+        'x': ((point['x'] ?? 0) + deltaX).clamp(0.0, 1.0),
+        'y': ((point['y'] ?? 0) + deltaY).clamp(0.0, 1.0),
+      };
+    }).toList();
+    setState(() {
+      _draftRoutes[routeIndex] = TeamMapRouteModel(
+        id: route.id,
+        mapId: route.mapId,
+        points: points,
+        label: route.label,
+        colorHex: route.colorHex,
+        strokeWidth: route.strokeWidth,
+        createdBy: route.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  void _translateZone(String zoneId, double deltaX, double deltaY) {
+    final int zoneIndex = _draftZones.indexWhere((TeamMapZoneModel zone) => zone.id == zoneId);
+    if (zoneIndex == -1) {
+      return;
+    }
+    final TeamMapZoneModel zone = _draftZones[zoneIndex];
+    final List<Map<String, double>> points = zone.points.map((Map<String, double> point) {
+      return <String, double>{
+        'x': ((point['x'] ?? 0) + deltaX).clamp(0.0, 1.0),
+        'y': ((point['y'] ?? 0) + deltaY).clamp(0.0, 1.0),
+      };
+    }).toList();
+    setState(() {
+      _draftZones[zoneIndex] = TeamMapZoneModel(
+        id: zone.id,
+        mapId: zone.mapId,
+        points: points,
+        label: zone.label,
+        colorHex: zone.colorHex,
+        createdBy: zone.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
   Future<void> _createMap() async {
     if (_creatingMap) return;
     final TextEditingController titleController = TextEditingController();
@@ -1042,6 +1093,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         onZoneLongPress: _showZoneActions,
                         onRoutePointDrag: _updateRoutePoint,
                         onZonePointDrag: _updateZonePoint,
+                        onRouteTranslate: _translateRoute,
+                        onZoneTranslate: _translateZone,
                       ),
                     ),
                     Positioned(
@@ -1329,6 +1382,7 @@ class _MapCanvas extends StatelessWidget {
     required this.onRouteTap, required this.onZoneTap,
     required this.onRouteLongPress, required this.onZoneLongPress,
     required this.onRoutePointDrag, required this.onZonePointDrag,
+    required this.onRouteTranslate, required this.onZoneTranslate,
   });
 
   final TeamMapModel map;
@@ -1354,6 +1408,8 @@ class _MapCanvas extends StatelessWidget {
   final ValueChanged<TeamMapZoneModel> onZoneLongPress;
   final void Function(String, int, double, double) onRoutePointDrag;
   final void Function(String, int, double, double) onZonePointDrag;
+  final void Function(String, double, double) onRouteTranslate;
+  final void Function(String, double, double) onZoneTranslate;
 
   @override
   Widget build(BuildContext context) {
@@ -1401,11 +1457,18 @@ class _MapCanvas extends StatelessWidget {
                         top: (mid['y'] ?? 0) * sz.height - 22,
                         child: GestureDetector(
                           onTap: () => onRouteTap(route),
+                          onPanUpdate: selectedRouteId == route.id && route.createdBy == currentUserId
+                              ? (DragUpdateDetails details) => onRouteTranslate(
+                                    route.id,
+                                    details.delta.dx / sz.width,
+                                    details.delta.dy / sz.height,
+                                  )
+                              : null,
                           onLongPress: () {
                             onRouteLongPress(route);
                           },
                           child: _LabelChip(
-                            text: (selectedRouteId == route.id ? '[Selected] ' : '') + (route.label ?? 'Route'),
+                            text: (selectedRouteId == route.id ? '[Selected] Drag to move  ' : '') + (route.label ?? 'Route'),
                           ),
                         ),
                       );
@@ -1446,11 +1509,18 @@ class _MapCanvas extends StatelessWidget {
                         top: centerY * sz.height - 14,
                         child: GestureDetector(
                           onTap: () => onZoneTap(zone),
+                          onPanUpdate: selectedZoneId == zone.id && zone.createdBy == currentUserId
+                              ? (DragUpdateDetails details) => onZoneTranslate(
+                                    zone.id,
+                                    details.delta.dx / sz.width,
+                                    details.delta.dy / sz.height,
+                                  )
+                              : null,
                           onLongPress: () {
                             onZoneLongPress(zone);
                           },
                           child: _LabelChip(
-                            text: (selectedZoneId == zone.id ? '[Selected] ' : '') + (zone.label ?? 'Zone'),
+                            text: (selectedZoneId == zone.id ? '[Selected] Drag to move  ' : '') + (zone.label ?? 'Zone'),
                           ),
                         ),
                       );

@@ -742,59 +742,6 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   }
 }
 
-class _RailActionButton extends StatelessWidget {
-  const _RailActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.badgeCount = 0,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final int badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      child: IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Icon(icon),
-            if (badgeCount > 0)
-              Positioned(
-                right: -8,
-                top: -7,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 14),
-                  child: Text(
-                    badgeCount > 99 ? '99+' : '$badgeCount',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _RailQuickActions extends StatelessWidget {
   const _RailQuickActions({
     required this.onOpenFields,

@@ -27,7 +27,10 @@ class PersistentShellBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isTablet = MediaQuery.sizeOf(context).width >= 960;
     if (isTablet) {
-      return const SizedBox.shrink();
+      return const SafeArea(
+        top: false,
+        child: SizedBox.shrink(),
+      );
     }
 
     final ThemeData theme = Theme.of(context);

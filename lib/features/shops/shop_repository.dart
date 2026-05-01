@@ -5,7 +5,7 @@ import 'shop_review_model.dart';
 
 class ShopRepository {
   ShopRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -27,6 +27,7 @@ class ShopRepository {
     List<ShopModel> source, {
     String search = '',
     String prefecture = 'All',
+    List<String> features = const <String>[],
   }) {
     var shops = List<ShopModel>.from(source);
 
@@ -49,6 +50,20 @@ class ShopRepository {
       shops = shops.where((s) {
         return (s.prefecture ?? '').toLowerCase() == pfLower ||
             (s.city ?? '').toLowerCase() == pfLower;
+      }).toList();
+    }
+
+    if (features.isNotEmpty) {
+      final Set<String> requested = features
+          .map((String value) => value.trim().toLowerCase())
+          .where((String value) => value.isNotEmpty)
+          .toSet();
+      shops = shops.where((ShopModel shop) {
+        final Set<String> available = shop.features
+            .map((String value) => value.trim().toLowerCase())
+            .where((String value) => value.isNotEmpty)
+            .toSet();
+        return requested.every(available.contains);
       }).toList();
     }
 

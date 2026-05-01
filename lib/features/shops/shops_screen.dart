@@ -23,6 +23,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
 
   String _selectedCountry = LocationPreferences.allCountries;
   String _selectedPrefecture = 'All';
+  final Set<String> _selectedFeatures = <String>{};
   late Future<List<ShopModel>> _shopsFuture;
   late Future<bool> _isAdminFuture;
 
@@ -38,16 +39,54 @@ class _ShopsScreenState extends State<ShopsScreen> {
         address: s.address,
       );
     })) {
-      for (final String value in <String>[shop.prefecture ?? '', shop.city ?? '']) {
+      for (final String value in <String>[
+        shop.prefecture ?? '',
+        shop.city ?? '',
+      ]) {
         final String trimmed = value.trim();
         if (trimmed.isNotEmpty) {
           values.add(trimmed);
         }
       }
     }
-    final List<String> sorted = values.where((String item) => item != 'All').toList()
-      ..sort((String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final List<String> sorted =
+        values.where((String item) => item != 'All').toList()..sort(
+          (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
+        );
     return <String>['All', ...sorted];
+  }
+
+  List<String> get _availableFeatures {
+    final Set<String> values = <String>{};
+    final Iterable<ShopModel> scope = _allShops.where((ShopModel shop) {
+      final bool matchesCountry = LocationPreferences.matchesCountry(
+        selectedCountry: _selectedCountry,
+        country: shop.country,
+        prefecture: shop.prefecture,
+        address: shop.address,
+      );
+      if (!matchesCountry) {
+        return false;
+      }
+      if (_selectedPrefecture == 'All') {
+        return true;
+      }
+      final String selected = _selectedPrefecture.toLowerCase();
+      return (shop.prefecture ?? '').toLowerCase() == selected ||
+          (shop.city ?? '').toLowerCase() == selected;
+    });
+
+    for (final ShopModel shop in scope) {
+      values.addAll(
+        shop.features.where((String feature) => feature.trim().isNotEmpty),
+      );
+    }
+
+    final List<String> sorted = values.toList()
+      ..sort(
+        (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
+      );
+    return sorted;
   }
 
   @override
@@ -59,7 +98,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
   }
 
   Future<void> _restoreCountryPreference() async {
-    final String savedCountry = await LocationPreferences.loadPreferredCountry();
+    final String savedCountry =
+        await LocationPreferences.loadPreferredCountry();
     if (!mounted) {
       return;
     }
@@ -83,6 +123,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
       _allShops,
       search: _searchController.text,
       prefecture: _selectedPrefecture,
+      features: _selectedFeatures.toList(),
     );
     return filtered.where((ShopModel shop) {
       return LocationPreferences.matchesCountry(
@@ -103,18 +144,22 @@ class _ShopsScreenState extends State<ShopsScreen> {
   void _applyFilters() {
     setState(() {
       _shopsFuture = Future.value(
-        _repository.applyFilters(
-          _allShops,
-          search: _searchController.text,
-          prefecture: _selectedPrefecture,
-        ).where((ShopModel shop) {
-          return LocationPreferences.matchesCountry(
-            selectedCountry: _selectedCountry,
-            country: shop.country,
-            prefecture: shop.prefecture,
-            address: shop.address,
-          );
-        }).toList(),
+        _repository
+            .applyFilters(
+              _allShops,
+              search: _searchController.text,
+              prefecture: _selectedPrefecture,
+              features: _selectedFeatures.toList(),
+            )
+            .where((ShopModel shop) {
+              return LocationPreferences.matchesCountry(
+                selectedCountry: _selectedCountry,
+                country: shop.country,
+                prefecture: shop.prefecture,
+                address: shop.address,
+              );
+            })
+            .toList(),
       );
     });
   }
@@ -136,9 +181,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
   }
 
   Future<void> _openSubmitShopScreen() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const UserSubmitShopScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const UserSubmitShopScreen()));
   }
 
   @override
@@ -156,21 +201,22 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-              TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: '${l10n.t('searchShopsHint')} (name, address, features)',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _refresh,
-                  ),
-                ),
-                onChanged: (_) => _applyFilters(),
-                onSubmitted: (_) => _applyFilters(),
-              ),
-              const SizedBox(height: 12),
+                      TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText:
+                              '${l10n.t('searchShopsHint')} (name, address, features)',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _refresh,
+                          ),
+                        ),
+                        onChanged: (_) => _applyFilters(),
+                        onSubmitted: (_) => _applyFilters(),
+                      ),
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 12,
                         runSpacing: 12,
@@ -179,19 +225,27 @@ class _ShopsScreenState extends State<ShopsScreen> {
                             width: isWide ? 260 : double.infinity,
                             child: DropdownButtonFormField<String>(
                               initialValue: _selectedCountry,
-                              decoration: const InputDecoration(labelText: 'Country'),
+                              decoration: const InputDecoration(
+                                labelText: 'Country',
+                              ),
                               items: LocationPreferences.countries
-                                  .map((String c) => DropdownMenuItem<String>(
-                                        value: c,
-                                        child: Text(c),
-                                      ))
+                                  .map(
+                                    (String c) => DropdownMenuItem<String>(
+                                      value: c,
+                                      child: Text(c),
+                                    ),
+                                  )
                                   .toList(),
                               onChanged: (String? value) {
                                 setState(() {
-                                  _selectedCountry = value ?? LocationPreferences.allCountries;
+                                  _selectedCountry =
+                                      value ?? LocationPreferences.allCountries;
                                   _selectedPrefecture = 'All';
+                                  _selectedFeatures.clear();
                                 });
-                                LocationPreferences.savePreferredCountry(_selectedCountry);
+                                LocationPreferences.savePreferredCountry(
+                                  _selectedCountry,
+                                );
                                 _applyFilters();
                               },
                             ),
@@ -200,44 +254,91 @@ class _ShopsScreenState extends State<ShopsScreen> {
                             width: isWide ? 260 : double.infinity,
                             child: DropdownButtonFormField<String>(
                               initialValue: _selectedPrefecture,
-                              decoration: const InputDecoration(labelText: 'State / Prefecture'),
+                              decoration: const InputDecoration(
+                                labelText: 'State / Prefecture',
+                              ),
                               items: _regions
-                                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                                  .map(
+                                    (p) => DropdownMenuItem(
+                                      value: p,
+                                      child: Text(p),
+                                    ),
+                                  )
                                   .toList(),
                               onChanged: (value) {
-                                setState(() => _selectedPrefecture = value ?? 'All');
+                                setState(() {
+                                  _selectedPrefecture = value ?? 'All';
+                                  _selectedFeatures.removeWhere(
+                                    (String feature) =>
+                                        !_availableFeatures.contains(feature),
+                                  );
+                                });
                                 _applyFilters();
                               },
                             ),
                           ),
                         ],
                       ),
-              const SizedBox(height: 12),
-              FutureBuilder<bool>(
-                future: _isAdminFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.data == true) {
-                    return Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _openCreateShopScreen,
-                        icon: const Icon(Icons.store_mall_directory),
-                        label: const Text('Add Shop (Admin)'),
-                      ),
-                    );
-                  }
+                      if (_availableFeatures.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Features',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableFeatures.map((String feature) {
+                            final bool isSelected = _selectedFeatures.contains(
+                              feature,
+                            );
+                            return FilterChip(
+                              label: Text(feature),
+                              selected: isSelected,
+                              onSelected: (bool selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedFeatures.add(feature);
+                                  } else {
+                                    _selectedFeatures.remove(feature);
+                                  }
+                                });
+                                _applyFilters();
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      FutureBuilder<bool>(
+                        future: _isAdminFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.data == true) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.icon(
+                                onPressed: _openCreateShopScreen,
+                                icon: const Icon(Icons.store_mall_directory),
+                                label: const Text('Add Shop (Admin)'),
+                              ),
+                            );
+                          }
 
-                  // Regular users can submit a shop for review.
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed: _openSubmitShopScreen,
-                      icon: const Icon(Icons.storefront_outlined),
-                      label: Text(l10n.t('submitShop')),
-                    ),
-                  );
-                },
-              ),
+                          // Regular users can submit a shop for review.
+                          return Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: _openSubmitShopScreen,
+                              icon: const Icon(Icons.storefront_outlined),
+                              label: Text(l10n.t('submitShop')),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -247,64 +348,65 @@ class _ShopsScreenState extends State<ShopsScreen> {
               child: FutureBuilder<List<ShopModel>>(
                 future: _shopsFuture,
                 builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      l10n.t(
-                        'failedLoadShops',
-                        args: {'error': '${snapshot.error}'},
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                );
-              }
-
-              final shops = snapshot.data ?? <ShopModel>[];
-
-              if (shops.isEmpty) {
-                return Center(child: Text(l10n.t('noShopsFound')));
-              }
-
-              return RefreshIndicator(
-                onRefresh: () async => _refresh(),
-                child: isWide
-                    ? GridView.builder(
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
                         padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                          childAspectRatio: 2.25,
+                        child: Text(
+                          l10n.t(
+                            'failedLoadShops',
+                            args: {'error': '${snapshot.error}'},
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        itemCount: shops.length,
-                        itemBuilder: (context, index) {
-                          return _ShopDirectoryCard(
-                            shop: shops[index],
-                            onTap: () => _openShop(shops[index]),
-                          );
-                        },
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: shops.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _ShopDirectoryCard(
-                              shop: shops[index],
-                              onTap: () => _openShop(shops[index]),
-                            ),
-                          );
-                        },
                       ),
-              );
+                    );
+                  }
+
+                  final shops = snapshot.data ?? <ShopModel>[];
+
+                  if (shops.isEmpty) {
+                    return Center(child: Text(l10n.t('noShopsFound')));
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () async => _refresh(),
+                    child: isWide
+                        ? GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: 16,
+                                  childAspectRatio: 2.25,
+                                ),
+                            itemCount: shops.length,
+                            itemBuilder: (context, index) {
+                              return _ShopDirectoryCard(
+                                shop: shops[index],
+                                onTap: () => _openShop(shops[index]),
+                              );
+                            },
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: shops.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _ShopDirectoryCard(
+                                  shop: shops[index],
+                                  onTap: () => _openShop(shops[index]),
+                                ),
+                              );
+                            },
+                          ),
+                  );
                 },
               ),
             ),
@@ -341,7 +443,8 @@ class _ShopDirectoryCard extends StatelessWidget {
                       ? Image.network(
                           shop.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => _ShopThumbnailPlaceholder(name: shop.name),
+                          errorBuilder: (_, _, _) =>
+                              _ShopThumbnailPlaceholder(name: shop.name),
                         )
                       : _ShopThumbnailPlaceholder(name: shop.name),
                 ),
@@ -369,7 +472,11 @@ class _ShopDirectoryCard extends StatelessWidget {
                             padding: EdgeInsets.only(left: 6),
                             child: Tooltip(
                               message: 'Official listing',
-                              child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                              child: Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: Colors.blue,
+                              ),
                             ),
                           ),
                       ],
@@ -396,7 +503,9 @@ class _ShopDirectoryCard extends StatelessWidget {
                       children: <Widget>[
                         _ShopMetaPill(
                           icon: Icons.place_outlined,
-                          label: shop.address.isEmpty ? shop.locationDisplay : shop.address,
+                          label: shop.address.isEmpty
+                              ? shop.locationDisplay
+                              : shop.address,
                         ),
                         if ((shop.phoneNumber ?? '').isNotEmpty)
                           _ShopMetaPill(
@@ -439,11 +548,7 @@ class _ShopMetaPill extends StatelessWidget {
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 150),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ],
       ),

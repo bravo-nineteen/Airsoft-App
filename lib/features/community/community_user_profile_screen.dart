@@ -1018,110 +1018,351 @@ class _CommunityPublicProfileScreenState
                   ],
                 ),
               ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const <Tab>[
-            Tab(text: 'Timeline'),
-            Tab(text: 'Activity'),
-            Tab(text: 'Events'),
-          ],
-        ),
       ),
       bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 2),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: <Widget>[
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                        children: <Widget>[
-                          Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            child: Column(
-                              children: <Widget>[
-                                _buildAvatar(84),
-                                const SizedBox(height: 12),
-                                Text(
-                                  _displayName,
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                if (_bio != null) ...<Widget>[
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    _bio!,
-                                    style: theme.textTheme.bodyMedium,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                                const SizedBox(height: 14),
-                                _buildRelationshipActions(theme),
-                                if (!_canMessage && !_isSelf) ...<Widget>[
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Messaging unlocks once you are friends.',
-                                    style: theme.textTheme.bodySmall,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  alignment: WrapAlignment.center,
-                                  children: <Widget>[
-                                    Chip(
-                                      label: Text('Timeline ${_timelinePosts.length}'),
-                                    ),
-                                    Chip(label: Text('Likes $_receivedLikesCount')),
-                                    Chip(
-                                      label: Text('Events ${_attendingEvents.length}'),
-                                    ),
-                                    if (_areFriends) const Chip(label: Text('Friends')),
-                                    if (_outgoingPending)
-                                      const Chip(label: Text('Request Pending')),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.82,
-                            child: TabBarView(
-                              controller: _tabController,
-                              children: <Widget>[
-                                SingleChildScrollView(
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  child: _buildTimelineSection(context),
-                                ),
-                                SingleChildScrollView(
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  child: _buildActivitySection(context),
-                                ),
-                                SingleChildScrollView(
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  child: _buildEventsSection(context),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+            : LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool isWide = constraints.maxWidth >= 980;
+                  final double viewportHeight = constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : MediaQuery.of(context).size.height;
+                  final double tabViewportHeight = (viewportHeight * (isWide ? 0.78 : 0.7)).clamp(620.0, 1020.0);
+
+                  final Widget sidebar = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      _PublicProfileOverviewCard(
+                        bio: _bio,
+                        likesCount: _receivedLikesCount,
+                        timelineCount: _timelinePosts.length,
+                        eventsCount: _attendingEvents.length,
+                        areFriends: _areFriends,
+                        outgoingPending: _outgoingPending,
+                        eventStats: _eventStats,
+                        canMessage: _canMessage,
+                        isSelf: _isSelf,
                       ),
+                    ],
+                  );
+
+                  final Widget tabPanel = Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: <Widget>[
+                        Material(
+                          color: theme.colorScheme.surface,
+                          child: TabBar(
+                            controller: _tabController,
+                            indicatorWeight: 3,
+                            dividerColor: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                            tabs: const <Tab>[
+                              Tab(text: 'Timeline'),
+                              Tab(text: 'Activity'),
+                              Tab(text: 'Events'),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          height: tabViewportHeight,
+                          child: TabBarView(
+                            controller: _tabController,
+                            children: <Widget>[
+                              SingleChildScrollView(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildTimelineSection(context),
+                              ),
+                              SingleChildScrollView(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildActivitySection(context),
+                              ),
+                              SingleChildScrollView(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildEventsSection(context),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  return RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                      children: <Widget>[
+                        _PublicProfileHero(
+                          displayName: _displayName,
+                          bio: _bio,
+                          avatar: _buildAvatar(112),
+                          relationshipActions: _buildRelationshipActions(theme),
+                          canMessage: _canMessage,
+                          isSelf: _isSelf,
+                          areFriends: _areFriends,
+                          outgoingPending: _outgoingPending,
+                          timelineCount: _timelinePosts.length,
+                          likesCount: _receivedLikesCount,
+                          eventsCount: _attendingEvents.length,
+                        ),
+                        const SizedBox(height: 16),
+                        if (isWide)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              SizedBox(width: 330, child: sidebar),
+                              const SizedBox(width: 16),
+                              Expanded(child: tabPanel),
+                            ],
+                          )
+                        else ...<Widget>[
+                          sidebar,
+                          const SizedBox(height: 16),
+                          tabPanel,
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+class _PublicProfileHero extends StatelessWidget {
+  const _PublicProfileHero({
+    required this.displayName,
+    required this.avatar,
+    required this.relationshipActions,
+    required this.canMessage,
+    required this.isSelf,
+    required this.areFriends,
+    required this.outgoingPending,
+    required this.timelineCount,
+    required this.likesCount,
+    required this.eventsCount,
+    this.bio,
+  });
+
+  final String displayName;
+  final String? bio;
+  final Widget avatar;
+  final Widget relationshipActions;
+  final bool canMessage;
+  final bool isSelf;
+  final bool areFriends;
+  final bool outgoingPending;
+  final int timelineCount;
+  final int likesCount;
+  final int eventsCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Container(
+                height: 190,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      theme.colorScheme.primary.withValues(alpha: 0.9),
+                      theme.colorScheme.secondary.withValues(alpha: 0.75),
+                      theme.colorScheme.tertiary.withValues(alpha: 0.55),
+                    ],
+                  ),
+                ),
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Wrap(
+                      spacing: 8,
+                      children: <Widget>[
+                        _PublicHeroStatPill(icon: Icons.article_outlined, label: 'Timeline $timelineCount'),
+                        _PublicHeroStatPill(icon: Icons.favorite_border, label: 'Likes $likesCount'),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
+              Positioned(
+                left: -34,
+                top: -30,
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 44,
+                bottom: 8,
+                child: Container(
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 20,
+                bottom: -54,
+                child: avatar,
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 68, 20, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  displayName,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if ((bio ?? '').trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(bio!),
+                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _PublicHeroStatPill(icon: Icons.event_outlined, label: 'Events $eventsCount'),
+                    if (areFriends) _PublicHeroStatPill(icon: Icons.people_outline, label: 'Friends'),
+                    if (outgoingPending) _PublicHeroStatPill(icon: Icons.schedule, label: 'Request Pending'),
+                    if (isSelf) _PublicHeroStatPill(icon: Icons.person_outline, label: 'Your Public Profile'),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                relationshipActions,
+                if (!canMessage && !isSelf) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Messaging unlocks once you are friends.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicHeroStatPill extends StatelessWidget {
+  const _PublicHeroStatPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicProfileOverviewCard extends StatelessWidget {
+  const _PublicProfileOverviewCard({
+    required this.likesCount,
+    required this.timelineCount,
+    required this.eventsCount,
+    required this.areFriends,
+    required this.outgoingPending,
+    required this.eventStats,
+    required this.canMessage,
+    required this.isSelf,
+    this.bio,
+  });
+
+  final String? bio;
+  final int likesCount;
+  final int timelineCount;
+  final int eventsCount;
+  final bool areFriends;
+  final bool outgoingPending;
+  final EventAttendanceStats eventStats;
+  final bool canMessage;
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Overview',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if ((bio ?? '').trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(bio!),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                Chip(label: Text('Timeline $timelineCount')),
+                Chip(label: Text('Likes $likesCount')),
+                Chip(label: Text('Events $eventsCount')),
+                Chip(label: Text('Attended ${eventStats.attended}')),
+                if (areFriends) const Chip(label: Text('Friends')),
+                if (outgoingPending) const Chip(label: Text('Request Pending')),
+              ],
+            ),
+            if (!canMessage && !isSelf) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                'Message is available after becoming friends.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

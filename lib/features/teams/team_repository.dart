@@ -75,14 +75,35 @@ class TeamRepository {
   Future<TeamMemberModel?> getMyMembership(String teamId) async {
     final uid = _uid;
     if (uid == null) return null;
-    final row = await _client
+    final List<dynamic> rows = await _client
         .from('team_members')
         .select('id, team_id, user_id, role, status, joined_at, profiles:profiles!team_members_user_id_fkey(call_sign, avatar_url)')
         .eq('team_id', teamId)
         .eq('user_id', uid)
-        .maybeSingle();
-    if (row == null) return null;
-    return TeamMemberModel.fromJson(Map<String, dynamic>.from(row));
+        .order('joined_at', ascending: false);
+    if (rows.isEmpty) return null;
+
+    final List<TeamMemberModel> memberships = rows
+        .map((dynamic row) => TeamMemberModel.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+
+    memberships.sort((TeamMemberModel a, TeamMemberModel b) {
+      int statusRank(TeamMemberModel member) {
+        if (member.isActive && member.isLeader) return 0;
+        if (member.isActive && member.isSquadLeader) return 1;
+        if (member.isActive) return 2;
+        if (member.isPending) return 3;
+        return 4;
+      }
+
+      final int rankCompare = statusRank(a).compareTo(statusRank(b));
+      if (rankCompare != 0) {
+        return rankCompare;
+      }
+      return b.joinedAt.compareTo(a.joinedAt);
+    });
+
+    return memberships.first;
   }
 
   /// Returns teams the current user belongs to (active).
