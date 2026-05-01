@@ -1607,6 +1607,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     ];
 
     return Scaffold(
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 1),
       appBar: AppBar(
         title: Text(_event.title),
         actions: <Widget>[
@@ -1624,7 +1625,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 _blockUserIfPresent(_event.hostUserId);
               }
             },
-            bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 1),
             itemBuilder: (BuildContext context) {
               final bool isHost = _isCurrentUserHost(_event);
               final bool isSelf = _event.hostUserId == _currentUserId;
