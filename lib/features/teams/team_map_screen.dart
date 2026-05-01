@@ -60,6 +60,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
   String? _draftMapId;
   bool _mapDirty = false;
   bool _savingMapDraft = false;
+  String? _selectedRouteId;
+  String? _selectedZoneId;
 
   String? _draggingMarkerId;
   double _dragX = 0;
@@ -123,6 +125,171 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
         )
         .toList();
     _mapDirty = false;
+    _selectedRouteId = null;
+    _selectedZoneId = null;
+  }
+
+  void _selectRoute(String routeId) {
+    setState(() {
+      _selectedRouteId = routeId;
+      _selectedZoneId = null;
+    });
+  }
+
+  void _selectZone(String zoneId) {
+    setState(() {
+      _selectedZoneId = zoneId;
+      _selectedRouteId = null;
+    });
+  }
+
+  Future<void> _renameRoute(String routeId) async {
+    final int index = _draftRoutes.indexWhere((TeamMapRouteModel route) => route.id == routeId);
+    if (index == -1) {
+      return;
+    }
+    final String? label = await _promptLabel(_draftRoutes[index].label ?? 'Route label');
+    if (!mounted || label == null) {
+      return;
+    }
+    setState(() {
+      final TeamMapRouteModel route = _draftRoutes[index];
+      _draftRoutes[index] = TeamMapRouteModel(
+        id: route.id,
+        mapId: route.mapId,
+        points: route.points,
+        label: label.trim().isEmpty ? null : label.trim(),
+        colorHex: route.colorHex,
+        strokeWidth: route.strokeWidth,
+        createdBy: route.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  Future<void> _recolorRoute(String routeId) async {
+    final int index = _draftRoutes.indexWhere((TeamMapRouteModel route) => route.id == routeId);
+    if (index == -1) {
+      return;
+    }
+    final String? colorHex = await _showColorPicker('Route Color');
+    if (!mounted || colorHex == null) {
+      return;
+    }
+    setState(() {
+      final TeamMapRouteModel route = _draftRoutes[index];
+      _draftRoutes[index] = TeamMapRouteModel(
+        id: route.id,
+        mapId: route.mapId,
+        points: route.points,
+        label: route.label,
+        colorHex: colorHex,
+        strokeWidth: route.strokeWidth,
+        createdBy: route.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  Future<void> _renameZone(String zoneId) async {
+    final int index = _draftZones.indexWhere((TeamMapZoneModel zone) => zone.id == zoneId);
+    if (index == -1) {
+      return;
+    }
+    final String? label = await _promptLabel(_draftZones[index].label ?? 'Zone label');
+    if (!mounted || label == null) {
+      return;
+    }
+    setState(() {
+      final TeamMapZoneModel zone = _draftZones[index];
+      _draftZones[index] = TeamMapZoneModel(
+        id: zone.id,
+        mapId: zone.mapId,
+        points: zone.points,
+        label: label.trim().isEmpty ? null : label.trim(),
+        colorHex: zone.colorHex,
+        createdBy: zone.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  Future<void> _recolorZone(String zoneId) async {
+    final int index = _draftZones.indexWhere((TeamMapZoneModel zone) => zone.id == zoneId);
+    if (index == -1) {
+      return;
+    }
+    final String? colorHex = await _showColorPicker('Zone Color');
+    if (!mounted || colorHex == null) {
+      return;
+    }
+    setState(() {
+      final TeamMapZoneModel zone = _draftZones[index];
+      _draftZones[index] = TeamMapZoneModel(
+        id: zone.id,
+        mapId: zone.mapId,
+        points: zone.points,
+        label: zone.label,
+        colorHex: colorHex,
+        createdBy: zone.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  void _updateRoutePoint(String routeId, int pointIndex, double x, double y) {
+    final int routeIndex = _draftRoutes.indexWhere((TeamMapRouteModel route) => route.id == routeId);
+    if (routeIndex == -1) {
+      return;
+    }
+    final List<Map<String, double>> points = _draftRoutes[routeIndex]
+        .points
+        .map((Map<String, double> point) => Map<String, double>.from(point))
+        .toList();
+    if (pointIndex < 0 || pointIndex >= points.length) {
+      return;
+    }
+    points[pointIndex] = <String, double>{'x': x, 'y': y};
+    setState(() {
+      final TeamMapRouteModel route = _draftRoutes[routeIndex];
+      _draftRoutes[routeIndex] = TeamMapRouteModel(
+        id: route.id,
+        mapId: route.mapId,
+        points: points,
+        label: route.label,
+        colorHex: route.colorHex,
+        strokeWidth: route.strokeWidth,
+        createdBy: route.createdBy,
+      );
+      _mapDirty = true;
+    });
+  }
+
+  void _updateZonePoint(String zoneId, int pointIndex, double x, double y) {
+    final int zoneIndex = _draftZones.indexWhere((TeamMapZoneModel zone) => zone.id == zoneId);
+    if (zoneIndex == -1) {
+      return;
+    }
+    final List<Map<String, double>> points = _draftZones[zoneIndex]
+        .points
+        .map((Map<String, double> point) => Map<String, double>.from(point))
+        .toList();
+    if (pointIndex < 0 || pointIndex >= points.length) {
+      return;
+    }
+    points[pointIndex] = <String, double>{'x': x, 'y': y};
+    setState(() {
+      final TeamMapZoneModel zone = _draftZones[zoneIndex];
+      _draftZones[zoneIndex] = TeamMapZoneModel(
+        id: zone.id,
+        mapId: zone.mapId,
+        points: points,
+        label: zone.label,
+        colorHex: zone.colorHex,
+        createdBy: zone.createdBy,
+      );
+      _mapDirty = true;
+    });
   }
 
   Future<void> _createMap() async {
@@ -382,6 +549,122 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     );
   }
 
+  Future<void> _showRouteActions(TeamMapRouteModel route) async {
+    if (route.createdBy != _uid) {
+      _selectRoute(route.id);
+      return;
+    }
+    _selectRoute(route.id);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.tune_outlined),
+                title: const Text('Adjust route points'),
+                subtitle: const Text('Drag the route handles on the map.'),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+              ListTile(
+                leading: const Icon(Icons.label_outline),
+                title: const Text('Rename route'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _renameRoute(route.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Change route colour'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _recolorRoute(route.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Delete route'),
+                textColor: Colors.red,
+                iconColor: Colors.red,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() {
+                    _draftRoutes.removeWhere((TeamMapRouteModel item) => item.id == route.id);
+                    if (_selectedRouteId == route.id) {
+                      _selectedRouteId = null;
+                    }
+                    _mapDirty = true;
+                  });
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showZoneActions(TeamMapZoneModel zone) async {
+    if (zone.createdBy != _uid) {
+      _selectZone(zone.id);
+      return;
+    }
+    _selectZone(zone.id);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.tune_outlined),
+                title: const Text('Adjust zone points'),
+                subtitle: const Text('Drag the zone handles on the map.'),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+              ListTile(
+                leading: const Icon(Icons.label_outline),
+                title: const Text('Rename zone'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _renameZone(zone.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Change zone colour'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _recolorZone(zone.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Delete zone'),
+                textColor: Colors.red,
+                iconColor: Colors.red,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() {
+                    _draftZones.removeWhere((TeamMapZoneModel item) => item.id == zone.id);
+                    if (_selectedZoneId == zone.id) {
+                      _selectedZoneId = null;
+                    }
+                    _mapDirty = true;
+                  });
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _addMarker(Offset pos, Size canvasSize) async {
     final TeamMapModel? selected = _selectedMap;
     if (selected == null || _mode == _MapEditMode.none || _mode == _MapEditMode.route || _mode == _MapEditMode.zone) return;
@@ -447,6 +730,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
             createdBy: _uid,
           ),
         );
+        _selectedRouteId = _draftRoutes.last.id;
+        _selectedZoneId = null;
         _routeDraft.clear();
         _routeLabel = null;
         _mapDirty = true;
@@ -481,6 +766,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
             createdBy: _uid,
           ),
         );
+        _selectedZoneId = _draftZones.last.id;
+        _selectedRouteId = null;
         _zoneDraft.clear();
         _zoneLabel = null;
         _mapDirty = true;
@@ -502,6 +789,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
       _routeLabel = null;
       _zoneDraft.clear();
       _zoneLabel = null;
+      _selectedRouteId = null;
+      _selectedZoneId = null;
     });
   }
 
@@ -572,7 +861,12 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     switch (_mode) {
       case _MapEditMode.route: _appendRoutePoint(pos, sz);
       case _MapEditMode.zone:  _appendZonePoint(pos, sz);
-      case _MapEditMode.none:  break;
+      case _MapEditMode.none:
+        setState(() {
+          _selectedRouteId = null;
+          _selectedZoneId = null;
+        });
+        break;
       default: _addMarker(pos, sz);
     }
   }
@@ -705,6 +999,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         routes: _draftRoutes,
                         zones: _draftZones,
                         markers: _draftMarkers,
+                        selectedRouteId: _selectedRouteId,
+                        selectedZoneId: _selectedZoneId,
                         routeDraft: _routeDraft,
                         zoneDraft: _zoneDraft,
                         currentUserId: _uid,
@@ -740,18 +1036,12 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                             _mapDirty = true;
                           });
                         },
-                        onDeleteRoute: (String routeId) {
-                          setState(() {
-                            _draftRoutes.removeWhere((TeamMapRouteModel route) => route.id == routeId);
-                            _mapDirty = true;
-                          });
-                        },
-                        onDeleteZone: (String zoneId) {
-                          setState(() {
-                            _draftZones.removeWhere((TeamMapZoneModel zone) => zone.id == zoneId);
-                            _mapDirty = true;
-                          });
-                        },
+                        onRouteTap: (TeamMapRouteModel route) => _selectRoute(route.id),
+                        onZoneTap: (TeamMapZoneModel zone) => _selectZone(zone.id),
+                        onRouteLongPress: _showRouteActions,
+                        onZoneLongPress: _showZoneActions,
+                        onRoutePointDrag: _updateRoutePoint,
+                        onZonePointDrag: _updateZonePoint,
                       ),
                     ),
                     Positioned(
@@ -761,6 +1051,10 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         mode: _mode,
                         onModeSelected: (m) => setState(() {
                           _mode = m;
+                          if (m != _MapEditMode.none) {
+                            _selectedRouteId = null;
+                            _selectedZoneId = null;
+                          }
                           if (m != _MapEditMode.route) {
                             _routeDraft.clear();
                             _routeLabel = null;
@@ -778,9 +1072,16 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
               // ── Route bar ──
               if (_mode == _MapEditMode.route)
                 _DraftBar(
-                  label: 'Route: ${_routeDraft.length} pts',
+                  label: _routeDraft.isEmpty
+                      ? 'Route mode: tap to add points, then save'
+                      : 'Route: ${_routeDraft.length} pts',
                   canSave: _routeDraft.length >= 2,
                   saving: _savingRoute,
+                  onUndo: _routeDraft.isEmpty
+                      ? null
+                      : () => setState(() {
+                            _routeDraft.removeLast();
+                          }),
                   onLabel: () async {
                     final String? l = await _promptLabel('Route label');
                     if (l != null && l.isNotEmpty && mounted) setState(() => _routeLabel = l);
@@ -792,9 +1093,16 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                 )
               else if (_mode == _MapEditMode.zone)
                 _DraftBar(
-                  label: 'Zone: ${_zoneDraft.length} pts',
+                  label: _zoneDraft.isEmpty
+                      ? 'Zone mode: tap to place corners, then save'
+                      : 'Zone: ${_zoneDraft.length} pts',
                   canSave: _zoneDraft.length >= 3,
                   saving: false,
+                  onUndo: _zoneDraft.isEmpty
+                      ? null
+                      : () => setState(() {
+                            _zoneDraft.removeLast();
+                          }),
                   onLabel: () async {
                     final String? l = await _promptLabel('Zone label (optional)');
                     if (l != null && l.isNotEmpty && mounted) setState(() => _zoneLabel = l);
@@ -822,7 +1130,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
 // ─── Draft action bar ─────────────────────────────────────────────────────────
 
 class _DraftBar extends StatelessWidget {
-  const _DraftBar({required this.label, required this.canSave, required this.saving, required this.onLabel, required this.onClear, required this.onSave, required this.saveLabel, required this.clearLabel});
+  const _DraftBar({required this.label, required this.canSave, required this.saving, required this.onLabel, required this.onClear, required this.onSave, required this.saveLabel, required this.clearLabel, this.onUndo});
   final String label;
   final bool canSave;
   final bool saving;
@@ -831,6 +1139,7 @@ class _DraftBar extends StatelessWidget {
   final VoidCallback onSave;
   final String saveLabel;
   final String clearLabel;
+  final VoidCallback? onUndo;
 
   @override
   Widget build(BuildContext context) {
@@ -858,6 +1167,15 @@ class _DraftBar extends StatelessWidget {
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
           ),
           const SizedBox(width: 8),
+          if (onUndo != null) ...[
+            OutlinedButton.icon(
+              onPressed: onUndo,
+              icon: const Icon(Icons.undo_rounded, size: 18),
+              label: const Text('Undo'),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+            ),
+            const SizedBox(width: 8),
+          ],
           OutlinedButton.icon(
             onPressed: onClear,
             icon: const Icon(Icons.clear_outlined, size: 18),
@@ -1001,12 +1319,16 @@ class _MapCanvas extends StatelessWidget {
   const _MapCanvas({
     required this.map, required this.mode,
     required this.routes, required this.zones, required this.markers,
+    required this.selectedRouteId, required this.selectedZoneId,
     required this.routeDraft, required this.zoneDraft,
     required this.currentUserId, required this.draggingMarkerId,
     required this.dragX, required this.dragY,
     required this.onTapMap, required this.onMarkerDragStart,
     required this.onMarkerDragUpdate, required this.onMarkerDragEnd,
-    required this.onMarkerTap, required this.onDeleteRoute, required this.onDeleteZone,
+    required this.onMarkerTap,
+    required this.onRouteTap, required this.onZoneTap,
+    required this.onRouteLongPress, required this.onZoneLongPress,
+    required this.onRoutePointDrag, required this.onZonePointDrag,
   });
 
   final TeamMapModel map;
@@ -1014,6 +1336,8 @@ class _MapCanvas extends StatelessWidget {
   final List<TeamMapRouteModel> routes;
   final List<TeamMapZoneModel> zones;
   final List<TeamMapMarkerModel> markers;
+  final String? selectedRouteId;
+  final String? selectedZoneId;
   final List<Map<String, double>> routeDraft;
   final List<Map<String, double>> zoneDraft;
   final String currentUserId;
@@ -1024,8 +1348,12 @@ class _MapCanvas extends StatelessWidget {
   final void Function(double, double) onMarkerDragUpdate;
   final void Function(String, double, double) onMarkerDragEnd;
   final ValueChanged<TeamMapMarkerModel> onMarkerTap;
-  final ValueChanged<String> onDeleteRoute;
-  final ValueChanged<String> onDeleteZone;
+  final ValueChanged<TeamMapRouteModel> onRouteTap;
+  final ValueChanged<TeamMapZoneModel> onZoneTap;
+  final ValueChanged<TeamMapRouteModel> onRouteLongPress;
+  final ValueChanged<TeamMapZoneModel> onZoneLongPress;
+  final void Function(String, int, double, double) onRoutePointDrag;
+  final void Function(String, int, double, double) onZonePointDrag;
 
   @override
   Widget build(BuildContext context) {
@@ -1072,15 +1400,37 @@ class _MapCanvas extends StatelessWidget {
                         left: (mid['x'] ?? 0) * sz.width - 36,
                         top: (mid['y'] ?? 0) * sz.height - 22,
                         child: GestureDetector(
+                          onTap: () => onRouteTap(route),
                           onLongPress: () {
-                            if (route.createdBy != currentUserId) return;
-                            onDeleteRoute(route.id);
+                            onRouteLongPress(route);
                           },
                           child: _LabelChip(
-                            text: (route.label ?? 'Route') + (route.createdBy == currentUserId ? '  Hold to delete' : ''),
+                            text: (selectedRouteId == route.id ? '[Selected] ' : '') + (route.label ?? 'Route'),
                           ),
                         ),
                       );
+                    }),
+                    ...routes.where((TeamMapRouteModel route) => route.id == selectedRouteId && route.createdBy == currentUserId).expand((TeamMapRouteModel route) {
+                      return route.points.asMap().entries.map((MapEntry<int, Map<String, double>> entry) {
+                        final double px = (entry.value['x'] ?? 0) * sz.width;
+                        final double py = (entry.value['y'] ?? 0) * sz.height;
+                        return Positioned(
+                          left: px - 10,
+                          top: py - 10,
+                          child: _PointHandle(
+                            color: _hexColor(route.colorHex) ?? const Color(0xFF8FCB63),
+                            onDrag: (double nextX, double nextY) => onRoutePointDrag(
+                              route.id,
+                              entry.key,
+                              nextX.clamp(0.0, 1.0),
+                              nextY.clamp(0.0, 1.0),
+                            ),
+                            canvasSize: sz,
+                            x: entry.value['x'] ?? 0,
+                            y: entry.value['y'] ?? 0,
+                          ),
+                        );
+                      });
                     }),
                     ...zones.where((TeamMapZoneModel zone) => zone.points.isNotEmpty).map((TeamMapZoneModel zone) {
                       double sumX = 0;
@@ -1095,15 +1445,37 @@ class _MapCanvas extends StatelessWidget {
                         left: centerX * sz.width - 42,
                         top: centerY * sz.height - 14,
                         child: GestureDetector(
+                          onTap: () => onZoneTap(zone),
                           onLongPress: () {
-                            if (zone.createdBy != currentUserId) return;
-                            onDeleteZone(zone.id);
+                            onZoneLongPress(zone);
                           },
                           child: _LabelChip(
-                            text: (zone.label ?? 'Zone') + (zone.createdBy == currentUserId ? '  Hold to delete' : ''),
+                            text: (selectedZoneId == zone.id ? '[Selected] ' : '') + (zone.label ?? 'Zone'),
                           ),
                         ),
                       );
+                    }),
+                    ...zones.where((TeamMapZoneModel zone) => zone.id == selectedZoneId && zone.createdBy == currentUserId).expand((TeamMapZoneModel zone) {
+                      return zone.points.asMap().entries.map((MapEntry<int, Map<String, double>> entry) {
+                        final double px = (entry.value['x'] ?? 0) * sz.width;
+                        final double py = (entry.value['y'] ?? 0) * sz.height;
+                        return Positioned(
+                          left: px - 10,
+                          top: py - 10,
+                          child: _PointHandle(
+                            color: _hexColor(zone.colorHex) ?? const Color(0xFFF44336),
+                            onDrag: (double nextX, double nextY) => onZonePointDrag(
+                              zone.id,
+                              entry.key,
+                              nextX.clamp(0.0, 1.0),
+                              nextY.clamp(0.0, 1.0),
+                            ),
+                            canvasSize: sz,
+                            x: entry.value['x'] ?? 0,
+                            y: entry.value['y'] ?? 0,
+                          ),
+                        );
+                      });
                     }),
                     ...markers.map((TeamMapMarkerModel marker) {
                       final bool isDragging = draggingMarkerId == marker.id;
@@ -1145,6 +1517,61 @@ class _MapCanvas extends StatelessWidget {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Color? _hexColor(String? hex) {
+    if (hex == null || hex.trim().isEmpty) {
+      return null;
+    }
+    final String value = hex.replaceAll('#', '').trim();
+    if (value.length != 6) {
+      return null;
+    }
+    final int? parsed = int.tryParse(value, radix: 16);
+    return parsed == null ? null : Color(0xFF000000 | parsed);
+  }
+}
+
+class _PointHandle extends StatelessWidget {
+  const _PointHandle({
+    required this.color,
+    required this.onDrag,
+    required this.canvasSize,
+    required this.x,
+    required this.y,
+  });
+
+  final Color color;
+  final void Function(double nextX, double nextY) onDrag;
+  final Size canvasSize;
+  final double x;
+  final double y;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onPanUpdate: (DragUpdateDetails details) {
+        final double nextX = x + (details.delta.dx / canvasSize.width);
+        final double nextY = y + (details.delta.dy / canvasSize.height);
+        onDrag(nextX, nextY);
+      },
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          border: Border.all(color: color, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
       ),
     );
