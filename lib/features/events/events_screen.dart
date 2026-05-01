@@ -344,13 +344,6 @@ class _EventsScreenState extends State<EventsScreen> {
     super.dispose();
   }
 
-  String _formatDate(DateTime value) {
-    final String yyyy = value.year.toString().padLeft(4, '0');
-    final String mm = value.month.toString().padLeft(2, '0');
-    final String dd = value.day.toString().padLeft(2, '0');
-    return '$yyyy-$mm-$dd';
-  }
-
   String? _statusLabel(AppLocalizations l10n, EventModel event) {
     switch (event.currentUserAttendanceStatus) {
       case 'attending':
@@ -366,30 +359,6 @@ class _EventsScreenState extends State<EventsScreen> {
       default:
         return null;
     }
-  }
-
-  String _fieldAndType(EventModel event) {
-    final String field = (event.location ?? '').trim().isEmpty
-        ? 'Unknown field'
-        : event.location!.trim();
-    final String type = (event.eventType ?? '').trim().isEmpty
-        ? 'General'
-        : event.eventType!.trim();
-    return '$field | $type';
-  }
-
-  Color _skillBadgeColor(BuildContext context, String skillLevel) {
-    final String normalized = skillLevel.trim().toLowerCase();
-    if (normalized.contains('beginner')) {
-      return Colors.green;
-    }
-    if (normalized.contains('intermediate')) {
-      return Colors.orange;
-    }
-    if (normalized.contains('experienced')) {
-      return Colors.red;
-    }
-    return Theme.of(context).colorScheme.primary;
   }
 
   Future<void> _openBookTickets(BuildContext context, String url) async {
@@ -513,215 +482,29 @@ class _EventsScreenState extends State<EventsScreen> {
                           currentUserId != null &&
                           event.hostUserId == currentUserId;
 
-                      final String dateLabel = _formatDate(event.startsAt);
-                      final String skillLabel = (event.skillLevel ?? 'All Levels').trim();
-                      final Color skillColor = _skillBadgeColor(context, skillLabel);
-                      final String imageUrl = (event.imageUrl ?? '').trim();
-
-                      return Card(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => EventDetailsScreen(event: event),
-                              ),
-                            );
-                            if (!mounted) {
-                              return;
-                            }
-                            await _refresh();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              children: <Widget>[
-                                if (event.isOfficial)
-                                  Container(
-                                    width: double.infinity,
-                                    margin: const EdgeInsets.only(bottom: 10),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        Icon(
-                                          Icons.verified,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Official Event',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSecondaryContainer,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: SizedBox(
-                                        width: 72,
-                                        height: 72,
-                                        child: imageUrl.isEmpty
-                                            ? Container(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest,
-                                                alignment: Alignment.center,
-                                                child: const Icon(Icons.image_outlined),
-                                              )
-                                            : Image.network(
-                                                imageUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) => Container(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainerHighest,
-                                                  alignment: Alignment.center,
-                                                  child: const Icon(Icons.broken_image_outlined),
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: <Widget>[
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Expanded(
-                                                child: Text(
-                                                  event.title,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                dateLabel,
-                                                style: Theme.of(context).textTheme.bodySmall,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Expanded(
-                                                child: Text(
-                                                  _fieldAndType(event),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: Theme.of(context).textTheme.bodyMedium,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: skillColor.withAlpha(36),
-                                                  borderRadius: BorderRadius.circular(999),
-                                                ),
-                                                child: Text(
-                                                  skillLabel,
-                                                  style: TextStyle(color: skillColor),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            children: <Widget>[
-                                              Expanded(
-                                                child: Text(
-                                                  '${l10n.t('goingWithCount', args: {'count': '${event.attendingCount}'})} • ${l10n.t('attendedWithCount', args: {'count': '${event.attendedCount}'})}'
-                                                  '${statusLabel == null ? '' : ' • $statusLabel'}',
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: Theme.of(context).textTheme.bodySmall,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: <Widget>[
-                                    if ((event.bookTicketsUrl ?? '').trim().isNotEmpty)
-                                      TextButton.icon(
-                                        onPressed: () => _openBookTickets(
-                                          context,
-                                          event.bookTicketsUrl!,
-                                        ),
-                                        icon: const Icon(Icons.confirmation_number_outlined),
-                                        label: const Text('Book tickets'),
-                                      ),
-                                    const Spacer(),
-                                    if (canEdit)
-                                      PopupMenuButton<String>(
-                                        tooltip: l10n.t('manageEvent'),
-                                        onSelected: (String value) {
-                                          if (value == 'edit') {
-                                            _openEdit(event);
-                                          } else if (value == 'delete') {
-                                            _deleteEvent(event);
-                                          }
-                                        },
-                                        itemBuilder: (BuildContext context) =>
-                                            <PopupMenuEntry<String>>[
-                                              PopupMenuItem<String>(
-                                                value: 'edit',
-                                                child: Text(l10n.t('editEvent')),
-                                              ),
-                                              PopupMenuItem<String>(
-                                                value: 'delete',
-                                                child: Text(l10n.t('deleteEventAction')),
-                                              ),
-                                            ],
-                                        icon: const Icon(Icons.more_vert),
-                                      ),
-                                    const Icon(Icons.chevron_right),
-                                  ],
-                                ),
-                              ],
+                      return _EventCard(
+                        event: event,
+                        l10n: l10n,
+                        statusLabel: statusLabel,
+                        canEdit: canEdit,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EventDetailsScreen(event: event),
                             ),
-                          ),
-                        ),
+                          );
+                          if (!mounted) {
+                            return;
+                          }
+                          await _refresh();
+                        },
+                        onBookTickets:
+                            (event.bookTicketsUrl ?? '').trim().isNotEmpty
+                                ? () => _openBookTickets(
+                                    context, event.bookTicketsUrl!)
+                                : null,
+                        onEdit: () => _openEdit(event),
+                        onDelete: () => _deleteEvent(event),
                       );
                     },
                   );
@@ -740,6 +523,295 @@ class _EventsScreenState extends State<EventsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EventCard extends StatelessWidget {
+  const _EventCard({
+    required this.event,
+    required this.l10n,
+    required this.statusLabel,
+    required this.canEdit,
+    required this.onTap,
+    required this.onBookTickets,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final EventModel event;
+  final AppLocalizations l10n;
+  final String? statusLabel;
+  final bool canEdit;
+  final VoidCallback onTap;
+  final VoidCallback? onBookTickets;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  static String _monthAbbr(int month) {
+    const List<String> months = <String>[
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return months[(month - 1).clamp(0, 11)];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String imageUrl = (event.imageUrl ?? '').trim();
+    final bool hasImage = imageUrl.isNotEmpty;
+    final DateTime dt = event.startsAt;
+    final String day = dt.day.toString();
+    final String month = _monthAbbr(dt.month);
+    final String skillLabel = (event.skillLevel ?? 'All Levels').trim();
+    final String skillNorm = skillLabel.toLowerCase();
+    final Color skillColor = skillNorm.contains('beginner')
+        ? Colors.green
+        : skillNorm.contains('intermediate')
+            ? Colors.orange
+            : skillNorm.contains('experienced')
+                ? Colors.red
+                : theme.colorScheme.primary;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (event.isOfficial)
+              Container(
+                width: double.infinity,
+                color: theme.colorScheme.secondaryContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.verified,
+                      size: 14,
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Official Event',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (hasImage)
+              AspectRatio(
+                aspectRatio: 16 / 7,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.broken_image_outlined),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 54,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          day,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: theme.colorScheme.onPrimaryContainer,
+                            height: 1,
+                          ),
+                        ),
+                        Text(
+                          month,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if ((event.location ?? '').trim().isNotEmpty)
+                          Row(
+                            children: <Widget>[
+                              Icon(
+                                Icons.place_outlined,
+                                size: 13,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  event.location!.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: <Widget>[
+                            _EventPill(label: skillLabel, color: skillColor),
+                            if ((event.eventType ?? '').trim().isNotEmpty)
+                              _EventPill(
+                                label: event.eventType!.trim(),
+                                color: theme.colorScheme.secondary,
+                              ),
+                            if (statusLabel != null)
+                              _EventPill(label: statusLabel!, color: Colors.green),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.people_outline,
+                              size: 14,
+                              color: theme.colorScheme.secondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.t(
+                                'goingWithCount',
+                                args: {'count': '${event.attendingCount}'},
+                              ),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              l10n.t(
+                                'attendedWithCount',
+                                args: {'count': '${event.attendedCount}'},
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: theme.dividerColor.withValues(alpha: 0.15),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: <Widget>[
+                  if ((event.bookTicketsUrl ?? '').trim().isNotEmpty)
+                    TextButton.icon(
+                      onPressed: onBookTickets,
+                      icon: const Icon(
+                        Icons.confirmation_number_outlined,
+                        size: 16,
+                      ),
+                      label: const Text('Book tickets'),
+                    ),
+                  const Spacer(),
+                  if (canEdit)
+                    PopupMenuButton<String>(
+                      tooltip: l10n.t('manageEvent'),
+                      onSelected: (String value) {
+                        if (value == 'edit') {
+                          onEdit();
+                        } else if (value == 'delete') {
+                          onDelete();
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Text(l10n.t('editEvent')),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Text(l10n.t('deleteEventAction')),
+                            ),
+                          ],
+                      icon: const Icon(Icons.more_vert),
+                    ),
+                  const Icon(Icons.chevron_right),
+                  const SizedBox(width: 4),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventPill extends StatelessWidget {
+  const _EventPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(36),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'contact_model.dart';
 import 'contact_repository.dart';
 import 'direct_message_screen.dart';
@@ -160,6 +161,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: FutureBuilder<List<ContactModel>>(
         future: _future,
         builder: (context, snapshot) {

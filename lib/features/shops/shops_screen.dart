@@ -24,44 +24,22 @@ class _ShopsScreenState extends State<ShopsScreen> {
   late Future<List<ShopModel>> _shopsFuture;
   late Future<bool> _isAdminFuture;
 
-  final List<String> _prefectures = const [
-    'All',
-    'Tokyo',
-    'Hokkaido',
-    'Aomori',
-    'Iwate',
-    'Miyagi',
-    'Akita',
-    'Yamagata',
-    'Fukushima',
-    'Ibaraki',
-    'Tochigi',
-    'Gunma',
-    'Saitama',
-    'Chiba',
-    'Kanagawa',
-    'Niigata',
-    'Toyama',
-    'Ishikawa',
-    'Fukui',
-    'Yamanashi',
-    'Nagano',
-    'Shizuoka',
-    'Aichi',
-    'Mie',
-    'Shiga',
-    'Kyoto',
-    'Osaka',
-    'Hyogo',
-    'Nara',
-    'Wakayama',
-    'Hiroshima',
-    'Okayama',
-    'Fukuoka',
-    'Okinawa',
-  ];
-
   List<ShopModel> _allShops = const [];
+
+  List<String> get _regions {
+    final Set<String> values = <String>{'All'};
+    for (final ShopModel shop in _allShops) {
+      for (final String value in <String>[shop.prefecture ?? '', shop.city ?? '']) {
+        final String trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          values.add(trimmed);
+        }
+      }
+    }
+    final List<String> sorted = values.where((String item) => item != 'All').toList()
+      ..sort((String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return <String>['All', ...sorted];
+  }
 
   @override
   void initState() {
@@ -130,13 +108,18 @@ class _ShopsScreenState extends State<ShopsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Column(
-            children: [
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isWide = constraints.maxWidth >= 920;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
               TextField(
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
@@ -152,17 +135,26 @@ class _ShopsScreenState extends State<ShopsScreen> {
                 onSubmitted: (_) => _applyFilters(),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedPrefecture,
-                decoration: InputDecoration(labelText: l10n.t('prefecture')),
-                items: _prefectures
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() => _selectedPrefecture = value ?? 'All');
-                  _applyFilters();
-                },
-              ),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          SizedBox(
+                            width: isWide ? 260 : double.infinity,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _selectedPrefecture,
+                              decoration: InputDecoration(labelText: l10n.location),
+                              items: _regions
+                                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() => _selectedPrefecture = value ?? 'All');
+                                _applyFilters();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
               const SizedBox(height: 12),
               FutureBuilder<bool>(
                 future: _isAdminFuture,
@@ -189,13 +181,15 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   );
                 },
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: FutureBuilder<List<ShopModel>>(
-            future: _shopsFuture,
-            builder: (context, snapshot) {
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<ShopModel>>(
+                future: _shopsFuture,
+                builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -223,73 +217,179 @@ class _ShopsScreenState extends State<ShopsScreen> {
 
               return RefreshIndicator(
                 onRefresh: () async => _refresh(),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: shops.length,
-                  itemBuilder: (context, index) {
-                    final shop = shops[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(10),
-                        onTap: () => _openShop(shop),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 64,
-                            height: 64,
-                            child: shop.hasImage
-                                ? Image.network(
-                                    shop.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) =>
-                                        _ShopThumbnailPlaceholder(
-                                          name: shop.name,
-                                        ),
-                                  )
-                                : _ShopThumbnailPlaceholder(name: shop.name),
+                child: isWide
+                    ? GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          childAspectRatio: 2.25,
+                        ),
+                        itemCount: shops.length,
+                        itemBuilder: (context, index) {
+                          return _ShopDirectoryCard(
+                            shop: shops[index],
+                            onTap: () => _openShop(shops[index]),
+                          );
+                        },
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: shops.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ShopDirectoryCard(
+                              shop: shops[index],
+                              onTap: () => _openShop(shops[index]),
+                            ),
+                          );
+                        },
+                      ),
+              );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ShopDirectoryCard extends StatelessWidget {
+  const _ShopDirectoryCard({required this.shop, required this.onTap});
+
+  final ShopModel shop;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 78,
+                  height: 78,
+                  child: shop.hasImage
+                      ? Image.network(
+                          shop.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _ShopThumbnailPlaceholder(name: shop.name),
+                        )
+                      : _ShopThumbnailPlaceholder(name: shop.name),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            shop.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                        title: Row(
-                          children: [
-                            Flexible(child: Text(shop.name)),
-                            if (shop.isOfficial) ...[
-                              const SizedBox(width: 6),
-                              const Tooltip(
-                                message: 'Official listing',
-                                child: Icon(
-                                  Icons.verified,
-                                  size: 16,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(shop.locationDisplay),
-                            if ((shop.openingTimes ?? '').isNotEmpty)
-                              Text(
-                                shop.openingTimes!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        isThreeLine: (shop.openingTimes ?? '').isNotEmpty,
+                        if (shop.isOfficial)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Tooltip(
+                              message: 'Official listing',
+                              child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      shop.locationDisplay,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if ((shop.openingTimes ?? '').isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Text(
+                        shop.openingTimes!,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    );
-                  },
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _ShopMetaPill(
+                          icon: Icons.place_outlined,
+                          label: shop.address.isEmpty ? shop.locationDisplay : shop.address,
+                        ),
+                        if ((shop.phoneNumber ?? '').isNotEmpty)
+                          _ShopMetaPill(
+                            icon: Icons.phone_outlined,
+                            label: shop.phoneNumber!,
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _ShopMetaPill extends StatelessWidget {
+  const _ShopMetaPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
 import 'shop_review_model.dart';
@@ -45,11 +46,25 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   }
 
   Future<void> _openExternalMap(double latitude, double longitude) async {
-    final Uri uri = Uri.parse(
+    final String label = shop.name.trim().isEmpty ? 'Shop' : shop.name.trim();
+    final Uri primaryGeo = Uri.parse(
+      'geo:$latitude,$longitude?q=${Uri.encodeComponent(label)}',
+    );
+    final Uri fallbackGoogle = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final Uri fallbackApple = Uri.parse(
+      'https://maps.apple.com/?ll=$latitude,$longitude&q=${Uri.encodeComponent(label)}',
+    );
+
+    if (await launchUrl(primaryGeo, mode: LaunchMode.externalApplication)) {
+      return;
+    }
+    if (await launchUrl(fallbackGoogle, mode: LaunchMode.externalApplication)) {
+      return;
+    }
+    if (mounted) {
+      await launchUrl(fallbackApple, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -152,6 +167,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../safety/safety_repository.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
@@ -1559,6 +1560,7 @@ class _CommunityPostDetailsScreenState
             ),
         ],
       ),
+          bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 2),
       body: hasMediaTab
           ? DefaultTabController(length: 2, child: body)
           : body,

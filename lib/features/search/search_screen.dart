@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../community/community_user_profile_screen.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
@@ -127,6 +128,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: _loading
           ? const LinearProgressIndicator()
           : _query.isEmpty

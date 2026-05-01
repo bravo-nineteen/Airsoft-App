@@ -26,6 +26,7 @@ import '../social/direct_message_threads_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shops/shops_screen.dart';
 import '../teams/teams_list_screen.dart';
+import 'shell_navigation_service.dart';
 
 enum _UtilityPanel {
   none,
@@ -94,6 +95,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ShellNavigationService.tabRequests.addListener(_handleExternalTabRequest);
     unawaited(AppContentPreloader.instance.ensureStarted());
     _restartRealtimeBadgeListeners(
       nextUserId: Supabase.instance.client.auth.currentUser?.id,
@@ -121,6 +123,20 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
         _handleNavTarget(target);
       }
     });
+  }
+
+  void _handleExternalTabRequest() {
+    final int? requestedIndex = ShellNavigationService.tabRequests.value;
+    if (requestedIndex == null || !mounted) {
+      return;
+    }
+    if (requestedIndex >= 0 && requestedIndex <= 3) {
+      setState(() {
+        _index = requestedIndex;
+        _utilityPanel = _UtilityPanel.none;
+      });
+    }
+    ShellNavigationService.clear();
   }
 
   @override
@@ -301,6 +317,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ShellNavigationService.tabRequests.removeListener(_handleExternalTabRequest);
     _authSubscription?.cancel();
     _unreadRefreshDebounce?.cancel();
     _navSubscription?.cancel();
@@ -476,10 +493,158 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
     );
   }
 
+  List<NavigationDestination> _phoneDestinations(AppLocalizations l10n) {
+    return <NavigationDestination>[
+      NavigationDestination(
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
+        label: l10n.home,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.event_outlined),
+        selectedIcon: const Icon(Icons.event),
+        label: l10n.events,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.groups_3_outlined),
+        selectedIcon: const Icon(Icons.groups_3),
+        label: l10n.t('boards'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.person_outline),
+        selectedIcon: const Icon(Icons.person),
+        label: l10n.profile,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.grid_view_rounded),
+        selectedIcon: const Icon(Icons.grid_view_rounded),
+        label: l10n.t('menu'),
+      ),
+    ];
+  }
+
+  Widget _buildTabletRail(AppLocalizations l10n, bool showingPrimaryTabs) {
+    final int selectedIndex = showingPrimaryTabs ? _index : 4;
+    return Container(
+      width: 92,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          right: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: <Widget>[
+            const SizedBox(height: 12),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.hub_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: NavigationRail(
+                extended: false,
+                minWidth: 88,
+                selectedIndex: selectedIndex,
+                onDestinationSelected: _selectTab,
+                groupAlignment: -0.7,
+                leading: Column(
+                  children: <Widget>[
+                    _RailActionButton(
+                      icon: Icons.search_rounded,
+                      label: 'Search',
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const GlobalSearchScreen(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _RailActionButton(
+                      icon: Icons.notifications_outlined,
+                      label: l10n.t('notifications'),
+                      badgeCount: _unreadNotifications,
+                      onPressed: _openNotifications,
+                    ),
+                    const SizedBox(height: 8),
+                    _RailActionButton(
+                      icon: Icons.mail_outline,
+                      label: l10n.t('messages'),
+                      badgeCount: _unreadMessages,
+                      onPressed: _openMessages,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+                destinations: <NavigationRailDestination>[
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.home_outlined),
+                    selectedIcon: const Icon(Icons.home),
+                    label: Text(l10n.home),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.event_outlined),
+                    selectedIcon: const Icon(Icons.event),
+                    label: Text(l10n.events),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.groups_3_outlined),
+                    selectedIcon: const Icon(Icons.groups_3),
+                    label: Text(l10n.t('boards')),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.person_outline),
+                    selectedIcon: const Icon(Icons.person),
+                    label: Text(l10n.profile),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.grid_view_rounded),
+                    selectedIcon: const Icon(Icons.grid_view_rounded),
+                    label: Text(l10n.t('menu')),
+                  ),
+                ],
+                trailing: Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _RailQuickActions(
+                        onOpenFields: () => _openUtilityPanel(_UtilityPanel.fields),
+                        onOpenShops: () => _openUtilityPanel(_UtilityPanel.shops),
+                        onOpenTeams: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TeamsListScreen(),
+                          ),
+                        ),
+                        onOpenSettings: () => _openUtilityPanel(_UtilityPanel.settings),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool showingPrimaryTabs = _utilityPanel == _UtilityPanel.none;
+    final bool isTablet = MediaQuery.sizeOf(context).width >= 960;
 
     Widget body = IndexedStack(index: _index, children: _screens);
     if (!showingPrimaryTabs) {
@@ -569,34 +734,130 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               ),
               title: utilityTitle != null ? Text(utilityTitle) : null,
             ),
-      body: body,
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: showingPrimaryTabs ? _index : 4,
-        onTap: _selectTab,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.home),
-            label: l10n.home,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.event),
-            label: l10n.events,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.campaign),
-            label: l10n.t('boards'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.person_outline),
-            label: l10n.profile,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.menu),
-            label: l10n.t('menu'),
-          ),
-        ],
+      body: isTablet
+          ? Row(
+              children: <Widget>[
+                _buildTabletRail(l10n, showingPrimaryTabs),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1280),
+                        child: body,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : body,
+      bottomNavigationBar: isTablet
+          ? null
+          : NavigationBar(
+              selectedIndex: showingPrimaryTabs ? _index : 4,
+              onDestinationSelected: _selectTab,
+              destinations: _phoneDestinations(l10n),
+            ),
+    );
+  }
+}
+
+class _RailActionButton extends StatelessWidget {
+  const _RailActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.badgeCount = 0,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final int badgeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: IconButton.filledTonal(
+        onPressed: onPressed,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Icon(icon),
+            if (badgeCount > 0)
+              Positioned(
+                right: -8,
+                top: -7,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 14),
+                  child: Text(
+                    badgeCount > 99 ? '99+' : '$badgeCount',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _RailQuickActions extends StatelessWidget {
+  const _RailQuickActions({
+    required this.onOpenFields,
+    required this.onOpenShops,
+    required this.onOpenTeams,
+    required this.onOpenSettings,
+  });
+
+  final VoidCallback onOpenFields;
+  final VoidCallback onOpenShops;
+  final VoidCallback onOpenTeams;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        IconButton(
+          onPressed: onOpenFields,
+          tooltip: 'Fields',
+          icon: const Icon(Icons.map_outlined),
+        ),
+        IconButton(
+          onPressed: onOpenShops,
+          tooltip: 'Shops',
+          icon: const Icon(Icons.storefront_outlined),
+        ),
+        IconButton(
+          onPressed: onOpenTeams,
+          tooltip: 'Teams',
+          icon: const Icon(Icons.groups_outlined),
+        ),
+        IconButton(
+          onPressed: onOpenSettings,
+          tooltip: 'Settings',
+          icon: const Icon(Icons.settings_outlined),
+        ),
+      ],
     );
   }
 }

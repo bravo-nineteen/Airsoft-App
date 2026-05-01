@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../safety/safety_repository.dart';
 
 class SafetyManagementScreen extends StatefulWidget {
@@ -220,6 +221,7 @@ class _SafetyManagementScreenState extends State<SafetyManagementScreen>
           ],
         ),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: TabBarView(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -22,6 +23,7 @@ class _NotificationSettingsScreenState
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('notifications'))),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: ListView(
         children: [
           SwitchListTile(

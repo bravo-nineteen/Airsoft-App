@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
 
@@ -116,6 +117,7 @@ class _UserSubmitShopScreenState extends State<UserSubmitShopScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('submitShop'))),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../community/community_image_service.dart';
 import 'event_model.dart';
 import 'event_repository.dart';
@@ -360,6 +361,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
               : (widget.isOfficial ? l10n.t('createOfficialEvent') : l10n.t('createEvent')),
         ),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 1),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

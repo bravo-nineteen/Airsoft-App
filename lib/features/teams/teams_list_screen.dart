@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../shared/widgets/user_avatar.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'team_details_screen.dart';
 import 'team_model.dart';
 import 'team_repository.dart';
@@ -119,6 +120,7 @@ class _TeamsListScreenState extends State<TeamsListScreen>
           ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
     );
   }
 }

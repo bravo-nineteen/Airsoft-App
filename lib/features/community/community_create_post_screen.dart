@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'community_image_service.dart';
 import 'community_post_categories.dart';
 import 'community_post_details_screen.dart';
@@ -417,6 +418,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
           widget.appBarTitle ??
               (_isProfilePost ? l10n.t('newTimelinePost') : l10n.t('createPost')),
         ),
+      ),
+      bottomNavigationBar: PersistentShellBottomNav(
+        selectedIndex: _isProfilePost ? 3 : 2,
       ),
       body: SafeArea(
         child: ListView(

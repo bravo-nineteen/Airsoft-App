@@ -357,6 +357,20 @@ class TeamCollabRepository {
         .eq('id', markerId);
   }
 
+  Future<void> updateMarkerAppearance({
+    required String markerId,
+    String? label,
+    String? colorHex,
+  }) async {
+    await _client
+        .from('team_map_markers')
+        .update(<String, dynamic>{
+          'label': label?.trim().isEmpty == true ? null : label?.trim(),
+          'color_hex': colorHex?.trim().isEmpty == true ? null : colorHex?.trim(),
+        })
+        .eq('id', markerId);
+  }
+
   Future<void> deleteRoute(String routeId) async {
     await _client.from('team_map_routes').delete().eq('id', routeId);
   }

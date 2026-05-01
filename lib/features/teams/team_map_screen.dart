@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'team_chat_screen.dart';
 import 'team_collab_repository.dart';
 
@@ -16,11 +17,12 @@ enum _MapEditMode { none, respawn, target, objective, waypoint, route, zone, lab
 // ─── Optimistic marker ───────────────────────────────────────────────────────
 
 class _PendingMarker {
-  _PendingMarker({required this.markerType, required this.x, required this.y, this.label});
+  _PendingMarker({required this.markerType, required this.x, required this.y, this.label, this.colorHex});
   final String markerType;
   final double x;
   final double y;
   final String? label;
+  final String? colorHex;
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -181,6 +183,51 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     return luminance > 0.5;
   }
 
+  Future<void> _showMarkerActions(TeamMapMarkerModel marker) async {
+    if (marker.createdBy != _uid) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Change marker colour'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  final String? colorHex = await _showColorPicker(context, 'Marker Colour');
+                  if (colorHex == null) {
+                    return;
+                  }
+                  await _repository.updateMarkerAppearance(
+                    markerId: marker.id,
+                    label: marker.label,
+                    colorHex: colorHex,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Delete marker'),
+                textColor: Colors.red,
+                iconColor: Colors.red,
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _repository.deleteMarker(marker.id);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _addMarker(Offset pos, Size canvasSize) async {
     final TeamMapModel? selected = _selectedMap;
     if (selected == null || _mode == _MapEditMode.none || _mode == _MapEditMode.route || _mode == _MapEditMode.zone) return;
@@ -188,6 +235,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     final double y = (pos.dy / canvasSize.height).clamp(0.0, 1.0);
     String? label;
     if (_mode == _MapEditMode.label) label = await _promptLabel('e.g. Alpha Base');
+    final String? colorHex = await _showColorPicker(context, 'Marker Colour');
     final String markerType = switch (_mode) {
       _MapEditMode.respawn => 'respawn',
       _MapEditMode.target => 'target',
@@ -196,10 +244,10 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
       _MapEditMode.label => 'label',
       _ => 'target',
     };
-    final _PendingMarker optimistic = _PendingMarker(markerType: markerType, x: x, y: y, label: label);
+    final _PendingMarker optimistic = _PendingMarker(markerType: markerType, x: x, y: y, label: label, colorHex: colorHex);
     setState(() => _pendingMarkers.add(optimistic));
     try {
-      await _repository.addMarker(mapId: selected.id, markerType: markerType, x: x, y: y, label: label);
+      await _repository.addMarker(mapId: selected.id, markerType: markerType, x: x, y: y, label: label, colorHex: colorHex);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).t('addMarkerFailed', args: {'error': e.toString()}))));
@@ -361,7 +409,12 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         dragX: _dragX,
                         dragY: _dragY,
                         onTapMap: _onTapMap,
-                        onMarkerDragStart: (id) => setState(() => _draggingMarkerId = id),
+                        onMarkerTap: _showMarkerActions,
+                        onMarkerDragStart: (id, x, y) => setState(() {
+                          _draggingMarkerId = id;
+                          _dragX = x;
+                          _dragY = y;
+                        }),
                         onMarkerDragUpdate: (x, y) => setState(() { _dragX = x; _dragY = y; }),
                         onMarkerDragEnd: (id, x, y) async {
                           setState(() => _draggingMarkerId = null);
@@ -423,6 +476,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
           );
         },
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
     );
   }
 }
@@ -597,6 +651,7 @@ class _MapCanvas extends StatelessWidget {
     required this.dragX, required this.dragY,
     required this.onTapMap, required this.onMarkerDragStart,
     required this.onMarkerDragUpdate, required this.onMarkerDragEnd,
+    required this.onMarkerTap,
   });
 
   final TeamMapModel map;
@@ -609,9 +664,10 @@ class _MapCanvas extends StatelessWidget {
   final String? draggingMarkerId;
   final double dragX, dragY;
   final void Function(Offset, Size) onTapMap;
-  final ValueChanged<String> onMarkerDragStart;
+  final void Function(String, double, double) onMarkerDragStart;
   final void Function(double, double) onMarkerDragUpdate;
   final void Function(String, double, double) onMarkerDragEnd;
+  final ValueChanged<TeamMapMarkerModel> onMarkerTap;
 
   @override
   Widget build(BuildContext context) {
@@ -626,6 +682,7 @@ class _MapCanvas extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTapUp: (d) => onTapMap(d.localPosition, sz),
             child: InteractiveViewer(
+              panEnabled: draggingMarkerId == null,
               minScale: 0.8,
               maxScale: 6,
               child: Stack(children: [
@@ -680,18 +737,24 @@ class _MapCanvas extends StatelessWidget {
                           left: math.max(0, lx - 14),
                           top: math.max(0, ly - 14),
                           child: GestureDetector(
-                            onLongPress: () async {
+                            onTap: () => onMarkerTap(marker),
+                            onPanStart: (_) {
                               if (marker.createdBy != currentUserId) return;
-                              await repository.deleteMarker(marker.id);
+                              onMarkerDragStart(marker.id, marker.x, marker.y);
                             },
-                            onPanStart: (_) => onMarkerDragStart(marker.id),
                             onPanUpdate: (d) {
-                              final nx = ((marker.x * sz.width + d.delta.dx) / sz.width).clamp(0.0, 1.0);
-                              final ny = ((marker.y * sz.height + d.delta.dy) / sz.height).clamp(0.0, 1.0);
+                              if (marker.createdBy != currentUserId) return;
+                              final double baseX = isDragging ? dragX : marker.x;
+                              final double baseY = isDragging ? dragY : marker.y;
+                              final nx = (baseX + (d.delta.dx / sz.width)).clamp(0.0, 1.0);
+                              final ny = (baseY + (d.delta.dy / sz.height)).clamp(0.0, 1.0);
                               onMarkerDragUpdate(nx, ny);
                             },
-                            onPanEnd: (_) => onMarkerDragEnd(marker.id, dragX, dragY),
-                            child: _MarkerWidget(markerType: marker.markerType, label: marker.label),
+                            onPanEnd: (_) {
+                              if (marker.createdBy != currentUserId) return;
+                              onMarkerDragEnd(marker.id, dragX, dragY);
+                            },
+                            child: _MarkerWidget(markerType: marker.markerType, label: marker.label, colorHex: marker.colorHex),
                           ),
                         );
                       }),
@@ -701,7 +764,7 @@ class _MapCanvas extends StatelessWidget {
                         return Positioned(
                           left: math.max(0, lx - 14),
                           top: math.max(0, ly - 14),
-                          child: Opacity(opacity: 0.55, child: _MarkerWidget(markerType: pm.markerType, label: pm.label)),
+                          child: Opacity(opacity: 0.55, child: _MarkerWidget(markerType: pm.markerType, label: pm.label, colorHex: pm.colorHex)),
                         );
                       }),
                     ]);
@@ -719,19 +782,21 @@ class _MapCanvas extends StatelessWidget {
 // ─── Marker widget ────────────────────────────────────────────────────────────
 
 class _MarkerWidget extends StatelessWidget {
-  const _MarkerWidget({required this.markerType, this.label});
+  const _MarkerWidget({required this.markerType, this.label, this.colorHex});
   final String markerType;
   final String? label;
+  final String? colorHex;
 
   @override
   Widget build(BuildContext context) {
-    final (IconData icon, Color color) = switch (markerType) {
+    final (IconData icon, Color fallbackColor) = switch (markerType) {
       'respawn'   => (Icons.flag_rounded,        const Color(0xFF4FC3F7)),
       'objective' => (Icons.adjust_rounded,      const Color(0xFFFFB74D)),
       'waypoint'  => (Icons.place_rounded,       const Color(0xFF81C784)),
       'label'     => (Icons.label_rounded,       const Color(0xFFCE93D8)),
       _           => (Icons.location_on_rounded, const Color(0xFFEF5350)),
     };
+    final Color color = _hex(colorHex) ?? fallbackColor;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       if ((label ?? '').isNotEmpty) ...[
         Container(
@@ -749,6 +814,14 @@ class _MarkerWidget extends StatelessWidget {
         child: Icon(icon, color: color, size: 14),
       ),
     ]);
+  }
+
+  Color? _hex(String? hex) {
+    if (hex == null || hex.trim().isEmpty) return null;
+    final String value = hex.replaceAll('#', '').trim();
+    if (value.length != 6) return null;
+    final int? parsed = int.tryParse(value, radix: 16);
+    return parsed == null ? null : Color(0xFF000000 | parsed);
   }
 }
 

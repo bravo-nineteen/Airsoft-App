@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 
 import 'field_booking_inbox_screen.dart';
 import 'field_model.dart';
@@ -609,6 +612,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(field.name)),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final bool isTablet = constraints.maxWidth >= 900;
@@ -658,6 +662,67 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
+              const SizedBox(height: 12),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SizedBox(
+                      height: isTablet ? 260 : 220,
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: LatLng(field.latitude, field.longitude),
+                          initialZoom: 13.5,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.all,
+                          ),
+                        ),
+                        children: <Widget>[
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.airsoftonlinejapan.fieldops',
+                          ),
+                          MarkerLayer(
+                            markers: <Marker>[
+                              Marker(
+                                point: LatLng(field.latitude, field.longitude),
+                                width: 56,
+                                height: 56,
+                                child: Icon(
+                                  Icons.location_pin,
+                                  size: 42,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(Icons.map_outlined, size: 18),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Map location',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _openInMaps(context),
+                            icon: const Icon(Icons.open_in_new, size: 16),
+                            label: Text(l10n.t('openInMaps')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [

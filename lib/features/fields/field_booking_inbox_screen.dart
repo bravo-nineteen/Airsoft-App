@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
 
@@ -184,6 +185,7 @@ class _FieldBookingInboxScreenState extends State<FieldBookingInboxScreen> {
       appBar: AppBar(
         title: Text('${widget.field.name} bookings'),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<FieldBookingRequestModel>>(

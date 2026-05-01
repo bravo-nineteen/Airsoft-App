@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'team_repository.dart';
 
 class CreateTeamScreen extends StatefulWidget {
@@ -53,6 +54,7 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Create Team')),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: Form(
         key: _formKey,
         child: ListView(

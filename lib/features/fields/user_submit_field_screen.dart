@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'field_model.dart';
 import 'field_repository.dart';
 
@@ -122,6 +123,7 @@ class _UserSubmitFieldScreenState extends State<UserSubmitFieldScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('submitField'))),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

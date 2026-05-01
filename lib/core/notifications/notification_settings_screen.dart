@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'notification_preferences_model.dart';
 import 'notification_repository.dart';
 
@@ -158,6 +159,7 @@ class _NotificationSettingsScreenState
       appBar: AppBar(
         title: Text(l10n.t('notifications')),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : prefs == null

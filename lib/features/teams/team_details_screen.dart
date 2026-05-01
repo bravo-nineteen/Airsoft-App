@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/admin/admin_repository.dart';
 import '../../shared/widgets/user_avatar.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'team_chat_screen.dart';
 import 'team_map_screen.dart';
 import 'team_model.dart';
@@ -301,6 +302,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
     );
   }
 

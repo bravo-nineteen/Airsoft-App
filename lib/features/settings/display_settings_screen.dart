@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 
 class DisplaySettingsScreen extends StatelessWidget {
   const DisplaySettingsScreen({
@@ -29,6 +30,7 @@ class DisplaySettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('display'))),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: ListView(
         children: [
           ListTile(

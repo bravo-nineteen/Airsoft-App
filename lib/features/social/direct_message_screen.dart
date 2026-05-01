@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../community/community_image_service.dart';
 import '../safety/safety_repository.dart';
 import 'contact_repository.dart';
@@ -569,6 +570,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     if (_loadingPermission) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.otherDisplayName)),
+        bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -576,6 +578,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     if (!_isAllowed) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.otherDisplayName)),
+        bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
         body: Center(
           child: Padding(
             padding: EdgeInsets.all(24),
@@ -634,6 +637,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: Column(
         children: [
           if (_isRefreshingMessages)

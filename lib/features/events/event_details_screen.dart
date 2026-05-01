@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../../shared/widgets/user_avatar.dart';
 import '../safety/safety_repository.dart';
 import 'event_create_screen.dart';
@@ -1623,6 +1624,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 _blockUserIfPresent(_event.hostUserId);
               }
             },
+            bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 1),
             itemBuilder: (BuildContext context) {
               final bool isHost = _isCurrentUserHost(_event);
               final bool isSelf = _event.hostUserId == _currentUserId;

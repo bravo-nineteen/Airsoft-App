@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../../shared/widgets/user_avatar.dart';
 import 'team_collab_repository.dart';
 
@@ -187,6 +188,7 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
     );
   }
 

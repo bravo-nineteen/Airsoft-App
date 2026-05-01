@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../../shared/widgets/user_avatar.dart';
 import '../events/event_details_screen.dart';
 import '../events/event_model.dart';
@@ -1026,6 +1027,7 @@ class _CommunityPublicProfileScreenState
           ],
         ),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 2),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())

@@ -337,7 +337,6 @@ class _CommunityListScreenState extends State<CommunityListScreen>
       return;
     }
 
-    final bool wasRefreshing = _posts.isNotEmpty;
     if (_posts.isEmpty) {
       setState(() {
         _isLoading = true;
@@ -1006,10 +1005,16 @@ class _CompactPostCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      elevation: 0,
+      elevation: 1,
+      shadowColor: theme.colorScheme.shadow.withValues(alpha: 0.12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.18)),
+        side: post.isPinned
+            ? BorderSide(
+                color: theme.colorScheme.primary.withValues(alpha: 0.45),
+                width: 1.5,
+              )
+            : BorderSide(color: theme.dividerColor.withValues(alpha: 0.18)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1195,6 +1200,11 @@ class _CompactPostCard extends StatelessWidget {
                           Expanded(
                             child: TextButton.icon(
                               onPressed: isLiking ? null : onLikeTap,
+                              style: TextButton.styleFrom(
+                                foregroundColor: post.isLikedByMe
+                                    ? Colors.red
+                                    : null,
+                              ),
                               icon: isLiking
                                   ? const SizedBox(
                                       width: 14,

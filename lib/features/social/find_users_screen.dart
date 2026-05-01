@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_repository.dart';
 import 'contact_model.dart';
@@ -171,6 +172,7 @@ class _FindUsersScreenState extends State<FindUsersScreen> {
       appBar: AppBar(
         title: Text(l10n.t('findUsers')),
       ),
+      bottomNavigationBar: const PersistentShellBottomNav(selectedIndex: 4),
       body: Column(
         children: [
           Padding(
