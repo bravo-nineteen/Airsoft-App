@@ -165,7 +165,7 @@ class _UserSubmitFieldScreenState extends State<UserSubmitFieldScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _fieldType,
+            initialValue: _fieldType,
             decoration: InputDecoration(
               labelText: l10n.t('fieldType'),
               border: const OutlineInputBorder(),

@@ -45,6 +45,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
   final List<Map<String, double>> _routeDraft = <Map<String, double>>[];
   String? _routeLabel;
   final List<Map<String, double>> _zoneDraft = <Map<String, double>>[];
+  String? _zoneLabel;
   final List<_PendingMarker> _pendingMarkers = <_PendingMarker>[];
 
   String? _draggingMarkerId;
@@ -104,6 +105,82 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     return result;
   }
 
+  Future<String?> _showColorPicker(BuildContext context, String title) async {
+    const List<(String label, String hex, Color color)> colors = [
+      ('Red', 'F44336', Color(0xFFF44336)),
+      ('Pink', 'E91E63', Color(0xFFE91E63)),
+      ('Purple', '9C27B0', Color(0xFF9C27B0)),
+      ('Blue', '2196F3', Color(0xFF2196F3)),
+      ('Cyan', '00BCD4', Color(0xFF00BCD4)),
+      ('Green', '4CAF50', Color(0xFF4CAF50)),
+      ('Lime', '8BC34A', Color(0xFF8BC34A)),
+      ('Yellow', 'FFEB3B', Color(0xFFFFEB3B)),
+      ('Amber', 'FFC107', Color(0xFFFFC107)),
+      ('Orange', 'FF9800', Color(0xFFFF9800)),
+      ('Deep Orange', 'FF5722', Color(0xFFFF5722)),
+      ('Brown', '795548', Color(0xFF795548)),
+    ];
+
+    String? selectedHex;
+    await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: colors.map(((String label, String hex, Color color) item) {
+              return GestureDetector(
+                onTap: () {
+                  selectedHex = item.$2;
+                  Navigator.of(ctx).pop();
+                },
+                child: Tooltip(
+                  message: item.$1,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: item.$3,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(ctx).colorScheme.outline,
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        item.$1.substring(0, 1),
+                        style: TextStyle(
+                          color: _isLightColor(item.$3) ? Colors.black : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(AppLocalizations.of(context).t('cancel')),
+          ),
+        ],
+      ),
+    );
+    return selectedHex;
+  }
+
+  bool _isLightColor(Color color) {
+    final luminance = color.computeLuminance();
+    return luminance > 0.5;
+  }
+
   Future<void> _addMarker(Offset pos, Size canvasSize) async {
     final TeamMapModel? selected = _selectedMap;
     if (selected == null || _mode == _MapEditMode.none || _mode == _MapEditMode.route || _mode == _MapEditMode.zone) return;
@@ -141,7 +218,8 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     if (_savingRoute || selected == null || _routeDraft.length < 2) return;
     setState(() => _savingRoute = true);
     try {
-      await _repository.addRoute(mapId: selected.id, points: List.from(_routeDraft), label: _routeLabel);
+      final String? colorHex = await _showColorPicker(context, 'Route Color');
+      await _repository.addRoute(mapId: selected.id, points: List.from(_routeDraft), label: _routeLabel, colorHex: colorHex);
       if (!mounted) return;
       setState(() { _routeDraft.clear(); _routeLabel = null; });
     } catch (e) {
@@ -160,11 +238,11 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
   Future<void> _saveZone() async {
     final TeamMapModel? selected = _selectedMap;
     if (selected == null || _zoneDraft.length < 3) return;
-    final String? label = await _promptLabel('Zone label (optional)');
+    final String? colorHex = await _showColorPicker(context, 'Zone Color');
     try {
-      await _repository.addZone(mapId: selected.id, points: List.from(_zoneDraft), label: label);
+      await _repository.addZone(mapId: selected.id, points: List.from(_zoneDraft), label: _zoneLabel, colorHex: colorHex);
       if (!mounted) return;
-      setState(() { _zoneDraft.clear(); });
+      setState(() { _zoneDraft.clear(); _zoneLabel = null; });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save zone: $e')));
@@ -241,7 +319,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                 child: Row(children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: selected.id,
+                      initialValue: selected.id,
                       decoration: InputDecoration(
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -298,8 +376,14 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         mode: _mode,
                         onModeSelected: (m) => setState(() {
                           _mode = m;
-                          if (m != _MapEditMode.route) _routeDraft.clear();
-                          if (m != _MapEditMode.zone) _zoneDraft.clear();
+                          if (m != _MapEditMode.route) {
+                            _routeDraft.clear();
+                            _routeLabel = null;
+                          }
+                          if (m != _MapEditMode.zone) {
+                            _zoneDraft.clear();
+                            _zoneLabel = null;
+                          }
                         }),
                       ),
                     ),
@@ -326,8 +410,11 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                   label: 'Zone: ${_zoneDraft.length} pts',
                   canSave: _zoneDraft.length >= 3,
                   saving: false,
-                  onLabel: () {},
-                  onClear: () => setState(() => _zoneDraft.clear()),
+                  onLabel: () async {
+                    final String? l = await _promptLabel('Zone label (optional)');
+                    if (l != null && l.isNotEmpty && mounted) setState(() => _zoneLabel = l);
+                  },
+                  onClear: () => setState(() { _zoneDraft.clear(); _zoneLabel = null; }),
                   onSave: _saveZone,
                   saveLabel: 'Save Zone',
                   clearLabel: l10n.mapModeClear,
@@ -360,15 +447,37 @@ class _DraftBar extends StatelessWidget {
       top: false,
       child: Container(
         color: cs.surface,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant))),
-          TextButton(onPressed: onLabel, child: const Text('Label')),
-          TextButton(onPressed: onClear, child: Text(clearLabel)),
-          const SizedBox(width: 4),
-          FilledButton(
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: onLabel,
+            icon: const Icon(Icons.label_outlined, size: 18),
+            label: const Text('Label'),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onClear,
+            icon: const Icon(Icons.clear_outlined, size: 18),
+            label: Text(clearLabel),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
             onPressed: (canSave && !saving) ? onSave : null,
-            child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Text(saveLabel),
+            icon: saving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.black))) : const Icon(Icons.check_rounded, size: 18),
+            label: Text(saveLabel),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
           ),
         ]),
       ),
@@ -387,34 +496,61 @@ class _ToolDock extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      width: 48,
-      margin: const EdgeInsets.only(right: 4),
+      width: 56,
+      margin: const EdgeInsets.only(right: 12, bottom: 12),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.93),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2))],
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        color: cs.surface.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        _Btn(icon: Icons.pan_tool_outlined, tip: 'View', active: mode == _MapEditMode.none, cs: cs, onTap: () => onModeSelected(_MapEditMode.none)),
-        _Btn(icon: Icons.flag_rounded, tip: 'Respawn', active: mode == _MapEditMode.respawn, cs: cs, onTap: () => onModeSelected(_MapEditMode.respawn)),
-        _Btn(icon: Icons.location_on_rounded, tip: 'Target', active: mode == _MapEditMode.target, cs: cs, onTap: () => onModeSelected(_MapEditMode.target)),
-        _Btn(icon: Icons.adjust_rounded, tip: 'Objective', active: mode == _MapEditMode.objective, cs: cs, onTap: () => onModeSelected(_MapEditMode.objective)),
-        _Btn(icon: Icons.place_rounded, tip: 'Waypoint', active: mode == _MapEditMode.waypoint, cs: cs, onTap: () => onModeSelected(_MapEditMode.waypoint)),
-        _Btn(icon: Icons.title_rounded, tip: 'Label', active: mode == _MapEditMode.label, cs: cs, onTap: () => onModeSelected(_MapEditMode.label)),
-        Divider(height: 10, color: cs.outlineVariant),
-        _Btn(icon: Icons.route_rounded, tip: 'Route', active: mode == _MapEditMode.route, cs: cs, onTap: () => onModeSelected(_MapEditMode.route)),
-        _Btn(icon: Icons.hexagon_outlined, tip: 'Zone', active: mode == _MapEditMode.zone, cs: cs, onTap: () => onModeSelected(_MapEditMode.zone)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ToolButton(icon: Icons.pan_tool_outlined, label: 'View', active: mode == _MapEditMode.none, cs: cs, onTap: () => onModeSelected(_MapEditMode.none)),
+          _ToolButton(icon: Icons.flag_rounded, label: 'Respawn', active: mode == _MapEditMode.respawn, cs: cs, onTap: () => onModeSelected(_MapEditMode.respawn)),
+          _ToolButton(icon: Icons.location_on_rounded, label: 'Target', active: mode == _MapEditMode.target, cs: cs, onTap: () => onModeSelected(_MapEditMode.target)),
+          _ToolButton(icon: Icons.adjust_rounded, label: 'Objective', active: mode == _MapEditMode.objective, cs: cs, onTap: () => onModeSelected(_MapEditMode.objective)),
+          _ToolButton(icon: Icons.place_rounded, label: 'Waypoint', active: mode == _MapEditMode.waypoint, cs: cs, onTap: () => onModeSelected(_MapEditMode.waypoint)),
+          _ToolButton(icon: Icons.title_rounded, label: 'Label', active: mode == _MapEditMode.label, cs: cs, onTap: () => onModeSelected(_MapEditMode.label)),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            color: cs.outlineVariant.withValues(alpha: 0.2),
+          ),
+          _ToolButton(icon: Icons.route_rounded, label: 'Route', active: mode == _MapEditMode.route, cs: cs, onTap: () => onModeSelected(_MapEditMode.route)),
+          _ToolButton(icon: Icons.hexagon_outlined, label: 'Zone', active: mode == _MapEditMode.zone, cs: cs, onTap: () => onModeSelected(_MapEditMode.zone)),
+        ],
+      ),
     );
   }
 }
 
-class _Btn extends StatelessWidget {
-  const _Btn({required this.icon, required this.tip, required this.active, required this.cs, required this.onTap});
+class _ToolButton extends StatelessWidget {
+  const _ToolButton({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.cs,
+    required this.onTap,
+  });
   final IconData icon;
-  final String tip;
+  final String label;
   final bool active;
   final ColorScheme cs;
   final VoidCallback onTap;
@@ -422,14 +558,29 @@ class _Btn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: tip,
+      message: label,
       preferBelow: false,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
-          child: Icon(icon, size: 20, color: active ? cs.primary : cs.onSurfaceVariant),
+      waitDuration: const Duration(milliseconds: 500),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            width: 56,
+            height: 44,
+            decoration: BoxDecoration(
+              color: active
+                  ? cs.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: active ? cs.primary : cs.onSurfaceVariant,
+            ),
+          ),
         ),
       ),
     );
@@ -640,7 +791,9 @@ class _RoutePainter extends CustomPainter {
       final pts = draft.map((p) => Offset((p['x'] ?? 0) * size.width, (p['y'] ?? 0) * size.height)).toList();
       canvas.drawPath(_curved(pts), paint);
       final dotPaint = Paint()..color = const Color(0xFF4FC3F7).withValues(alpha: 0.75);
-      for (final pt in pts) canvas.drawCircle(pt, 4, dotPaint);
+      for (final pt in pts) {
+        canvas.drawCircle(pt, 4, dotPaint);
+      }
     }
   }
 
@@ -725,7 +878,11 @@ class _ZonePainter extends CustomPainter {
       final cr = math.min(r, math.min(d1, d2) / 2);
       final from = curr + (prev - curr) / d1 * cr;
       final to   = curr + (next - curr) / d2 * cr;
-      if (i == 0) path.moveTo(from.dx, from.dy); else path.lineTo(from.dx, from.dy);
+      if (i == 0) {
+        path.moveTo(from.dx, from.dy);
+      } else {
+        path.lineTo(from.dx, from.dy);
+      }
       path.quadraticBezierTo(curr.dx, curr.dy, to.dx, to.dy);
     }
     path.close();

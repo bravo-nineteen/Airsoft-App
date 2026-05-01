@@ -381,14 +381,6 @@ class _CommunityListScreenState extends State<CommunityListScreen>
         _isRefreshing = false;
       });
       _cachePosts();
-      if (wasRefreshing && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Updated'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
     } catch (error) {
       if (!mounted) {
         return;

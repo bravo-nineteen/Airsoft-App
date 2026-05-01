@@ -98,6 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
 
     return FutureBuilder<ProfileModel?>(
       future: _future,
@@ -129,11 +130,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           children: [
+            // Header Card with Avatar, Name, Edit Button
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
                     AvatarPickerWidget(
@@ -143,49 +145,162 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     Text(
                       profile.displayName,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
-                    Text(profile.userCode),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _edit(profile),
-                          icon: const Icon(Icons.edit),
-                          label: Text(l10n.t('edit')),
-                        ),
-
-                      ],
+                    Text(
+                      profile.userCode,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: () => _edit(profile),
+                      icon: const Icon(Icons.edit),
+                      label: Text(l10n.t('edit')),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            _InfoCard(title: l10n.area, value: profile.area),
-            _InfoCard(title: l10n.teamName, value: profile.teamName),
-            _InfoCard(title: l10n.loadout, value: profile.loadout),
-            _LoadoutGallery(cards: profile.normalizedLoadoutCards),
-            FutureBuilder<List<ContactModel>>(
-              future: _friendsFuture,
-              builder: (BuildContext context, AsyncSnapshot<List<ContactModel>> friendsSnapshot) {
-                if (friendsSnapshot.connectionState != ConnectionState.done) {
-                  return const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: LinearProgressIndicator(minHeight: 2),
-                      ),
+            const SizedBox(height: 14),
+
+            // Profile Info Grid (condensed 2-column layout)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final bool narrow = constraints.maxWidth < 600;
+                final int columns = narrow ? 1 : 2;
+                final double gap = 12;
+                final double cardWidth = (constraints.maxWidth - gap) / columns;
+
+                List<Widget> infoWidgets = [];
+                if ((profile.area ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.area,
+                      value: profile.area!,
+                      width: cardWidth,
+                    ),
+                  );
+                }
+                if ((profile.teamName ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.teamName,
+                      value: profile.teamName!,
+                      width: cardWidth,
+                    ),
+                  );
+                }
+                if ((profile.loadout ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.loadout,
+                      value: profile.loadout!,
+                      width: cardWidth,
+                    ),
+                  );
+                }
+                if ((profile.instagram ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.instagram,
+                      value: profile.instagram!,
+                      width: cardWidth,
+                    ),
+                  );
+                }
+                if ((profile.facebook ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.facebook,
+                      value: profile.facebook!,
+                      width: cardWidth,
+                    ),
+                  );
+                }
+                if ((profile.youtube ?? '').trim().isNotEmpty) {
+                  infoWidgets.add(
+                    _CompactInfoCard(
+                      title: l10n.youtube,
+                      value: profile.youtube!,
+                      width: cardWidth,
                     ),
                   );
                 }
 
-                final List<ContactModel> friends = friendsSnapshot.data ?? <ContactModel>[];
+                if (infoWidgets.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: infoWidgets,
+                  ),
+                );
+              },
+            ),
+
+            // Loadout Gallery
+            _LoadoutGallery(cards: profile.normalizedLoadoutCards),
+
+            // Stats Row
+            FutureBuilder<List<dynamic>>(
+              future: Future.wait([_friendsFuture, _eventsFuture]),
+              builder: (context, snapshot) {
+                int friendsCount = 0;
+                int eventsCount = 0;
+
+                if (snapshot.hasData) {
+                  friendsCount = (snapshot.data![0] as List<ContactModel>).length;
+                  eventsCount = (snapshot.data![1] as List<EventModel>).length;
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      Chip(label: Text('Friends $friendsCount')),
+                      Chip(label: Text('Events $eventsCount')),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+            // Email Card
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.mail),
+                title: Text(l10n.t('signedInAccount')),
+                subtitle: Text(
+                  Supabase.instance.client.auth.currentUser?.email ?? '',
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Friends List
+            FutureBuilder<List<ContactModel>>(
+              future: _friendsFuture,
+              builder: (BuildContext context,
+                  AsyncSnapshot<List<ContactModel>> friendsSnapshot) {
+                if (friendsSnapshot.connectionState != ConnectionState.done) {
+                  return const SizedBox.shrink();
+                }
+
+                final List<ContactModel> friends =
+                    friendsSnapshot.data ?? <ContactModel>[];
                 if (friends.isEmpty) {
                   return const SizedBox.shrink();
                 }
@@ -203,18 +318,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
                           child: Text(
                             'Friends',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700),
                           ),
                         ),
-                        ...friends.map((ContactModel contact) {
-                          final String userId = _otherUserId(contact, currentUserId);
-                          final String displayName = _otherDisplayName(contact, currentUserId);
+                        ...friends.take(5).map((ContactModel contact) {
+                          final String userId =
+                              _otherUserId(contact, currentUserId);
+                          final String displayName =
+                              _otherDisplayName(contact, currentUserId);
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
                                 displayName.isEmpty
                                     ? '?'
-                                    : displayName.characters.first.toUpperCase(),
+                                    : displayName.characters.first
+                                        .toUpperCase(),
                               ),
                             ),
                             title: Text(displayName),
@@ -222,7 +341,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) => CommunityUserProfileScreen(
+                                  builder: (_) =>
+                                      CommunityUserProfileScreen(
                                     userId: userId,
                                     fallbackName: displayName,
                                   ),
@@ -231,19 +351,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             },
                           );
                         }),
+                        if (friends.length > 5)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                            child: Text(
+                              '+${friends.length - 5} more friends',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 );
               },
             ),
+
+            // Events List
             FutureBuilder<List<EventModel>>(
               future: _eventsFuture,
-              builder: (BuildContext context, AsyncSnapshot<List<EventModel>> evSnap) {
+              builder: (BuildContext context,
+                  AsyncSnapshot<List<EventModel>> evSnap) {
                 if (evSnap.connectionState != ConnectionState.done) {
                   return const SizedBox.shrink();
                 }
-                final List<EventModel> events = evSnap.data ?? <EventModel>[];
+                final List<EventModel> events =
+                    evSnap.data ?? <EventModel>[];
                 if (events.isEmpty) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -255,14 +387,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
                           child: Text(
                             'My Events',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700),
                           ),
                         ),
                         ...events.take(5).map((EventModel ev) => ListTile(
                           leading: const Icon(Icons.event_outlined),
                           title: Text(ev.title),
                           subtitle: Text(
-                              '${ev.startsAt.year}/${ev.startsAt.month.toString().padLeft(2,'0')}/${ev.startsAt.day.toString().padLeft(2,'0')}'),
+                              '${ev.startsAt.year}/${ev.startsAt.month.toString().padLeft(2, '0')}/${ev.startsAt.day.toString().padLeft(2, '0')}'),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -275,7 +408,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                             child: Text(
                               '+${events.length - 5} more',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall,
                             ),
                           ),
                       ],
@@ -284,22 +417,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               },
             ),
-            _InfoCard(title: l10n.instagram, value: profile.instagram),
-            _InfoCard(title: l10n.facebook, value: profile.facebook),
-            _InfoCard(title: l10n.youtube, value: profile.youtube),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.mail),
-                title: Text(l10n.t('signedInAccount')),
-                subtitle: Text(
-                  Supabase.instance.client.auth.currentUser?.email ?? '',
-                ),
-              ),
-            ),
           ],
         );
       },
+    );
+  }
+}
+
+class _CompactInfoCard extends StatelessWidget {
+  const _CompactInfoCard({
+    required this.title,
+    required this.value,
+    required this.width,
+  });
+
+  final String title;
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

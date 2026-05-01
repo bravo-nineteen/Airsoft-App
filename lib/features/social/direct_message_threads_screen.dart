@@ -48,14 +48,6 @@ class _DirectMessageThreadsScreenState
       _future = _contentPreloader.refreshThreads();
     });
     await _future;
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Updated'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
   }
 
   Future<void> _openCompose() async {
