@@ -103,6 +103,7 @@ class ShopRepository {
   Future<void> submitShop({
     required String name,
     required String address,
+    String? country,
     String? prefecture,
     String? city,
     String? phoneNumber,
@@ -113,6 +114,7 @@ class ShopRepository {
     await _client.from('shops').insert(<String, dynamic>{
       'name': name.trim(),
       'address': address.trim(),
+      'country': _nullIfEmpty(country),
       'prefecture': _nullIfEmpty(prefecture),
       'city': _nullIfEmpty(city),
       'phone_number': _nullIfEmpty(phoneNumber),

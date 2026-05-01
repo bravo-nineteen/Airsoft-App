@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/location/location_preferences.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
@@ -24,6 +25,7 @@ class _UserSubmitShopScreenState extends State<UserSubmitShopScreen> {
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
 
+  String _country = LocationPreferences.allCountries;
   bool _isSaving = false;
   late Future<List<ShopModel>> _mySubmissionsFuture;
 
@@ -31,6 +33,17 @@ class _UserSubmitShopScreenState extends State<UserSubmitShopScreen> {
   void initState() {
     super.initState();
     _mySubmissionsFuture = _repository.getMyShopSubmissions();
+    _restoreSavedCountry();
+  }
+
+  Future<void> _restoreSavedCountry() async {
+    final String savedCountry = await LocationPreferences.loadPreferredCountry();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _country = savedCountry;
+    });
   }
 
   @override
@@ -78,6 +91,7 @@ class _UserSubmitShopScreenState extends State<UserSubmitShopScreen> {
       await _repository.submitShop(
         name: name,
         address: address,
+        country: _country == LocationPreferences.allCountries ? null : _country,
         prefecture: _prefectureController.text,
         city: _cityController.text,
         phoneNumber: _phoneController.text,
@@ -142,6 +156,27 @@ class _UserSubmitShopScreenState extends State<UserSubmitShopScreen> {
               labelText: l10n.t('address'),
               border: const OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _country,
+            decoration: const InputDecoration(
+              labelText: 'Country',
+              border: OutlineInputBorder(),
+            ),
+            items: LocationPreferences.countries
+                .map((String value) => DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    ))
+                .toList(),
+            onChanged: (String? value) {
+              if (value == null) {
+                return;
+              }
+              setState(() => _country = value);
+              LocationPreferences.savePreferredCountry(value);
+            },
           ),
           const SizedBox(height: 12),
           TextField(

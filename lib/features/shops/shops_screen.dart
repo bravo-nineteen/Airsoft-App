@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/location/location_preferences.dart';
 import '../admin/admin_create_shop_screen.dart';
 import '../admin/admin_repository.dart';
 import 'shop_details_screen.dart';
@@ -20,6 +21,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
   final AdminRepository _adminRepository = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
 
+  String _selectedCountry = LocationPreferences.allCountries;
   String _selectedPrefecture = 'All';
   late Future<List<ShopModel>> _shopsFuture;
   late Future<bool> _isAdminFuture;
@@ -28,7 +30,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
 
   List<String> get _regions {
     final Set<String> values = <String>{'All'};
-    for (final ShopModel shop in _allShops) {
+    for (final ShopModel shop in _allShops.where((ShopModel s) {
+      return LocationPreferences.matchesCountry(
+        selectedCountry: _selectedCountry,
+        country: s.country,
+        prefecture: s.prefecture,
+        address: s.address,
+      );
+    })) {
       for (final String value in <String>[shop.prefecture ?? '', shop.city ?? '']) {
         final String trimmed = value.trim();
         if (trimmed.isNotEmpty) {
@@ -44,8 +53,20 @@ class _ShopsScreenState extends State<ShopsScreen> {
   @override
   void initState() {
     super.initState();
+    _restoreCountryPreference();
     _shopsFuture = _loadShops();
     _isAdminFuture = _adminRepository.isCurrentUserAdmin();
+  }
+
+  Future<void> _restoreCountryPreference() async {
+    final String savedCountry = await LocationPreferences.loadPreferredCountry();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedCountry = savedCountry;
+    });
+    _refresh();
   }
 
   @override
@@ -58,11 +79,19 @@ class _ShopsScreenState extends State<ShopsScreen> {
     if (_allShops.isEmpty || force) {
       _allShops = await _repository.getShops();
     }
-    return _repository.applyFilters(
+    final List<ShopModel> filtered = _repository.applyFilters(
       _allShops,
       search: _searchController.text,
       prefecture: _selectedPrefecture,
     );
+    return filtered.where((ShopModel shop) {
+      return LocationPreferences.matchesCountry(
+        selectedCountry: _selectedCountry,
+        country: shop.country,
+        prefecture: shop.prefecture,
+        address: shop.address,
+      );
+    }).toList();
   }
 
   void _refresh() {
@@ -78,7 +107,14 @@ class _ShopsScreenState extends State<ShopsScreen> {
           _allShops,
           search: _searchController.text,
           prefecture: _selectedPrefecture,
-        ),
+        ).where((ShopModel shop) {
+          return LocationPreferences.matchesCountry(
+            selectedCountry: _selectedCountry,
+            country: shop.country,
+            prefecture: shop.prefecture,
+            address: shop.address,
+          );
+        }).toList(),
       );
     });
   }
@@ -124,7 +160,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: l10n.t('searchShopsHint'),
+                  hintText: '${l10n.t('searchShopsHint')} (name, address, features)',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.refresh),
@@ -142,8 +178,29 @@ class _ShopsScreenState extends State<ShopsScreen> {
                           SizedBox(
                             width: isWide ? 260 : double.infinity,
                             child: DropdownButtonFormField<String>(
+                              initialValue: _selectedCountry,
+                              decoration: const InputDecoration(labelText: 'Country'),
+                              items: LocationPreferences.countries
+                                  .map((String c) => DropdownMenuItem<String>(
+                                        value: c,
+                                        child: Text(c),
+                                      ))
+                                  .toList(),
+                              onChanged: (String? value) {
+                                setState(() {
+                                  _selectedCountry = value ?? LocationPreferences.allCountries;
+                                  _selectedPrefecture = 'All';
+                                });
+                                LocationPreferences.savePreferredCountry(_selectedCountry);
+                                _applyFilters();
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: isWide ? 260 : double.infinity,
+                            child: DropdownButtonFormField<String>(
                               initialValue: _selectedPrefecture,
-                              decoration: InputDecoration(labelText: l10n.location),
+                              decoration: const InputDecoration(labelText: 'State / Prefecture'),
                               items: _regions
                                   .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                                   .toList(),

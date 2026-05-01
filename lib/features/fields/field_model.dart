@@ -6,6 +6,7 @@ class FieldModel {
     required this.description,
     required this.latitude,
     required this.longitude,
+    this.country,
     this.prefecture,
     this.city,
     this.fieldType,
@@ -32,6 +33,7 @@ class FieldModel {
   final String description;
   final double latitude;
   final double longitude;
+  final String? country;
   final String? prefecture;
   final String? city;
   final String? fieldType;
@@ -59,6 +61,7 @@ class FieldModel {
       description: (json['description'] ?? '').toString(),
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      country: _readNullableString(json['country']),
       prefecture: _readNullableString(json['prefecture']),
       city: _readNullableString(json['city']),
       fieldType: _readNullableString(json['field_type']),

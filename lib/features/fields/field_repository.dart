@@ -327,6 +327,7 @@ class FieldRepository {
   Future<void> submitField({
     required String name,
     required String locationName,
+    String? country,
     String? prefecture,
     String? city,
     String? fieldType,
@@ -337,6 +338,7 @@ class FieldRepository {
     await _client.from('fields').insert(<String, dynamic>{
       'name': name.trim(),
       'location_name': locationName.trim(),
+      'country': _nullIfEmpty(country),
       'description': (description ?? '').trim(),
       'latitude': latitude ?? 0.0,
       'longitude': longitude ?? 0.0,
@@ -358,10 +360,6 @@ class FieldRepository {
     return (response as List<dynamic>)
         .map<FieldModel>((e) => FieldModel.fromJson(e))
         .toList();
-  }
-
-  static bool _isMissingColumnError(PostgrestException e) {
-    return e.code == '42703' || e.code == 'PGRST205';
   }
 }
 

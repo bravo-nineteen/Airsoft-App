@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../core/location/location_preferences.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../community/community_image_service.dart';
 import 'event_model.dart';
@@ -38,6 +39,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   DateTime _startAt = DateTime.now().add(const Duration(days: 7));
   DateTime _endAt = DateTime.now().add(const Duration(days: 7, hours: 6));
 
+  String _country = LocationPreferences.allCountries;
   String _eventType = 'Skirmish';
   String _language = 'bilingual';
   String _skillLevel = 'All Levels';
@@ -73,10 +75,12 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
   @override
   void initState() {
     super.initState();
+    _restoreSavedCountry();
     final EventModel? event = widget.existingEvent;
     if (event == null) {
       return;
     }
+    _country = event.country ?? _country;
     _titleController.text = event.title;
     _descriptionController.text = event.description;
     _locationController.text = event.location ?? '';
@@ -84,7 +88,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     _organizerController.text = event.organizerName ?? '';
     _contactController.text = event.contactInfo ?? '';
     _notesController.text = event.notes ?? '';
-    _bookTicketsController.text = event.bookTicketsUrl ?? '';
+    _bookTicketsController.text = _stripUrlScheme(event.bookTicketsUrl ?? '');
     _priceController.text = event.priceYen?.toString() ?? '';
     _maxPlayersController.text = event.maxPlayers?.toString() ?? '';
     _startAt = event.startsAt;
@@ -96,6 +100,16 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       : _language;
     _skillLevel = event.skillLevel ?? _skillLevel;
     _eventImageUrl = (event.imageUrl ?? '').trim().isEmpty ? null : event.imageUrl;
+  }
+
+  Future<void> _restoreSavedCountry() async {
+    final String savedCountry = await LocationPreferences.loadPreferredCountry();
+    if (!mounted || _isEditing) {
+      return;
+    }
+    setState(() {
+      _country = savedCountry;
+    });
   }
 
   Future<void> _pickAndUploadEventImage() async {
@@ -239,6 +253,10 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
     final int? priceYen = int.tryParse(_priceController.text.trim());
     final int? maxPlayers = int.tryParse(_maxPlayersController.text.trim());
 
+    final String bookTicketsUrl = _normalizedBookTicketsUrl(
+      _bookTicketsController.text,
+    );
+
     setState(() {
       _isSaving = true;
     });
@@ -252,6 +270,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           startsAt: _startAt,
           endsAt: _endAt,
           isOfficial: widget.isOfficial,
+          country: _country == LocationPreferences.allCountries ? null : _country,
           location: _locationController.text.trim(),
           prefecture: _prefectureController.text.trim(),
           eventType: _eventType,
@@ -263,7 +282,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           priceYen: priceYen,
           maxPlayers: maxPlayers,
           imageUrl: _eventImageUrl,
-          bookTicketsUrl: _bookTicketsController.text.trim(),
+          bookTicketsUrl: bookTicketsUrl,
         );
       } else {
         await _repository.createEvent(
@@ -272,6 +291,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           startsAt: _startAt,
           endsAt: _endAt,
           isOfficial: widget.isOfficial,
+          country: _country == LocationPreferences.allCountries ? null : _country,
           location: _locationController.text.trim(),
           prefecture: _prefectureController.text.trim(),
           eventType: _eventType,
@@ -283,7 +303,7 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
           priceYen: priceYen,
           maxPlayers: maxPlayers,
           imageUrl: _eventImageUrl,
-          bookTicketsUrl: _bookTicketsController.text.trim(),
+          bookTicketsUrl: bookTicketsUrl,
         );
       }
 
@@ -332,6 +352,20 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
       default:
         return l10n.t('bilingual');
     }
+  }
+
+  String _stripUrlScheme(String value) {
+    return value
+        .trim()
+        .replaceFirst(RegExp(r'^https?://', caseSensitive: false), '');
+  }
+
+  String _normalizedBookTicketsUrl(String value) {
+    final String trimmed = _stripUrlScheme(value);
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    return 'https://$trimmed';
   }
 
   @override
@@ -427,6 +461,26 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
                 setState(() => _skillLevel = value);
               },
               decoration: InputDecoration(labelText: l10n.t('skillLevel')),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _country,
+              items: LocationPreferences.countries
+                  .map(
+                    (String value) => DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (String? value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() => _country = value);
+                LocationPreferences.savePreferredCountry(value);
+              },
+              decoration: const InputDecoration(labelText: 'Country'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -544,7 +598,10 @@ class _EventCreateScreenState extends State<EventCreateScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _bookTicketsController,
-              decoration: const InputDecoration(labelText: 'Book tickets URL'),
+              decoration: const InputDecoration(
+                labelText: 'Book tickets URL',
+                prefixText: 'https://',
+              ),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),

@@ -49,12 +49,47 @@ class _CommunityListScreenState extends State<CommunityListScreen>
   bool _didInitLanguagePreference = false;
   int _offset = 0;
   String _selectedLanguagePreference = 'all';
+  String _selectedGroup = 'All groups';
   String _selectedCategory = 'All';
 
   static const int _pageSize = 20;
 
-  static const List<String> _categories =
-      CommunityPostCategories.communityCategoriesWithAll;
+  static const Map<String, List<String>> _boardGroups = <String, List<String>>{
+    'All groups': <String>[
+      CommunityPostCategories.general,
+      CommunityPostCategories.news,
+      CommunityPostCategories.discussion,
+      CommunityPostCategories.gear,
+      CommunityPostCategories.field,
+      CommunityPostCategories.events,
+      CommunityPostCategories.team,
+      CommunityPostCategories.advice,
+      CommunityPostCategories.offTopic,
+      CommunityPostCategories.camping,
+    ],
+    'General': <String>[
+      CommunityPostCategories.general,
+      CommunityPostCategories.news,
+      CommunityPostCategories.discussion,
+      CommunityPostCategories.offTopic,
+    ],
+    'Gameplay': <String>[
+      CommunityPostCategories.field,
+      CommunityPostCategories.events,
+      CommunityPostCategories.team,
+      CommunityPostCategories.advice,
+    ],
+    'Gear & Lifestyle': <String>[
+      CommunityPostCategories.gear,
+      CommunityPostCategories.camping,
+    ],
+  };
+
+  List<String> get _visibleCategories {
+    final List<String> categories =
+        _boardGroups[_selectedGroup] ?? _boardGroups['All groups']!;
+    return <String>[CommunityPostCategories.all, ...categories];
+  }
 
   bool _isTransientLoadError(Object error) {
     final String text = error.toString().toLowerCase();
@@ -294,6 +329,11 @@ class _CommunityListScreenState extends State<CommunityListScreen>
   bool _matchesCurrentFilters(CommunityPostModel post) {
     final String normalizedCategory =
         CommunityPostCategories.normalizeCommunityCategory(post.category);
+    final List<String> allowed =
+        _boardGroups[_selectedGroup] ?? _boardGroups['All groups']!;
+    if (!allowed.contains(normalizedCategory)) {
+      return false;
+    }
     if (_selectedCategory != CommunityPostCategories.all &&
         normalizedCategory != _selectedCategory) {
       return false;
@@ -786,6 +826,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isTablet = MediaQuery.sizeOf(context).width >= 960;
     final Map<String, String> postLanguageLabels = <String, String>{
       'english': l10n.t('english'),
       'japanese': l10n.t('japanese'),
@@ -847,11 +888,40 @@ class _CommunityListScreenState extends State<CommunityListScreen>
                           ),
                         ),
                         const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedGroup,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            labelText: 'Group',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _boardGroups.keys
+                              .map(
+                                (String g) => DropdownMenuItem<String>(
+                                  value: g,
+                                  child: Text(g),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (String? value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setState(() {
+                              _selectedGroup = value;
+                              if (!_visibleCategories.contains(_selectedCategory)) {
+                                _selectedCategory = CommunityPostCategories.all;
+                              }
+                            });
+                            _loadPosts(showError: false);
+                          },
+                        ),
+                        const SizedBox(height: 10),
                         SizedBox(
                           height: 40,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
-                            itemCount: _categories.length + 1,
+                            itemCount: _visibleCategories.length + 1,
                             separatorBuilder: (_, index) =>
                                 const SizedBox(width: 8),
                             itemBuilder: (BuildContext context, int index) {
@@ -864,7 +934,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
                                 );
                               }
 
-                              final category = _categories[index - 1];
+                              final category = _visibleCategories[index - 1];
                               final isSelected = category == _selectedCategory;
 
                               return ChoiceChip(
@@ -928,39 +998,74 @@ class _CommunityListScreenState extends State<CommunityListScreen>
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
-                sliver: SliverList.builder(
-                  itemCount: feedItems.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final Object entry = feedItems[index];
-                    if (entry is _CommunityAdSlot) {
-                      return const AdInlineBanner();
-                    }
+                sliver: isTablet
+                    ? SliverGrid.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 2.15,
+                        ),
+                        itemCount: _posts.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final CommunityPostModel post = _posts[index];
+                          return _CompactPostCard(
+                            post: post,
+                            timeAgo: _timeAgo(post.createdAt),
+                            languageLabel:
+                                postLanguageLabels[(post.language ?? '')
+                                    .toLowerCase()] ??
+                                l10n.t('allLanguages'),
+                            onTap: () => _openPostDetails(post),
+                            onImageTap: () {
+                              final List<String> images = post.imageUrls.isNotEmpty
+                                  ? post.imageUrls
+                                  : (post.primaryImageUrl == null
+                                        ? <String>[]
+                                        : <String>[post.primaryImageUrl!]);
+                              _openImageLightbox(images);
+                            },
+                            onLikeTap: () => _toggleLikeFromFeed(post),
+                            isLiking: _busyLikePostIds.contains(post.id),
+                            onAuthorTap: () =>
+                                _openProfile(post.authorId, post.authorName),
+                          );
+                        },
+                      )
+                    : SliverList.builder(
+                        itemCount: feedItems.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final Object entry = feedItems[index];
+                          if (entry is _CommunityAdSlot) {
+                            return const AdInlineBanner();
+                          }
 
-                    final CommunityPostModel post = entry as CommunityPostModel;
+                          final CommunityPostModel post = entry as CommunityPostModel;
 
-                    return _CompactPostCard(
-                      post: post,
-                      timeAgo: _timeAgo(post.createdAt),
-                      languageLabel:
-                          postLanguageLabels[(post.language ?? '')
-                              .toLowerCase()] ??
-                          l10n.t('allLanguages'),
-                      onTap: () => _openPostDetails(post),
-                      onImageTap: () {
-                        final List<String> images = post.imageUrls.isNotEmpty
-                            ? post.imageUrls
-                            : (post.primaryImageUrl == null
-                                  ? <String>[]
-                                  : <String>[post.primaryImageUrl!]);
-                        _openImageLightbox(images);
-                      },
-                      onLikeTap: () => _toggleLikeFromFeed(post),
-                      isLiking: _busyLikePostIds.contains(post.id),
-                      onAuthorTap: () =>
-                          _openProfile(post.authorId, post.authorName),
-                    );
-                  },
-                ),
+                          return _CompactPostCard(
+                            post: post,
+                            timeAgo: _timeAgo(post.createdAt),
+                            languageLabel:
+                                postLanguageLabels[(post.language ?? '')
+                                    .toLowerCase()] ??
+                                l10n.t('allLanguages'),
+                            onTap: () => _openPostDetails(post),
+                            onImageTap: () {
+                              final List<String> images = post.imageUrls.isNotEmpty
+                                  ? post.imageUrls
+                                  : (post.primaryImageUrl == null
+                                        ? <String>[]
+                                        : <String>[post.primaryImageUrl!]);
+                              _openImageLightbox(images);
+                            },
+                            onLikeTap: () => _toggleLikeFromFeed(post),
+                            isLiking: _busyLikePostIds.contains(post.id),
+                            onAuthorTap: () =>
+                                _openProfile(post.authorId, post.authorName),
+                          );
+                        },
+                      ),
               ),
           ],
         ),

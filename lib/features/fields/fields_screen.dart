@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
+import '../../core/location/location_preferences.dart';
 import '../admin/admin_create_field_screen.dart';
 import '../admin/admin_repository.dart';
 
@@ -27,6 +28,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedLocation = 'All';
+  String _selectedCountry = LocationPreferences.allCountries;
   String _selectedFieldType = 'All';
   double _minRating = 0;
   bool _mapView = false;
@@ -34,9 +36,20 @@ class _FieldsScreenState extends State<FieldsScreen> {
   late Future<List<FieldModel>> _fieldsFuture;
   late Future<bool> _isAdminFuture;
 
+  List<FieldModel> get _countryScopedFields {
+    return _contentPreloader.fields.where((FieldModel field) {
+      return LocationPreferences.matchesCountry(
+        selectedCountry: _selectedCountry,
+        country: field.country,
+        prefecture: field.prefecture,
+        location: field.locationName,
+      );
+    }).toList();
+  }
+
   List<String> get _locations {
     final Set<String> values = <String>{'All'};
-    for (final FieldModel field in _contentPreloader.fields) {
+    for (final FieldModel field in _countryScopedFields) {
       for (final String value in <String>[
         field.prefecture ?? '',
         field.city ?? '',
@@ -70,8 +83,20 @@ class _FieldsScreenState extends State<FieldsScreen> {
   void initState() {
     super.initState();
     _contentPreloader.fieldsRevision.addListener(_handleSharedFieldsUpdated);
+    _restoreCountryPreference();
     _fieldsFuture = _loadFields();
     _isAdminFuture = _adminRepository.isCurrentUserAdmin();
+  }
+
+  Future<void> _restoreCountryPreference() async {
+    final String saved = await LocationPreferences.loadPreferredCountry();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedCountry = saved;
+    });
+    _refreshFields();
   }
 
   @override
@@ -85,13 +110,21 @@ class _FieldsScreenState extends State<FieldsScreen> {
     final List<FieldModel> source = await _contentPreloader.loadFields(
       preferCache: preferCache,
     );
-    return _repository.applyFilters(
+    final List<FieldModel> filtered = _repository.applyFilters(
       source,
       search: _searchController.text,
       location: _selectedLocation,
       fieldType: _selectedFieldType,
       minRating: _minRating,
     );
+    return filtered.where((FieldModel field) {
+      return LocationPreferences.matchesCountry(
+        selectedCountry: _selectedCountry,
+        country: field.country,
+        prefecture: field.prefecture,
+        location: field.locationName,
+      );
+    }).toList();
   }
 
   void _handleSharedFieldsUpdated() {
@@ -107,7 +140,14 @@ class _FieldsScreenState extends State<FieldsScreen> {
           location: _selectedLocation,
           fieldType: _selectedFieldType,
           minRating: _minRating,
-        ),
+        ).where((FieldModel field) {
+          return LocationPreferences.matchesCountry(
+            selectedCountry: _selectedCountry,
+            country: field.country,
+            prefecture: field.prefecture,
+            location: field.locationName,
+          );
+        }).toList(),
       );
     });
   }
@@ -178,8 +218,38 @@ class _FieldsScreenState extends State<FieldsScreen> {
                           SizedBox(
                             width: isWide ? 260 : double.infinity,
                             child: DropdownButtonFormField<String>(
+                              initialValue: _selectedCountry,
+                              decoration: const InputDecoration(
+                                labelText: 'Country',
+                              ),
+                              items: LocationPreferences.countries
+                                  .map(
+                                    (String value) => DropdownMenuItem<String>(
+                                      value: value,
+                                      child: Text(value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (String? value) {
+                                setState(() {
+                                  _selectedCountry =
+                                      value ?? LocationPreferences.allCountries;
+                                  _selectedLocation = 'All';
+                                });
+                                LocationPreferences.savePreferredCountry(
+                                  _selectedCountry,
+                                );
+                                _refreshFields();
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: isWide ? 260 : double.infinity,
+                            child: DropdownButtonFormField<String>(
                               initialValue: _selectedLocation,
-                              decoration: InputDecoration(labelText: l10n.location),
+                              decoration: const InputDecoration(
+                                labelText: 'State / Prefecture',
+                              ),
                               items: _locations
                                   .map(
                                     (value) => DropdownMenuItem<String>(
@@ -437,10 +507,12 @@ class _FieldDirectoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final String subtitle = [
-      field.locationName,
-      if ((field.fieldType ?? '').trim().isNotEmpty) field.fieldType!,
-    ].where((String item) => item.trim().isNotEmpty).join(' • ');
+    final String subtitle = field.fullLocation.isEmpty
+        ? field.locationName
+        : field.fullLocation;
+    final String ratingText = field.rating != null
+        ? field.rating!.toStringAsFixed(1)
+        : '--';
 
     return Card(
       child: InkWell(
@@ -472,7 +544,20 @@ class _FieldDirectoryCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
+                        if (field.isOfficial)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6, top: 2),
+                            child: Tooltip(
+                              message: 'Official listing',
+                              child: Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
                         Expanded(
                           child: Text(
                             field.name,
@@ -483,18 +568,29 @@ class _FieldDirectoryCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (field.isOfficial)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Tooltip(
-                              message: 'Official listing',
-                              child: Icon(
-                                Icons.verified,
-                                size: 16,
-                                color: Colors.blue,
-                              ),
+                        const SizedBox(width: 6),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: <Widget>[
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.star_rounded,
+                                  size: 16,
+                                  color: Colors.amber,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  ratingText,
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -513,12 +609,11 @@ class _FieldDirectoryCard extends StatelessWidget {
                           icon: Icons.map_outlined,
                           label: field.fullLocation,
                         ),
-                        _FieldMetaPill(
-                          icon: Icons.star_outline,
-                          label: field.rating != null
-                              ? field.rating!.toStringAsFixed(1)
-                              : AppLocalizations.of(context).t('noRatingYet'),
-                        ),
+                        if ((field.fieldType ?? '').trim().isNotEmpty)
+                          _FieldMetaPill(
+                            icon: Icons.terrain_outlined,
+                            label: field.fieldType!,
+                          ),
                       ],
                     ),
                   ],

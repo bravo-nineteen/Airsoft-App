@@ -3,6 +3,7 @@ class ShopModel {
     required this.id,
     required this.name,
     required this.address,
+    this.country,
     this.prefecture,
     this.city,
     this.openingTimes,
@@ -19,6 +20,7 @@ class ShopModel {
   final String id;
   final String name;
   final String address;
+  final String? country;
   final String? prefecture;
   final String? city;
   final String? openingTimes;
@@ -36,6 +38,7 @@ class ShopModel {
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       address: (json['address'] ?? '').toString(),
+      country: _readNullable(json['country']),
       prefecture: _readNullable(json['prefecture']),
       city: _readNullable(json['city']),
       openingTimes: _readNullable(json['opening_times']),

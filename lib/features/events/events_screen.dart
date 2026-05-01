@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../core/ads/ad_access_repository.dart';
 import '../../core/ads/ad_config.dart';
+import '../../core/location/location_preferences.dart';
 import '../../shared/widgets/ad_inline_banner.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../core/content/app_content_preloader.dart';
@@ -31,6 +32,7 @@ class _EventsScreenState extends State<EventsScreen> {
   List<EventModel> _cachedEvents = <EventModel>[];
   Timer? _backgroundSyncTimer;
   String _searchQuery = '';
+  String _selectedCountry = LocationPreferences.allCountries;
   String? _selectedEventType;
   String? _selectedLanguage;
   String? _selectedSkillLevel;
@@ -42,12 +44,23 @@ class _EventsScreenState extends State<EventsScreen> {
     _cachedEvents = _contentPreloader.events;
     _contentPreloader.eventsRevision.addListener(_handleSharedEventsUpdated);
     _future = _contentPreloader.loadEvents();
+    _restoreCountryPreference();
     _loadAdVisibility();
     _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (!mounted) {
         return;
       }
       _refresh();
+    });
+  }
+
+  Future<void> _restoreCountryPreference() async {
+    final String savedCountry = await LocationPreferences.loadPreferredCountry();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedCountry = savedCountry;
     });
   }
 
@@ -180,6 +193,14 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   bool _matchesStructuredFilters(EventModel event) {
+    if (!LocationPreferences.matchesCountry(
+      selectedCountry: _selectedCountry,
+      country: event.country,
+      prefecture: event.prefecture,
+      location: event.location,
+    )) {
+      return false;
+    }
     if (_selectedEventType != null && event.eventType != _selectedEventType) {
       return false;
     }
@@ -195,6 +216,7 @@ class _EventsScreenState extends State<EventsScreen> {
 
   bool get _hasActiveFilters {
     return _searchQuery.trim().isNotEmpty ||
+      _selectedCountry != LocationPreferences.allCountries ||
         _selectedEventType != null ||
         _selectedLanguage != null ||
         _selectedSkillLevel != null;
@@ -218,10 +240,12 @@ class _EventsScreenState extends State<EventsScreen> {
     _searchController.clear();
     setState(() {
       _searchQuery = '';
+      _selectedCountry = LocationPreferences.allCountries;
       _selectedEventType = null;
       _selectedLanguage = null;
       _selectedSkillLevel = null;
     });
+    LocationPreferences.savePreferredCountry(_selectedCountry);
   }
 
   Widget _buildSearchAndFilters(
@@ -262,6 +286,22 @@ class _EventsScreenState extends State<EventsScreen> {
           spacing: 12,
           runSpacing: 12,
           children: <Widget>[
+            _FilterDropdown(
+              label: 'Country',
+              value: _selectedCountry == LocationPreferences.allCountries
+                  ? null
+                  : _selectedCountry,
+              options: LocationPreferences.countries
+                  .where((String c) => c != LocationPreferences.allCountries)
+                  .toList(),
+              onChanged: (String? value) {
+                setState(() {
+                  _selectedCountry =
+                      value ?? LocationPreferences.allCountries;
+                });
+                LocationPreferences.savePreferredCountry(_selectedCountry);
+              },
+            ),
             _FilterDropdown(
               label: l10n.t('eventType'),
               value: _selectedEventType,
@@ -362,7 +402,11 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _openBookTickets(BuildContext context, String url) async {
-    final Uri? uri = Uri.tryParse(url.trim());
+    final String raw = url.trim();
+    final String normalized = raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : 'https://$raw';
+    final Uri? uri = Uri.tryParse(normalized);
     if (uri == null) {
       return;
     }
@@ -548,214 +592,132 @@ class _EventCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  static String _monthAbbr(int month) {
-    const List<String> months = <String>[
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return months[(month - 1).clamp(0, 11)];
-  }
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String imageUrl = (event.imageUrl ?? '').trim();
     final bool hasImage = imageUrl.isNotEmpty;
-    final DateTime dt = event.startsAt;
-    final String day = dt.day.toString();
-    final String month = _monthAbbr(dt.month);
+    final String locationText = <String>[
+      if ((event.prefecture ?? '').trim().isNotEmpty) event.prefecture!.trim(),
+      if ((event.location ?? '').trim().isNotEmpty) event.location!.trim(),
+    ].join(' • ');
     final String skillLabel = (event.skillLevel ?? 'All Levels').trim();
-    final String skillNorm = skillLabel.toLowerCase();
-    final Color skillColor = skillNorm.contains('beginner')
-        ? Colors.green
-        : skillNorm.contains('intermediate')
-            ? Colors.orange
-            : skillNorm.contains('experienced')
-                ? Colors.red
-                : theme.colorScheme.primary;
+    final String eventType = (event.eventType ?? '').trim();
 
     return Card(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (event.isOfficial)
-              Container(
-                width: double.infinity,
-                color: theme.colorScheme.secondaryContainer,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 86,
+                  height: 86,
+                  child: hasImage
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.broken_image_outlined),
+                          ),
+                        )
+                      : Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.event_outlined),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(
-                      Icons.verified,
-                      size: 14,
-                      color: theme.colorScheme.onSecondaryContainer,
+                    Row(
+                      children: <Widget>[
+                        if (event.isOfficial)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                          ),
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Official Event',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSecondaryContainer,
+                    const SizedBox(height: 6),
+                    if (locationText.isNotEmpty)
+                      Text(
+                        locationText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
                       ),
+                    if (locationText.isNotEmpty) const SizedBox(height: 2),
+                    Text(
+                      <String>[
+                        if (eventType.isNotEmpty) eventType,
+                        skillLabel,
+                        ?statusLabel,
+                      ].join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.people_outline,
+                          size: 14,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            l10n.t(
+                              'goingWithCount',
+                              args: {'count': '${event.attendingCount}'},
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            if (hasImage)
-              AspectRatio(
-                aspectRatio: 16 / 7,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image_outlined),
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
-                  Container(
-                    width: 54,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          day,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: theme.colorScheme.onPrimaryContainer,
-                            height: 1,
-                          ),
-                        ),
-                        Text(
-                          month,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          event.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        if ((event.location ?? '').trim().isNotEmpty)
-                          Row(
-                            children: <Widget>[
-                              Icon(
-                                Icons.place_outlined,
-                                size: 13,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 3),
-                              Expanded(
-                                child: Text(
-                                  event.location!.trim(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: <Widget>[
-                            _EventPill(label: skillLabel, color: skillColor),
-                            if ((event.eventType ?? '').trim().isNotEmpty)
-                              _EventPill(
-                                label: event.eventType!.trim(),
-                                color: theme.colorScheme.secondary,
-                              ),
-                            if (statusLabel != null)
-                              _EventPill(label: statusLabel!, color: Colors.green),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: <Widget>[
-                            Icon(
-                              Icons.people_outline,
-                              size: 14,
-                              color: theme.colorScheme.secondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              l10n.t(
-                                'goingWithCount',
-                                args: {'count': '${event.attendingCount}'},
-                              ),
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              l10n.t(
-                                'attendedWithCount',
-                                args: {'count': '${event.attendedCount}'},
-                              ),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: theme.dividerColor.withValues(alpha: 0.15),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: <Widget>[
-                  if ((event.bookTicketsUrl ?? '').trim().isNotEmpty)
-                    TextButton.icon(
+                  if (onBookTickets != null)
+                    IconButton.filledTonal(
                       onPressed: onBookTickets,
-                      icon: const Icon(
-                        Icons.confirmation_number_outlined,
-                        size: 16,
-                      ),
-                      label: const Text('Book tickets'),
-                    ),
-                  const Spacer(),
+                      icon: const Icon(Icons.confirmation_number_outlined, size: 18),
+                      tooltip: 'Book tickets',
+                    )
+                  else
+                    const SizedBox(height: 40),
                   if (canEdit)
                     PopupMenuButton<String>(
                       tooltip: l10n.t('manageEvent'),
@@ -778,38 +740,14 @@ class _EventCard extends StatelessWidget {
                             ),
                           ],
                       icon: const Icon(Icons.more_vert),
-                    ),
+                    )
+                  else
+                    const SizedBox(height: 40),
                   const Icon(Icons.chevron_right),
-                  const SizedBox(width: 4),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EventPill extends StatelessWidget {
-  const _EventPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withAlpha(36),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: color,
+            ],
+          ),
         ),
       ),
     );

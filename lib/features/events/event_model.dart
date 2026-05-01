@@ -7,6 +7,7 @@ class EventModel {
     required this.description,
     required this.startsAt,
     required this.endsAt,
+    this.country,
     this.location,
     this.prefecture,
     this.eventType,
@@ -34,6 +35,7 @@ class EventModel {
   final String description;
   final DateTime startsAt;
   final DateTime endsAt;
+  final String? country;
   final String? location;
   final String? prefecture;
   final String? eventType;
@@ -66,6 +68,7 @@ class EventModel {
     String? description,
     DateTime? startsAt,
     DateTime? endsAt,
+    String? country,
     String? location,
     String? prefecture,
     String? eventType,
@@ -93,6 +96,7 @@ class EventModel {
       description: description ?? this.description,
       startsAt: startsAt ?? this.startsAt,
       endsAt: endsAt ?? this.endsAt,
+      country: country ?? this.country,
       location: location ?? this.location,
       prefecture: prefecture ?? this.prefecture,
       eventType: eventType ?? this.eventType,
@@ -131,6 +135,7 @@ class EventModel {
       description: (json['description'] ?? '').toString(),
       startsAt: startsAt,
       endsAt: endsAt,
+      country: _readNullableString(json['country']),
       location: _readNullableString(json['location']),
       prefecture: _readNullableString(json['prefecture']),
       eventType: _readNullableString(json['event_type']),
