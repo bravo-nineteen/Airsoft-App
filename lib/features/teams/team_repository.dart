@@ -14,7 +14,7 @@ class TeamRepository {
   Future<List<TeamModel>> getTeams({String? search}) async {
     var query = _client
         .from('teams')
-        .select('id, name, description, logo_url, banner_url, is_official, leader_id, created_by, created_at');
+      .select('id, name, description, logo_url, banner_url, country, prefecture, city, association, is_official, leader_id, created_by, created_at');
 
     if (search != null && search.trim().isNotEmpty) {
       final q = search.trim().replaceAll('%', '');
@@ -26,8 +26,12 @@ class TeamRepository {
     final List<TeamModel> teams = [];
     for (final row in rows) {
       final m = Map<String, dynamic>.from(row as Map);
-      // Fetch member count separately (simple approach)
-      m['member_count'] = 0;
+      final List<dynamic> members = await _client
+          .from('team_members')
+          .select('id')
+          .eq('team_id', m['id'])
+          .eq('status', 'active');
+      m['member_count'] = members.length;
       teams.add(TeamModel.fromJson(m));
     }
     return teams;
@@ -36,11 +40,18 @@ class TeamRepository {
   Future<TeamModel?> getTeam(String teamId) async {
     final row = await _client
         .from('teams')
-        .select('id, name, description, logo_url, banner_url, is_official, leader_id, created_by, created_at')
+      .select('id, name, description, logo_url, banner_url, country, prefecture, city, association, is_official, leader_id, created_by, created_at')
         .eq('id', teamId)
         .maybeSingle();
     if (row == null) return null;
-    return TeamModel.fromJson(Map<String, dynamic>.from(row));
+    final data = Map<String, dynamic>.from(row);
+    final List<dynamic> members = await _client
+      .from('team_members')
+      .select('id')
+      .eq('team_id', teamId)
+      .eq('status', 'active');
+    data['member_count'] = members.length;
+    return TeamModel.fromJson(data);
   }
 
   Future<List<TeamMemberModel>> getMembers(String teamId,
@@ -80,13 +91,23 @@ class TeamRepository {
     if (uid == null) return [];
     final rows = await _client
         .from('team_members')
-        .select('team_id, teams:teams!team_members_team_id_fkey(id, name, description, logo_url, banner_url, is_official, leader_id, created_by, created_at)')
+        .select('team_id, teams:teams!team_members_team_id_fkey(id, name, description, logo_url, banner_url, country, prefecture, city, association, is_official, leader_id, created_by, created_at)')
         .eq('user_id', uid)
         .eq('status', 'active') as List<dynamic>;
-    return rows.map((r) {
-      final teamRow = (r as Map<String, dynamic>)['teams'] as Map<String, dynamic>;
-      return TeamModel.fromJson(teamRow);
-    }).toList();
+    final List<TeamModel> teams = [];
+    for (final row in rows) {
+      final teamRow = Map<String, dynamic>.from(
+        (row as Map<String, dynamic>)['teams'] as Map<String, dynamic>,
+      );
+      final List<dynamic> members = await _client
+          .from('team_members')
+          .select('id')
+          .eq('team_id', teamRow['id'])
+          .eq('status', 'active');
+      teamRow['member_count'] = members.length;
+      teams.add(TeamModel.fromJson(teamRow));
+    }
+    return teams;
   }
 
   // ── Create / Edit ────────────────────────────────────────────────────────────
@@ -95,6 +116,10 @@ class TeamRepository {
     required String name,
     String? description,
     String? logoUrl,
+    String? country,
+    String? prefecture,
+    String? city,
+    String? association,
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -105,6 +130,10 @@ class TeamRepository {
           'name': name.trim(),
           'description': description?.trim(),
           'logo_url': logoUrl,
+          'country': country?.trim(),
+          'prefecture': prefecture?.trim(),
+          'city': city?.trim(),
+          'association': association?.trim(),
           'leader_id': uid,
           'created_by': uid,
         })
@@ -120,6 +149,10 @@ class TeamRepository {
       String? description,
       String? logoUrl,
       String? bannerUrl,
+      String? country,
+      String? prefecture,
+      String? city,
+      String? association,
   }) async {
     final payload = <String, dynamic>{
       'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -128,6 +161,10 @@ class TeamRepository {
     if (description != null) payload['description'] = description.trim();
     if (logoUrl != null) payload['logo_url'] = logoUrl;
     if (bannerUrl != null) payload['banner_url'] = bannerUrl;
+    if (country != null) payload['country'] = country.trim();
+    if (prefecture != null) payload['prefecture'] = prefecture.trim();
+    if (city != null) payload['city'] = city.trim();
+    if (association != null) payload['association'] = association.trim();
 
     await _client.from('teams').update(payload).eq('id', teamId);
   }
@@ -156,6 +193,10 @@ class TeamRepository {
         .from('team_members')
         .update({'status': 'active'})
         .eq('id', memberId);
+  }
+
+  Future<void> updateMemberRole(String memberId, String role) async {
+    await _client.from('team_members').update({'role': role}).eq('id', memberId);
   }
 
   /// Leader rejects / removes a member.

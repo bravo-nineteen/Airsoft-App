@@ -31,8 +31,15 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
 
   String? get _uid => Supabase.instance.client.auth.currentUser?.id;
   bool get _isLeader => _myMembership?.isLeader == true;
+  bool get _canManageTeam => _myMembership?.canManageTeam == true;
   bool get _isMember => _myMembership?.isActive == true;
   bool get _isPending => _myMembership?.isPending == true;
+
+  String _locationLabel(TeamModel team) => [
+        team.country,
+        team.prefecture,
+        team.city,
+      ].whereType<String>().where((String value) => value.trim().isNotEmpty).join(' • ');
 
   @override
   void initState() {
@@ -155,6 +162,132 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
     }
   }
 
+  Future<void> _changeRole(TeamMemberModel member, String role) async {
+    try {
+      await _repo.updateMemberRole(member.id, role);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
+
+  Future<void> _editTeam() async {
+    final team = _team;
+    if (team == null) return;
+    final nameCtrl = TextEditingController(text: team.name);
+    final descCtrl = TextEditingController(text: team.description ?? '');
+    final prefectureCtrl = TextEditingController(text: team.prefecture ?? '');
+    final cityCtrl = TextEditingController(text: team.city ?? '');
+    final associationCtrl = TextEditingController(text: team.association ?? '');
+    String country = team.country ?? 'Japan';
+    try {
+      final updated = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocalState) => AlertDialog(
+            title: const Text('Edit team'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+                  const SizedBox(height: 8),
+                  TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description'), maxLines: 3),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: country,
+                    decoration: const InputDecoration(labelText: 'Country'),
+                    items: const [
+                      DropdownMenuItem(value: 'Japan', child: Text('Japan')),
+                      DropdownMenuItem(value: 'United States', child: Text('United States')),
+                      DropdownMenuItem(value: 'United Kingdom', child: Text('United Kingdom')),
+                      DropdownMenuItem(value: 'Canada', child: Text('Canada')),
+                      DropdownMenuItem(value: 'Australia', child: Text('Australia')),
+                    ],
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setLocalState(() => country = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(controller: prefectureCtrl, decoration: const InputDecoration(labelText: 'State / Prefecture')),
+                  const SizedBox(height: 8),
+                  TextField(controller: cityCtrl, decoration: const InputDecoration(labelText: 'City')),
+                  const SizedBox(height: 8),
+                  TextField(controller: associationCtrl, decoration: const InputDecoration(labelText: 'Association')),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+            ],
+          ),
+        ),
+      );
+      if (updated != true) {
+        return;
+      }
+      await _repo.updateTeam(
+        team.id,
+        name: nameCtrl.text,
+        description: descCtrl.text,
+        country: country,
+        prefecture: prefectureCtrl.text,
+        city: cityCtrl.text,
+        association: associationCtrl.text,
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    } finally {
+      nameCtrl.dispose();
+      descCtrl.dispose();
+      prefectureCtrl.dispose();
+      cityCtrl.dispose();
+      associationCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteTeam() async {
+    final team = _team;
+    if (team == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete team?'),
+        content: const Text('This removes the team for all members.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await _repo.deleteTeam(team.id);
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -186,6 +319,20 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
           ],
         ),
         actions: [
+          if (_isLeader)
+            PopupMenuButton<String>(
+              onSelected: (String value) {
+                if (value == 'edit') {
+                  _editTeam();
+                } else if (value == 'delete') {
+                  _deleteTeam();
+                }
+              },
+              itemBuilder: (BuildContext context) => const [
+                PopupMenuItem<String>(value: 'edit', child: Text('Edit team')),
+                PopupMenuItem<String>(value: 'delete', child: Text('Delete team')),
+              ],
+            ),
           if (_isAdmin)
             IconButton(
               icon: Icon(team.isOfficial
@@ -234,6 +381,16 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
                               '${_activeMembers.length} member${_activeMembers.length == 1 ? '' : 's'}',
                               style: theme.textTheme.bodySmall,
                             ),
+                            if (_locationLabel(team).isNotEmpty)
+                              Text(
+                                _locationLabel(team),
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            if ((team.association ?? '').trim().isNotEmpty)
+                              Text(
+                                team.association!,
+                                style: theme.textTheme.bodySmall,
+                              ),
                           ],
                         ),
                       ),
@@ -249,7 +406,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
               ),
             ),
             // Pending applications (only leader sees)
-            if (_isLeader && _pendingMembers.isNotEmpty) ...[
+            if (_canManageTeam && _pendingMembers.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
@@ -289,14 +446,41 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
                           padding: EdgeInsets.zero,
                           labelStyle: const TextStyle(fontSize: 11),
                         )
-                      : (_isLeader && m.userId != _uid
-                          ? IconButton(
-                              icon: const Icon(Icons.remove_circle_outline,
-                                  color: Colors.red),
-                              tooltip: 'Remove member',
-                              onPressed: () => _reject(m),
+                      : (m.isSquadLeader
+                          ? Chip(
+                              label: const Text('Squad Leader'),
+                              backgroundColor:
+                                  theme.colorScheme.secondaryContainer,
+                              padding: EdgeInsets.zero,
+                              labelStyle: const TextStyle(fontSize: 11),
                             )
-                          : null),
+                          : (_canManageTeam && m.userId != _uid
+                              ? PopupMenuButton<String>(
+                                  onSelected: (String value) {
+                                    if (value == 'remove') {
+                                      _reject(m);
+                                    } else {
+                                      _changeRole(m, value);
+                                    }
+                                  },
+                                  itemBuilder: (BuildContext context) => [
+                                    if (_isLeader)
+                                      const PopupMenuItem<String>(
+                                        value: 'member',
+                                        child: Text('Set as member'),
+                                      ),
+                                    if (_isLeader)
+                                      const PopupMenuItem<String>(
+                                        value: 'squad_leader',
+                                        child: Text('Set as squad leader'),
+                                      ),
+                                    const PopupMenuItem<String>(
+                                      value: 'remove',
+                                      child: Text('Remove member'),
+                                    ),
+                                  ],
+                                )
+                              : null)),
                 )),
             const SizedBox(height: 80),
           ],
@@ -351,14 +535,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
       );
     }
 
-    if (_isLeader) {
+    if (_canManageTeam) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           OutlinedButton.icon(
             onPressed: null,
             icon: const Icon(Icons.star_outline),
-            label: const Text('You are the leader'),
+            label: Text(_isLeader ? 'You are the leader' : 'You are a squad leader'),
           ),
           const SizedBox(height: 8),
           collaborationButtons(),

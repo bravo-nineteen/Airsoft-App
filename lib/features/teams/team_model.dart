@@ -8,6 +8,10 @@ class TeamModel {
     this.description,
     this.logoUrl,
     this.bannerUrl,
+    this.country,
+    this.prefecture,
+    this.city,
+    this.association,
     this.isOfficial = false,
     this.memberCount = 0,
   });
@@ -17,6 +21,10 @@ class TeamModel {
   final String? description;
   final String? logoUrl;
   final String? bannerUrl;
+  final String? country;
+  final String? prefecture;
+  final String? city;
+  final String? association;
   final bool isOfficial;
   final String leaderId;
   final String createdBy;
@@ -30,6 +38,10 @@ class TeamModel {
       description: _str(json['description']),
       logoUrl: _str(json['logo_url']),
       bannerUrl: _str(json['banner_url']),
+      country: _str(json['country']),
+      prefecture: _str(json['prefecture']),
+      city: _str(json['city']),
+      association: _str(json['association']),
       isOfficial: json['is_official'] == true,
       leaderId: (json['leader_id'] ?? '').toString(),
       createdBy: (json['created_by'] ?? '').toString(),
@@ -49,6 +61,10 @@ class TeamModel {
     String? description,
     String? logoUrl,
     String? bannerUrl,
+    String? country,
+    String? prefecture,
+    String? city,
+    String? association,
     bool? isOfficial,
     int? memberCount,
   }) {
@@ -58,6 +74,10 @@ class TeamModel {
       description: description ?? this.description,
       logoUrl: logoUrl ?? this.logoUrl,
       bannerUrl: bannerUrl ?? this.bannerUrl,
+      country: country ?? this.country,
+      prefecture: prefecture ?? this.prefecture,
+      city: city ?? this.city,
+      association: association ?? this.association,
       isOfficial: isOfficial ?? this.isOfficial,
       leaderId: leaderId,
       createdBy: createdBy,
@@ -72,7 +92,7 @@ class TeamMemberModel {
     required this.id,
     required this.teamId,
     required this.userId,
-    required this.role,
+    required this.role,   // 'leader' | 'squad_leader' | 'member'
     required this.status,
     required this.joinedAt,
     this.callSign,
@@ -89,6 +109,8 @@ class TeamMemberModel {
   final String? avatarUrl;
 
   bool get isLeader => role == 'leader';
+  bool get isSquadLeader => role == 'squad_leader';
+  bool get canManageTeam => isLeader || isSquadLeader;
   bool get isActive => status == 'active';
   bool get isPending => status == 'pending';
 

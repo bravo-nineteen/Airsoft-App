@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/localization/app_localizations.dart';
@@ -12,14 +13,73 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const int _maxFailedAttempts = 4;
+  static const Duration _lockDuration = Duration(minutes: 10);
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _loading = false;
   String? _error;
 
+  Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
+
+  String get _attemptsKey => 'login-failed-attempts';
+  String get _lockedUntilKey => 'login-locked-until';
+
+  Future<DateTime?> _getLockedUntil() async {
+    final SharedPreferences prefs = await _prefs;
+    final int? millis = prefs.getInt(_lockedUntilKey);
+    if (millis == null) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  Future<bool> _isLockedOut() async {
+    final DateTime? lockedUntil = await _getLockedUntil();
+    if (lockedUntil == null) {
+      return false;
+    }
+    if (DateTime.now().isAfter(lockedUntil)) {
+      final SharedPreferences prefs = await _prefs;
+      await prefs.remove(_lockedUntilKey);
+      await prefs.remove(_attemptsKey);
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _registerFailedAttempt() async {
+    final SharedPreferences prefs = await _prefs;
+    final int attempts = prefs.getInt(_attemptsKey) ?? 0;
+    final int nextAttempts = attempts + 1;
+    await prefs.setInt(_attemptsKey, nextAttempts);
+    if (nextAttempts >= _maxFailedAttempts) {
+      await prefs.setInt(
+        _lockedUntilKey,
+        DateTime.now().add(_lockDuration).millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  Future<void> _clearFailedAttempts() async {
+    final SharedPreferences prefs = await _prefs;
+    await prefs.remove(_attemptsKey);
+    await prefs.remove(_lockedUntilKey);
+  }
+
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
+
+    final DateTime? lockedUntil = await _getLockedUntil();
+    if (await _isLockedOut()) {
+      final Duration remaining = lockedUntil!.difference(DateTime.now());
+      setState(() {
+        _error =
+            'Too many failed attempts. Try again in ${remaining.inMinutes + 1} minutes.';
+      });
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -31,9 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+      await _clearFailedAttempts();
     } on AuthException catch (e) {
+      await _registerFailedAttempt();
+      final bool locked = await _isLockedOut();
       setState(() {
-        _error = e.message;
+        _error = locked
+            ? 'Too many failed attempts. This device is locked for 10 minutes.'
+            : e.message;
       });
     } catch (e) {
       setState(() {

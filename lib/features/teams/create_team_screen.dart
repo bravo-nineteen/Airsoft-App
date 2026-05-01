@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/location/location_preferences.dart';
+import '../community/community_image_service.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import 'team_repository.dart';
 
@@ -13,16 +15,35 @@ class CreateTeamScreen extends StatefulWidget {
 class _CreateTeamScreenState extends State<CreateTeamScreen> {
   final _formKey = GlobalKey<FormState>();
   final TeamRepository _repo = TeamRepository();
+  final CommunityImageService _imageService = CommunityImageService();
 
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _prefectureCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _associationCtrl = TextEditingController();
+  String _country = 'Japan';
+  String? _logoUrl;
   bool _saving = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
+    _prefectureCtrl.dispose();
+    _cityCtrl.dispose();
+    _associationCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _uploadLogo() async {
+    final String? imageUrl = await _imageService.pickCropAndUploadCommunityImage(
+      folder: 'teams',
+    );
+    if (!mounted || imageUrl == null) {
+      return;
+    }
+    setState(() => _logoUrl = imageUrl);
   }
 
   Future<void> _submit() async {
@@ -34,6 +55,11 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
         description: _descCtrl.text.trim().isEmpty
             ? null
             : _descCtrl.text.trim(),
+        logoUrl: _logoUrl,
+        country: _country,
+        prefecture: _prefectureCtrl.text,
+        city: _cityCtrl.text,
+        association: _associationCtrl.text,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -84,6 +110,53 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
               ),
               maxLines: 4,
               maxLength: 500,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _country,
+              decoration: const InputDecoration(
+                labelText: 'Country',
+                border: OutlineInputBorder(),
+              ),
+              items: LocationPreferences.countries
+                  .where((String c) => c != LocationPreferences.allCountries)
+                  .map((String c) => DropdownMenuItem<String>(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (String? value) {
+                if (value != null) {
+                  setState(() => _country = value);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _prefectureCtrl,
+              decoration: const InputDecoration(
+                labelText: 'State / Prefecture',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _cityCtrl,
+              decoration: const InputDecoration(
+                labelText: 'City',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _associationCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Association / Community / Field',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _uploadLogo,
+              icon: const Icon(Icons.upload_outlined),
+              label: Text(_logoUrl == null ? 'Upload team logo' : 'Replace team logo'),
             ),
             const SizedBox(height: 8),
             Text(

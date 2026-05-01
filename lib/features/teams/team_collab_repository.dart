@@ -44,6 +44,7 @@ class TeamMapMarkerModel {
     required this.y,
     this.label,
     this.colorHex,
+    this.sizeScale = 1,
     required this.createdBy,
   });
 
@@ -54,6 +55,7 @@ class TeamMapMarkerModel {
   final double y;
   final String? label;
   final String? colorHex;
+  final double sizeScale;
   final String createdBy;
 
   factory TeamMapMarkerModel.fromJson(Map<String, dynamic> json) {
@@ -69,6 +71,7 @@ class TeamMapMarkerModel {
       colorHex: (json['color_hex'] ?? '').toString().trim().isEmpty
           ? null
           : (json['color_hex'] ?? '').toString().trim(),
+      sizeScale: (json['size_scale'] as num?)?.toDouble() ?? 1,
       createdBy: (json['created_by'] ?? '').toString(),
     );
   }
@@ -313,6 +316,7 @@ class TeamCollabRepository {
     required double y,
     String? label,
     String? colorHex,
+    double sizeScale = 1,
   }) async {
     await _client.from('team_map_markers').insert(<String, dynamic>{
       'map_id': mapId,
@@ -321,6 +325,7 @@ class TeamCollabRepository {
       'y': y,
       'label': label?.trim().isEmpty == true ? null : label?.trim(),
       'color_hex': colorHex,
+      'size_scale': sizeScale,
       'created_by': _uid,
     });
   }
@@ -361,12 +366,14 @@ class TeamCollabRepository {
     required String markerId,
     String? label,
     String? colorHex,
+    double? sizeScale,
   }) async {
     await _client
         .from('team_map_markers')
         .update(<String, dynamic>{
           'label': label?.trim().isEmpty == true ? null : label?.trim(),
           'color_hex': colorHex?.trim().isEmpty == true ? null : colorHex?.trim(),
+          ...?sizeScale == null ? null : <String, dynamic>{'size_scale': sizeScale},
         })
         .eq('id', markerId);
   }
@@ -391,6 +398,37 @@ class TeamCollabRepository {
       'color_hex': colorHex,
       'created_by': _uid,
     });
+  }
+
+  Future<void> replaceRoutes({
+    required String mapId,
+    required List<TeamMapRouteModel> routes,
+  }) async {
+    await _client.from('team_map_routes').delete().eq('map_id', mapId);
+    for (final TeamMapRouteModel route in routes) {
+      await addRoute(
+        mapId: mapId,
+        points: route.points,
+        label: route.label,
+        colorHex: route.colorHex,
+        strokeWidth: route.strokeWidth,
+      );
+    }
+  }
+
+  Future<void> replaceZones({
+    required String mapId,
+    required List<TeamMapZoneModel> zones,
+  }) async {
+    await _client.from('team_map_zones').delete().eq('map_id', mapId);
+    for (final TeamMapZoneModel zone in zones) {
+      await addZone(
+        mapId: mapId,
+        points: zone.points,
+        label: zone.label,
+        colorHex: zone.colorHex,
+      );
+    }
   }
 
   Future<void> deleteZone(String zoneId) async {

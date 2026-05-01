@@ -12,17 +12,20 @@ import 'team_collab_repository.dart';
 
 // ─── Edit Modes ──────────────────────────────────────────────────────────────
 
-enum _MapEditMode { none, respawn, target, objective, waypoint, route, zone, label }
-
-// ─── Optimistic marker ───────────────────────────────────────────────────────
-
-class _PendingMarker {
-  _PendingMarker({required this.markerType, required this.x, required this.y, this.label, this.colorHex});
-  final String markerType;
-  final double x;
-  final double y;
-  final String? label;
-  final String? colorHex;
+enum _MapEditMode {
+  none,
+  respawn,
+  target,
+  objective,
+  waypoint,
+  ammo,
+  medic,
+  bomb,
+  terminal,
+  extraction,
+  route,
+  zone,
+  label,
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -48,13 +51,79 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
   String? _routeLabel;
   final List<Map<String, double>> _zoneDraft = <Map<String, double>>[];
   String? _zoneLabel;
-  final List<_PendingMarker> _pendingMarkers = <_PendingMarker>[];
+  List<TeamMapMarkerModel> _draftMarkers = <TeamMapMarkerModel>[];
+  List<TeamMapRouteModel> _draftRoutes = <TeamMapRouteModel>[];
+  List<TeamMapZoneModel> _draftZones = <TeamMapZoneModel>[];
+  List<TeamMapMarkerModel> _remoteMarkers = <TeamMapMarkerModel>[];
+  List<TeamMapRouteModel> _remoteRoutes = <TeamMapRouteModel>[];
+  List<TeamMapZoneModel> _remoteZones = <TeamMapZoneModel>[];
+  String? _draftMapId;
+  bool _mapDirty = false;
+  bool _savingMapDraft = false;
 
   String? _draggingMarkerId;
   double _dragX = 0;
   double _dragY = 0;
 
   String get _uid => Supabase.instance.client.auth.currentUser?.id ?? '';
+
+  String _draftId() => 'draft_${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(99999)}';
+
+  void _syncDrafts(
+    TeamMapModel map,
+    List<TeamMapMarkerModel> markers,
+    List<TeamMapRouteModel> routes,
+    List<TeamMapZoneModel> zones,
+  ) {
+    _remoteMarkers = markers;
+    _remoteRoutes = routes;
+    _remoteZones = zones;
+    if (_draftMapId == map.id && _mapDirty) {
+      return;
+    }
+    _draftMapId = map.id;
+    _draftMarkers = markers
+        .map(
+          (TeamMapMarkerModel marker) => TeamMapMarkerModel(
+            id: marker.id,
+            mapId: marker.mapId,
+            markerType: marker.markerType,
+            x: marker.x,
+            y: marker.y,
+            label: marker.label,
+            colorHex: marker.colorHex,
+            sizeScale: marker.sizeScale,
+            createdBy: marker.createdBy,
+          ),
+        )
+        .toList();
+    _draftRoutes = routes
+        .map(
+          (TeamMapRouteModel route) => TeamMapRouteModel(
+            id: route.id,
+            mapId: route.mapId,
+            points: route.points.map((Map<String, double> p) => Map<String, double>.from(p)).toList(),
+            label: route.label,
+            colorHex: route.colorHex,
+            strokeWidth: route.strokeWidth,
+            createdBy: route.createdBy,
+          ),
+        )
+        .toList();
+    _draftZones = zones
+        .map(
+          (TeamMapZoneModel zone) => TeamMapZoneModel(
+            id: zone.id,
+            mapId: zone.mapId,
+            points: zone.points.map((Map<String, double> p) => Map<String, double>.from(p)).toList(),
+            label: zone.label,
+            colorHex: zone.colorHex,
+            createdBy: zone.createdBy,
+          ),
+        )
+        .toList();
+    _mapDirty = false;
+  }
 
   Future<void> _createMap() async {
     if (_creatingMap) return;
@@ -107,7 +176,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     return result;
   }
 
-  Future<String?> _showColorPicker(BuildContext context, String title) async {
+  Future<String?> _showColorPicker(String title) async {
     const List<(String label, String hex, Color color)> colors = [
       ('Red', 'F44336', Color(0xFFF44336)),
       ('Pink', 'E91E63', Color(0xFFE91E63)),
@@ -138,29 +207,40 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                   selectedHex = item.$2;
                   Navigator.of(ctx).pop();
                 },
-                child: Tooltip(
-                  message: item.$1,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: item.$3,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(ctx).colorScheme.outline,
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        item.$1.substring(0, 1),
-                        style: TextStyle(
-                          color: _isLightColor(item.$3) ? Colors.black : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                child: SizedBox(
+                  width: 72,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: item.$3,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(ctx).colorScheme.outline,
+                            width: 2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            item.$1.substring(0, 1),
+                            style: TextStyle(
+                              color: _isLightColor(item.$3) ? Colors.black : Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.$1,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -170,7 +250,7 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(AppLocalizations.of(context).t('cancel')),
+            child: Text(AppLocalizations.of(ctx).t('cancel')),
           ),
         ],
       ),
@@ -200,15 +280,86 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                 title: const Text('Change marker colour'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
-                  final String? colorHex = await _showColorPicker(context, 'Marker Colour');
+                  final String? colorHex = await _showColorPicker('Marker Colour');
                   if (colorHex == null) {
                     return;
                   }
-                  await _repository.updateMarkerAppearance(
-                    markerId: marker.id,
-                    label: marker.label,
-                    colorHex: colorHex,
+                  final int index = _draftMarkers.indexWhere((TeamMapMarkerModel item) => item.id == marker.id);
+                  if (index == -1) {
+                    return;
+                  }
+                  setState(() {
+                    _draftMarkers[index] = TeamMapMarkerModel(
+                      id: _draftMarkers[index].id,
+                      mapId: _draftMarkers[index].mapId,
+                      markerType: _draftMarkers[index].markerType,
+                      x: _draftMarkers[index].x,
+                      y: _draftMarkers[index].y,
+                      label: _draftMarkers[index].label,
+                      colorHex: colorHex,
+                      sizeScale: _draftMarkers[index].sizeScale,
+                      createdBy: _draftMarkers[index].createdBy,
+                    );
+                    _mapDirty = true;
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.open_in_full_outlined),
+                title: const Text('Resize marker'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  double sizeScale = marker.sizeScale;
+                  final bool? confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext ctx) => StatefulBuilder(
+                      builder: (BuildContext ctx, void Function(void Function()) setLocalState) => AlertDialog(
+                        title: const Text('Marker size'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Slider(
+                              value: sizeScale,
+                              min: 0.7,
+                              max: 2.4,
+                              divisions: 17,
+                              label: sizeScale.toStringAsFixed(1),
+                              onChanged: (double value) {
+                                setLocalState(() => sizeScale = value);
+                              },
+                            ),
+                            Text('Scale ${sizeScale.toStringAsFixed(1)}x'),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Apply')),
+                        ],
+                      ),
+                    ),
                   );
+                  if (confirmed != true) {
+                    return;
+                  }
+                  final int index = _draftMarkers.indexWhere((TeamMapMarkerModel item) => item.id == marker.id);
+                  if (index == -1) {
+                    return;
+                  }
+                  setState(() {
+                    final TeamMapMarkerModel current = _draftMarkers[index];
+                    _draftMarkers[index] = TeamMapMarkerModel(
+                      id: current.id,
+                      mapId: current.mapId,
+                      markerType: current.markerType,
+                      x: current.x,
+                      y: current.y,
+                      label: current.label,
+                      colorHex: current.colorHex,
+                      sizeScale: sizeScale,
+                      createdBy: current.createdBy,
+                    );
+                    _mapDirty = true;
+                  });
                 },
               ),
               ListTile(
@@ -218,7 +369,10 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                 iconColor: Colors.red,
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
-                  await _repository.deleteMarker(marker.id);
+                  setState(() {
+                    _draftMarkers.removeWhere((TeamMapMarkerModel item) => item.id == marker.id);
+                    _mapDirty = true;
+                  });
                 },
               ),
             ],
@@ -235,25 +389,39 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     final double y = (pos.dy / canvasSize.height).clamp(0.0, 1.0);
     String? label;
     if (_mode == _MapEditMode.label) label = await _promptLabel('e.g. Alpha Base');
-    final String? colorHex = await _showColorPicker(context, 'Marker Colour');
+    final String? colorHex = await _showColorPicker('Marker Colour');
+    if (!mounted) {
+      return;
+    }
     final String markerType = switch (_mode) {
       _MapEditMode.respawn => 'respawn',
       _MapEditMode.target => 'target',
       _MapEditMode.objective => 'objective',
       _MapEditMode.waypoint => 'waypoint',
+      _MapEditMode.ammo => 'ammo',
+      _MapEditMode.medic => 'medic',
+      _MapEditMode.bomb => 'bomb',
+      _MapEditMode.terminal => 'terminal',
+      _MapEditMode.extraction => 'extraction',
       _MapEditMode.label => 'label',
       _ => 'target',
     };
-    final _PendingMarker optimistic = _PendingMarker(markerType: markerType, x: x, y: y, label: label, colorHex: colorHex);
-    setState(() => _pendingMarkers.add(optimistic));
-    try {
-      await _repository.addMarker(mapId: selected.id, markerType: markerType, x: x, y: y, label: label, colorHex: colorHex);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).t('addMarkerFailed', args: {'error': e.toString()}))));
-    } finally {
-      if (mounted) setState(() => _pendingMarkers.remove(optimistic));
-    }
+    setState(() {
+      _draftMarkers.add(
+        TeamMapMarkerModel(
+          id: _draftId(),
+          mapId: selected.id,
+          markerType: markerType,
+          x: x,
+          y: y,
+          label: label,
+          colorHex: colorHex,
+          sizeScale: 1,
+          createdBy: _uid,
+        ),
+      );
+      _mapDirty = true;
+    });
   }
 
   void _appendRoutePoint(Offset pos, Size sz) {
@@ -266,10 +434,23 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
     if (_savingRoute || selected == null || _routeDraft.length < 2) return;
     setState(() => _savingRoute = true);
     try {
-      final String? colorHex = await _showColorPicker(context, 'Route Color');
-      await _repository.addRoute(mapId: selected.id, points: List.from(_routeDraft), label: _routeLabel, colorHex: colorHex);
+      final String? colorHex = await _showColorPicker('Route Color');
       if (!mounted) return;
-      setState(() { _routeDraft.clear(); _routeLabel = null; });
+      setState(() {
+        _draftRoutes.add(
+          TeamMapRouteModel(
+            id: _draftId(),
+            mapId: selected.id,
+            points: List<Map<String, double>>.from(_routeDraft),
+            label: _routeLabel,
+            colorHex: colorHex,
+            createdBy: _uid,
+          ),
+        );
+        _routeDraft.clear();
+        _routeLabel = null;
+        _mapDirty = true;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).t('routeSaveFailed', args: {'error': e.toString()}))));
@@ -286,14 +467,100 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
   Future<void> _saveZone() async {
     final TeamMapModel? selected = _selectedMap;
     if (selected == null || _zoneDraft.length < 3) return;
-    final String? colorHex = await _showColorPicker(context, 'Zone Color');
+    final String? colorHex = await _showColorPicker('Zone Color');
     try {
-      await _repository.addZone(mapId: selected.id, points: List.from(_zoneDraft), label: _zoneLabel, colorHex: colorHex);
       if (!mounted) return;
-      setState(() { _zoneDraft.clear(); _zoneLabel = null; });
+      setState(() {
+        _draftZones.add(
+          TeamMapZoneModel(
+            id: _draftId(),
+            mapId: selected.id,
+            points: List<Map<String, double>>.from(_zoneDraft),
+            label: _zoneLabel,
+            colorHex: colorHex,
+            createdBy: _uid,
+          ),
+        );
+        _zoneDraft.clear();
+        _zoneLabel = null;
+        _mapDirty = true;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save zone: $e')));
+    }
+  }
+
+  void _discardDraftChanges() {
+    final TeamMapModel? selected = _selectedMap;
+    if (selected == null) {
+      return;
+    }
+    setState(() {
+      _syncDrafts(selected, _remoteMarkers, _remoteRoutes, _remoteZones);
+      _routeDraft.clear();
+      _routeLabel = null;
+      _zoneDraft.clear();
+      _zoneLabel = null;
+    });
+  }
+
+  Future<void> _saveDraftChanges() async {
+    final TeamMapModel? selected = _selectedMap;
+    if (selected == null || _savingMapDraft) {
+      return;
+    }
+    setState(() => _savingMapDraft = true);
+    try {
+      final Set<String> remoteIds = _remoteMarkers.map((TeamMapMarkerModel marker) => marker.id).toSet();
+      final Set<String> draftIds = _draftMarkers
+          .where((TeamMapMarkerModel marker) => !marker.id.startsWith('draft_'))
+          .map((TeamMapMarkerModel marker) => marker.id)
+          .toSet();
+
+      for (final TeamMapMarkerModel marker in _draftMarkers) {
+        if (marker.id.startsWith('draft_')) {
+          await _repository.addMarker(
+            mapId: selected.id,
+            markerType: marker.markerType,
+            x: marker.x,
+            y: marker.y,
+            label: marker.label,
+            colorHex: marker.colorHex,
+            sizeScale: marker.sizeScale,
+          );
+          continue;
+        }
+        await _repository.updateMarkerPosition(marker.id, marker.x, marker.y);
+        await _repository.updateMarkerAppearance(
+          markerId: marker.id,
+          label: marker.label,
+          colorHex: marker.colorHex,
+          sizeScale: marker.sizeScale,
+        );
+      }
+
+      for (final String markerId in remoteIds.difference(draftIds)) {
+        await _repository.deleteMarker(markerId);
+      }
+
+      await _repository.replaceRoutes(mapId: selected.id, routes: _draftRoutes);
+      await _repository.replaceZones(mapId: selected.id, zones: _draftZones);
+
+      if (!mounted) return;
+      setState(() => _mapDirty = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Map changes saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save map changes: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _savingMapDraft = false);
+      }
     }
   }
 
@@ -323,6 +590,22 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
         shadowColor: cs.shadow.withValues(alpha: 0.15),
         title: Text(l10n.t('teamMap', args: {'teamName': widget.teamName}), style: const TextStyle(fontWeight: FontWeight.w700)),
         actions: [
+          if (_mapDirty)
+            TextButton(
+              onPressed: _savingMapDraft ? null : _discardDraftChanges,
+              child: const Text('Discard'),
+            ),
+          if (_mapDirty)
+            FilledButton.tonal(
+              onPressed: _savingMapDraft ? null : _saveDraftChanges,
+              child: _savingMapDraft
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
           IconButton(onPressed: _openChat, icon: const Icon(Icons.chat_bubble_outline_rounded), tooltip: l10n.teamChat),
           IconButton(onPressed: _creatingMap ? null : _createMap, icon: const Icon(Icons.add_photo_alternate_outlined), tooltip: l10n.uploadMap),
         ],
@@ -358,8 +641,21 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
 
           final TeamMapModel selected = _selectedMap!;
 
-          return Column(
-            children: [
+          return StreamBuilder<List<TeamMapMarkerModel>>(
+            stream: _repository.watchMarkers(selected.id),
+            builder: (context, markerSnapshot) {
+              final List<TeamMapMarkerModel> markers = markerSnapshot.data ?? const <TeamMapMarkerModel>[];
+              return StreamBuilder<List<TeamMapRouteModel>>(
+                stream: _repository.watchRoutes(selected.id),
+                builder: (context, routeSnapshot) {
+                  final List<TeamMapRouteModel> routes = routeSnapshot.data ?? const <TeamMapRouteModel>[];
+                  return StreamBuilder<List<TeamMapZoneModel>>(
+                    stream: _repository.watchZones(selected.id),
+                    builder: (context, zoneSnapshot) {
+                      final List<TeamMapZoneModel> zones = zoneSnapshot.data ?? const <TeamMapZoneModel>[];
+                      _syncDrafts(selected, markers, routes, zones);
+                      return Column(
+                        children: [
               // ── Map selector ──
               Container(
                 color: cs.surface,
@@ -378,6 +674,12 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                       items: maps.map((m) => DropdownMenuItem<String>(value: m.id, child: Text(m.title))).toList(),
                       onChanged: (v) {
                         if (v == null) return;
+                        if (_mapDirty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Save or discard the current draft before switching maps.')),
+                          );
+                          return;
+                        }
                         setState(() { _selectedMap = maps.firstWhere((m) => m.id == v); _routeDraft.clear(); _zoneDraft.clear(); });
                       },
                     ),
@@ -399,11 +701,12 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                     Positioned.fill(
                       child: _MapCanvas(
                         map: selected,
-                        repository: _repository,
                         mode: _mode,
+                        routes: _draftRoutes,
+                        zones: _draftZones,
+                        markers: _draftMarkers,
                         routeDraft: _routeDraft,
                         zoneDraft: _zoneDraft,
-                        pendingMarkers: _pendingMarkers,
                         currentUserId: _uid,
                         draggingMarkerId: _draggingMarkerId,
                         dragX: _dragX,
@@ -417,8 +720,37 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                         }),
                         onMarkerDragUpdate: (x, y) => setState(() { _dragX = x; _dragY = y; }),
                         onMarkerDragEnd: (id, x, y) async {
-                          setState(() => _draggingMarkerId = null);
-                          await _repository.updateMarkerPosition(id, x, y);
+                          setState(() {
+                            _draggingMarkerId = null;
+                            final int index = _draftMarkers.indexWhere((TeamMapMarkerModel marker) => marker.id == id);
+                            if (index != -1) {
+                              final TeamMapMarkerModel marker = _draftMarkers[index];
+                              _draftMarkers[index] = TeamMapMarkerModel(
+                                id: marker.id,
+                                mapId: marker.mapId,
+                                markerType: marker.markerType,
+                                x: x,
+                                y: y,
+                                label: marker.label,
+                                colorHex: marker.colorHex,
+                                sizeScale: marker.sizeScale,
+                                createdBy: marker.createdBy,
+                              );
+                            }
+                            _mapDirty = true;
+                          });
+                        },
+                        onDeleteRoute: (String routeId) {
+                          setState(() {
+                            _draftRoutes.removeWhere((TeamMapRouteModel route) => route.id == routeId);
+                            _mapDirty = true;
+                          });
+                        },
+                        onDeleteZone: (String zoneId) {
+                          setState(() {
+                            _draftZones.removeWhere((TeamMapZoneModel zone) => zone.id == zoneId);
+                            _mapDirty = true;
+                          });
                         },
                       ),
                     ),
@@ -472,7 +804,13 @@ class _TeamMapScreenState extends State<TeamMapScreen> {
                   saveLabel: 'Save Zone',
                   clearLabel: l10n.mapModeClear,
                 ),
-            ],
+                        ],
+                      );
+                    },
+                  );
+                },
+              );
+            },
           );
         },
       ),
@@ -550,7 +888,7 @@ class _ToolDock extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      width: 56,
+      width: 136,
       margin: const EdgeInsets.only(right: 12, bottom: 12),
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: 0.96),
@@ -581,6 +919,11 @@ class _ToolDock extends StatelessWidget {
           _ToolButton(icon: Icons.location_on_rounded, label: 'Target', active: mode == _MapEditMode.target, cs: cs, onTap: () => onModeSelected(_MapEditMode.target)),
           _ToolButton(icon: Icons.adjust_rounded, label: 'Objective', active: mode == _MapEditMode.objective, cs: cs, onTap: () => onModeSelected(_MapEditMode.objective)),
           _ToolButton(icon: Icons.place_rounded, label: 'Waypoint', active: mode == _MapEditMode.waypoint, cs: cs, onTap: () => onModeSelected(_MapEditMode.waypoint)),
+          _ToolButton(icon: Icons.inventory_2_rounded, label: 'Ammo', active: mode == _MapEditMode.ammo, cs: cs, onTap: () => onModeSelected(_MapEditMode.ammo)),
+          _ToolButton(icon: Icons.medical_services_rounded, label: 'Medic', active: mode == _MapEditMode.medic, cs: cs, onTap: () => onModeSelected(_MapEditMode.medic)),
+          _ToolButton(icon: Icons.whatshot_rounded, label: 'Bomb', active: mode == _MapEditMode.bomb, cs: cs, onTap: () => onModeSelected(_MapEditMode.bomb)),
+          _ToolButton(icon: Icons.dns_rounded, label: 'Terminal', active: mode == _MapEditMode.terminal, cs: cs, onTap: () => onModeSelected(_MapEditMode.terminal)),
+          _ToolButton(icon: Icons.flight_takeoff_rounded, label: 'Extraction', active: mode == _MapEditMode.extraction, cs: cs, onTap: () => onModeSelected(_MapEditMode.extraction)),
           _ToolButton(icon: Icons.title_rounded, label: 'Label', active: mode == _MapEditMode.label, cs: cs, onTap: () => onModeSelected(_MapEditMode.label)),
           Container(
             height: 1,
@@ -611,29 +954,40 @@ class _ToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      preferBelow: false,
-      waitDuration: const Duration(milliseconds: 500),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            width: 56,
-            height: 44,
-            decoration: BoxDecoration(
-              color: active
-                  ? cs.primary.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              size: 22,
-              color: active ? cs.primary : cs.onSurfaceVariant,
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 136,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: active
+                ? cs.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: active ? cs.primary : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: active ? cs.primary : cs.onSurfaceVariant,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -645,21 +999,23 @@ class _ToolButton extends StatelessWidget {
 
 class _MapCanvas extends StatelessWidget {
   const _MapCanvas({
-    required this.map, required this.repository, required this.mode,
-    required this.routeDraft, required this.zoneDraft, required this.pendingMarkers,
+    required this.map, required this.mode,
+    required this.routes, required this.zones, required this.markers,
+    required this.routeDraft, required this.zoneDraft,
     required this.currentUserId, required this.draggingMarkerId,
     required this.dragX, required this.dragY,
     required this.onTapMap, required this.onMarkerDragStart,
     required this.onMarkerDragUpdate, required this.onMarkerDragEnd,
-    required this.onMarkerTap,
+    required this.onMarkerTap, required this.onDeleteRoute, required this.onDeleteZone,
   });
 
   final TeamMapModel map;
-  final TeamCollabRepository repository;
   final _MapEditMode mode;
+  final List<TeamMapRouteModel> routes;
+  final List<TeamMapZoneModel> zones;
+  final List<TeamMapMarkerModel> markers;
   final List<Map<String, double>> routeDraft;
   final List<Map<String, double>> zoneDraft;
-  final List<_PendingMarker> pendingMarkers;
   final String currentUserId;
   final String? draggingMarkerId;
   final double dragX, dragY;
@@ -668,6 +1024,8 @@ class _MapCanvas extends StatelessWidget {
   final void Function(double, double) onMarkerDragUpdate;
   final void Function(String, double, double) onMarkerDragEnd;
   final ValueChanged<TeamMapMarkerModel> onMarkerTap;
+  final ValueChanged<String> onDeleteRoute;
+  final ValueChanged<String> onDeleteZone;
 
   @override
   Widget build(BuildContext context) {
@@ -676,104 +1034,118 @@ class _MapCanvas extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: const BoxDecoration(color: Color(0xFF111510)),
-        child: LayoutBuilder(builder: (context, constraints) {
-          final Size sz = Size(constraints.maxWidth, constraints.maxHeight);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (d) => onTapMap(d.localPosition, sz),
-            child: InteractiveViewer(
-              panEnabled: draggingMarkerId == null,
-              minScale: 0.8,
-              maxScale: 6,
-              child: Stack(children: [
-                // Image
-                Positioned.fill(
-                  child: Image.network(map.imageUrl, fit: BoxFit.contain,
-                      errorBuilder: (ctx, _, _) => Center(child: Text(AppLocalizations.of(ctx).t('mapUploadFailed', args: {'error': '?'}), style: TextStyle(color: cs.error)))),
-                ),
-                // Zones
-                StreamBuilder<List<TeamMapZoneModel>>(
-                  stream: repository.watchZones(map.id),
-                  builder: (context, snap) => CustomPaint(
-                    painter: _ZonePainter(zones: snap.data ?? const [], draft: zoneDraft),
-                    size: Size.infinite,
-                  ),
-                ),
-                // Routes + labels
-                StreamBuilder<List<TeamMapRouteModel>>(
-                  stream: repository.watchRoutes(map.id),
-                  builder: (context, snap) {
-                    final routes = snap.data ?? const <TeamMapRouteModel>[];
-                    return Stack(children: [
-                      CustomPaint(painter: _RoutePainter(routes: routes, draft: routeDraft), size: Size.infinite),
-                      ...routes.where((r) => (r.label ?? '').isNotEmpty).map((r) {
-                        final mid = r.points[r.points.length ~/ 2];
-                        return Positioned(
-                          left: (mid['x'] ?? 0) * sz.width - 36,
-                          top: (mid['y'] ?? 0) * sz.height - 22,
-                          child: GestureDetector(
-                            onLongPress: () async {
-                              if (r.createdBy != currentUserId) return;
-                              await repository.deleteRoute(r.id);
-                            },
-                            child: _LabelChip(text: r.label!),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final Size sz = Size(constraints.maxWidth, constraints.maxHeight);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) => onTapMap(details.localPosition, sz),
+              child: InteractiveViewer(
+                panEnabled: draggingMarkerId == null,
+                minScale: 0.8,
+                maxScale: 6,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Image.network(
+                        map.imageUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (ctx, _, _) => Center(
+                          child: Text(
+                            AppLocalizations.of(ctx).t('mapUploadFailed', args: {'error': '?'}),
+                            style: TextStyle(color: cs.error),
                           ),
-                        );
-                      }),
-                    ]);
-                  },
-                ),
-                // Markers
-                StreamBuilder<List<TeamMapMarkerModel>>(
-                  stream: repository.watchMarkers(map.id),
-                  builder: (context, snap) {
-                    final markers = snap.data ?? const <TeamMapMarkerModel>[];
-                    return Stack(children: [
-                      ...markers.map((marker) {
-                        final isDragging = draggingMarkerId == marker.id;
-                        final lx = (isDragging ? dragX : marker.x) * sz.width;
-                        final ly = (isDragging ? dragY : marker.y) * sz.height;
-                        return Positioned(
-                          left: math.max(0, lx - 14),
-                          top: math.max(0, ly - 14),
-                          child: GestureDetector(
-                            onTap: () => onMarkerTap(marker),
-                            onPanStart: (_) {
-                              if (marker.createdBy != currentUserId) return;
-                              onMarkerDragStart(marker.id, marker.x, marker.y);
-                            },
-                            onPanUpdate: (d) {
-                              if (marker.createdBy != currentUserId) return;
-                              final double baseX = isDragging ? dragX : marker.x;
-                              final double baseY = isDragging ? dragY : marker.y;
-                              final nx = (baseX + (d.delta.dx / sz.width)).clamp(0.0, 1.0);
-                              final ny = (baseY + (d.delta.dy / sz.height)).clamp(0.0, 1.0);
-                              onMarkerDragUpdate(nx, ny);
-                            },
-                            onPanEnd: (_) {
-                              if (marker.createdBy != currentUserId) return;
-                              onMarkerDragEnd(marker.id, dragX, dragY);
-                            },
-                            child: _MarkerWidget(markerType: marker.markerType, label: marker.label, colorHex: marker.colorHex),
+                        ),
+                      ),
+                    ),
+                    CustomPaint(
+                      painter: _ZonePainter(zones: zones, draft: zoneDraft),
+                      size: Size.infinite,
+                    ),
+                    CustomPaint(
+                      painter: _RoutePainter(routes: routes, draft: routeDraft),
+                      size: Size.infinite,
+                    ),
+                    ...routes.map((TeamMapRouteModel route) {
+                      final Map<String, double> mid = route.points[route.points.length ~/ 2];
+                      return Positioned(
+                        left: (mid['x'] ?? 0) * sz.width - 36,
+                        top: (mid['y'] ?? 0) * sz.height - 22,
+                        child: GestureDetector(
+                          onLongPress: () {
+                            if (route.createdBy != currentUserId) return;
+                            onDeleteRoute(route.id);
+                          },
+                          child: _LabelChip(
+                            text: (route.label ?? 'Route') + (route.createdBy == currentUserId ? '  Hold to delete' : ''),
                           ),
-                        );
-                      }),
-                      ...pendingMarkers.map((pm) {
-                        final lx = pm.x * sz.width;
-                        final ly = pm.y * sz.height;
-                        return Positioned(
-                          left: math.max(0, lx - 14),
-                          top: math.max(0, ly - 14),
-                          child: Opacity(opacity: 0.55, child: _MarkerWidget(markerType: pm.markerType, label: pm.label, colorHex: pm.colorHex)),
-                        );
-                      }),
-                    ]);
-                  },
+                        ),
+                      );
+                    }),
+                    ...zones.where((TeamMapZoneModel zone) => zone.points.isNotEmpty).map((TeamMapZoneModel zone) {
+                      double sumX = 0;
+                      double sumY = 0;
+                      for (final Map<String, double> point in zone.points) {
+                        sumX += point['x'] ?? 0;
+                        sumY += point['y'] ?? 0;
+                      }
+                      final double centerX = sumX / zone.points.length;
+                      final double centerY = sumY / zone.points.length;
+                      return Positioned(
+                        left: centerX * sz.width - 42,
+                        top: centerY * sz.height - 14,
+                        child: GestureDetector(
+                          onLongPress: () {
+                            if (zone.createdBy != currentUserId) return;
+                            onDeleteZone(zone.id);
+                          },
+                          child: _LabelChip(
+                            text: (zone.label ?? 'Zone') + (zone.createdBy == currentUserId ? '  Hold to delete' : ''),
+                          ),
+                        ),
+                      );
+                    }),
+                    ...markers.map((TeamMapMarkerModel marker) {
+                      final bool isDragging = draggingMarkerId == marker.id;
+                      final double lx = (isDragging ? dragX : marker.x) * sz.width;
+                      final double ly = (isDragging ? dragY : marker.y) * sz.height;
+                      final double radiusOffset = 14 * marker.sizeScale;
+                      return Positioned(
+                        left: math.max(0, lx - radiusOffset),
+                        top: math.max(0, ly - radiusOffset),
+                        child: GestureDetector(
+                          onTap: () => onMarkerTap(marker),
+                          onPanStart: (_) {
+                            if (marker.createdBy != currentUserId) return;
+                            onMarkerDragStart(marker.id, marker.x, marker.y);
+                          },
+                          onPanUpdate: (details) {
+                            if (marker.createdBy != currentUserId) return;
+                            final double baseX = isDragging ? dragX : marker.x;
+                            final double baseY = isDragging ? dragY : marker.y;
+                            final double nx = (baseX + (details.delta.dx / sz.width)).clamp(0.0, 1.0);
+                            final double ny = (baseY + (details.delta.dy / sz.height)).clamp(0.0, 1.0);
+                            onMarkerDragUpdate(nx, ny);
+                          },
+                          onPanEnd: (_) {
+                            if (marker.createdBy != currentUserId) return;
+                            onMarkerDragEnd(marker.id, dragX, dragY);
+                          },
+                          child: _MarkerWidget(
+                            markerType: marker.markerType,
+                            label: marker.label,
+                            colorHex: marker.colorHex,
+                            sizeScale: marker.sizeScale,
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
-              ]),
-            ),
-          );
-        }),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -782,10 +1154,11 @@ class _MapCanvas extends StatelessWidget {
 // ─── Marker widget ────────────────────────────────────────────────────────────
 
 class _MarkerWidget extends StatelessWidget {
-  const _MarkerWidget({required this.markerType, this.label, this.colorHex});
+  const _MarkerWidget({required this.markerType, this.label, this.colorHex, this.sizeScale = 1});
   final String markerType;
   final String? label;
   final String? colorHex;
+  final double sizeScale;
 
   @override
   Widget build(BuildContext context) {
@@ -793,10 +1166,17 @@ class _MarkerWidget extends StatelessWidget {
       'respawn'   => (Icons.flag_rounded,        const Color(0xFF4FC3F7)),
       'objective' => (Icons.adjust_rounded,      const Color(0xFFFFB74D)),
       'waypoint'  => (Icons.place_rounded,       const Color(0xFF81C784)),
+      'ammo'      => (Icons.inventory_2_rounded, const Color(0xFF8D6E63)),
+      'medic'     => (Icons.medical_services_rounded, const Color(0xFFEF5350)),
+      'bomb'      => (Icons.whatshot_rounded,    const Color(0xFFFF7043)),
+      'terminal'  => (Icons.dns_rounded,         const Color(0xFF7986CB)),
+      'extraction'=> (Icons.flight_takeoff_rounded, const Color(0xFF26A69A)),
       'label'     => (Icons.label_rounded,       const Color(0xFFCE93D8)),
       _           => (Icons.location_on_rounded, const Color(0xFFEF5350)),
     };
     final Color color = _hex(colorHex) ?? fallbackColor;
+    final double diameter = 28 * sizeScale;
+    final double iconSize = 14 * sizeScale.clamp(0.8, 1.8);
     return Column(mainAxisSize: MainAxisSize.min, children: [
       if ((label ?? '').isNotEmpty) ...[
         Container(
@@ -808,10 +1188,10 @@ class _MarkerWidget extends StatelessWidget {
         const SizedBox(height: 2),
       ],
       Container(
-        width: 28,
-        height: 28,
+        width: diameter,
+        height: diameter,
         decoration: BoxDecoration(color: color.withValues(alpha: 0.18), shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
-        child: Icon(icon, color: color, size: 14),
+        child: Icon(icon, color: color, size: iconSize),
       ),
     ]);
   }

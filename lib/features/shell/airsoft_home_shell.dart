@@ -559,34 +559,6 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                 selectedIndex: selectedIndex,
                 onDestinationSelected: _selectTab,
                 groupAlignment: -0.7,
-                leading: Column(
-                  children: <Widget>[
-                    _RailActionButton(
-                      icon: Icons.search_rounded,
-                      label: 'Search',
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const GlobalSearchScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _RailActionButton(
-                      icon: Icons.notifications_outlined,
-                      label: l10n.t('notifications'),
-                      badgeCount: _unreadNotifications,
-                      onPressed: _openNotifications,
-                    ),
-                    const SizedBox(height: 8),
-                    _RailActionButton(
-                      icon: Icons.mail_outline,
-                      label: l10n.t('messages'),
-                      badgeCount: _unreadMessages,
-                      onPressed: _openMessages,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
                 destinations: <NavigationRailDestination>[
                   NavigationRailDestination(
                     icon: const Icon(Icons.home_outlined),
@@ -739,15 +711,19 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
               children: <Widget>[
                 _buildTabletRail(l10n, showingPrimaryTabs),
                 Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                    ),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1280),
-                        child: body,
+                  child: SafeArea(
+                    left: false,
+                    top: false,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                      ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1280),
+                          child: body,
+                        ),
                       ),
                     ),
                   ),

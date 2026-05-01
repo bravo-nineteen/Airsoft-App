@@ -164,6 +164,12 @@ class _TeamCard extends StatelessWidget {
   const _TeamCard({required this.team});
   final TeamModel team;
 
+  String get _locationLabel => [
+        team.country,
+        team.prefecture,
+        team.city,
+      ].whereType<String>().where((String value) => value.trim().isNotEmpty).join(' • ');
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -217,6 +223,22 @@ class _TeamCard extends StatelessWidget {
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
+                    const SizedBox(height: 4),
+                    Text(
+                      _locationLabel.isEmpty
+                          ? '${team.memberCount} members'
+                          : '${team.memberCount} members • $_locationLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if ((team.association ?? '').trim().isNotEmpty)
+                      Text(
+                        team.association!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),

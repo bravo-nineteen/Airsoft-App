@@ -94,7 +94,7 @@ class MembershipRepository {
       'full_name': trimmedName,
       'contact_email': trimmedEmail,
       'notes': notes.trim().isEmpty ? null : notes.trim(),
-      'annual_fee_yen': 5000,
+      'annual_fee_yen': 800,
       'payment_platform': 'google_play',
       'status': 'pending',
     });

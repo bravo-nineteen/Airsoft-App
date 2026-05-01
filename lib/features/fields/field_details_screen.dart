@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../community/community_image_service.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 
 import 'field_booking_inbox_screen.dart';
@@ -22,10 +23,10 @@ class FieldDetailsScreen extends StatefulWidget {
 
 class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   final FieldRepository _repository = FieldRepository();
+  final CommunityImageService _imageService = CommunityImageService();
   final TextEditingController _reviewController = TextEditingController();
   final TextEditingController _claimStaffNameController =
       TextEditingController();
-  final TextEditingController _claimIdController = TextEditingController();
   final TextEditingController _claimPhoneController = TextEditingController();
   final TextEditingController _claimEmailController = TextEditingController();
   final TextEditingController _claimNoteController =
@@ -44,9 +45,11 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   bool _loadingBookingOptions = true;
   bool _savingReview = false;
   bool _submittingClaim = false;
+  bool _uploadingClaimId = false;
   bool _submittingBooking = false;
   int _selectedRating = 5;
   String? _editingReviewId;
+  String? _claimIdImageUrl;
 
   FieldModel get field => widget.field;
 
@@ -255,10 +258,9 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       return false;
     }
     final String staffName = _claimStaffNameController.text.trim();
-    final String idNumber = _claimIdController.text.trim();
     final String phone = _claimPhoneController.text.trim();
     final String email = _claimEmailController.text.trim();
-    if (staffName.isEmpty || idNumber.isEmpty || phone.isEmpty || email.isEmpty) {
+    if (staffName.isEmpty || (_claimIdImageUrl ?? '').isEmpty || phone.isEmpty || email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Fill in all claim verification fields.')),
       );
@@ -273,7 +275,8 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       await _repository.submitFieldClaimRequest(
         fieldId: field.id,
         staffName: staffName,
-        officialIdNumber: idNumber,
+        officialIdNumber: _claimIdImageUrl!,
+        officialIdImageUrl: _claimIdImageUrl,
         officialPhone: phone,
         officialEmail: email,
         verificationNote: _claimNoteController.text,
@@ -284,7 +287,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Claim request sent. Admin will review your request first. If approved, they will send a Google Play payment request (¥5000/year).',
+            'Claim request sent. Admin will review your request first. If approved, they will send a Google Play payment request (¥5,000/year).',
           ),
         ),
       );
@@ -317,7 +320,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 const Text(
-                  'Submit your field staff verification details. Payment is requested only after admin approval.',
+                  'Submit your field staff verification details. Annual fee is ¥5,000 and payment is requested only after admin approval.',
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -325,10 +328,37 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
                   decoration: const InputDecoration(labelText: 'Staff name'),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _claimIdController,
-                  decoration: const InputDecoration(
-                    labelText: 'Official ID / employee ID',
+                OutlinedButton.icon(
+                  onPressed: _uploadingClaimId
+                      ? null
+                      : () async {
+                          setState(() => _uploadingClaimId = true);
+                          try {
+                            final String? imageUrl = await _imageService
+                                .pickCropAndUploadCommunityImage(
+                              folder: 'field-claims',
+                            );
+                            if (!mounted || imageUrl == null) {
+                              return;
+                            }
+                            setState(() => _claimIdImageUrl = imageUrl);
+                          } finally {
+                            if (mounted) {
+                              setState(() => _uploadingClaimId = false);
+                            }
+                          }
+                        },
+                  icon: _uploadingClaimId
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.badge_outlined),
+                  label: Text(
+                    (_claimIdImageUrl ?? '').isEmpty
+                        ? 'Upload official ID image'
+                        : 'ID image uploaded',
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -540,7 +570,6 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   void dispose() {
     _reviewController.dispose();
     _claimStaffNameController.dispose();
-    _claimIdController.dispose();
     _claimPhoneController.dispose();
     _claimEmailController.dispose();
     _claimNoteController.dispose();
@@ -932,7 +961,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               )
             else
               const Text(
-                'Staff can claim this field by submitting official ID, phone, and email. Admin reviews first and sends the ¥5000/year Google Play request only after approval.',
+                'Staff can claim this field by submitting an official ID image, phone, and email. Admin reviews first and sends the ¥5,000/year Google Play request only after approval.',
               ),
             const SizedBox(height: 12),
             Row(
