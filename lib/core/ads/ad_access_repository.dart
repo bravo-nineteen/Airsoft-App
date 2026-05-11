@@ -3,17 +3,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AdAccessRepository {
   AdAccessRepository();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient? get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<bool> shouldShowAds() async {
-    final User? user = _client.auth.currentUser;
+    final SupabaseClient? client = _client;
+    if (client == null) {
+      return true;
+    }
+
+    final User? user = client.auth.currentUser;
     if (user == null) {
       return true;
     }
 
     final DateTime nowUtc = DateTime.now().toUtc();
 
-    final List<dynamic> rows = await _client
+    final List<dynamic> rows = await client
         .from('ad_free_membership_requests')
         .select('status, expires_at')
         .eq('requester_user_id', user.id)

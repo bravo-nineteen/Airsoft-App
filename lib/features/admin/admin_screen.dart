@@ -1351,7 +1351,7 @@ class _AdminScreenState extends State<AdminScreen>
                       children: <Widget>[
                         Text(request.fieldName ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         Text('Claimant: ${request.staffName} (${request.requesterUserId})'),  
-                        Text('Payment status: ${request.paymentStatus ?? 'payment_requested'}'),
+                        Text('Payment status: ${request.paymentStatus}'),
                         const SizedBox(height: 8),
                         Row(
                           children: <Widget>[
