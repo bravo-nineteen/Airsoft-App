@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../core/location/location_preferences.dart';
-import '../admin/admin_create_shop_screen.dart';
-import '../admin/admin_repository.dart';
 import 'shop_details_screen.dart';
 import 'shop_model.dart';
 import 'shop_repository.dart';
@@ -18,19 +16,24 @@ class ShopsScreen extends StatefulWidget {
 
 class _ShopsScreenState extends State<ShopsScreen> {
   final ShopRepository _repository = ShopRepository();
-  final AdminRepository _adminRepository = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedCountry = LocationPreferences.allCountries;
   String _selectedPrefecture = 'All';
   final Set<String> _selectedFeatures = <String>{};
+  bool _featuresExpanded = false;
   late Future<List<ShopModel>> _shopsFuture;
-  late Future<bool> _isAdminFuture;
 
   List<ShopModel> _allShops = const [];
+  static const int _lazyPageSize = 20;
+  int _visibleCount = _lazyPageSize;
 
   List<String> get _regions {
-    final Set<String> values = <String>{'All'};
+    // Merge predefined regions for the selected country with any regions
+    // already present in the loaded data.
+    final Set<String> values = <String>{
+      ...LocationPreferences.getRegions(_selectedCountry),
+    };
     for (final ShopModel shop in _allShops.where((ShopModel s) {
       return LocationPreferences.matchesCountry(
         selectedCountry: _selectedCountry,
@@ -94,7 +97,6 @@ class _ShopsScreenState extends State<ShopsScreen> {
     super.initState();
     _restoreCountryPreference();
     _shopsFuture = _loadShops();
-    _isAdminFuture = _adminRepository.isCurrentUserAdmin();
   }
 
   Future<void> _restoreCountryPreference() async {
@@ -125,7 +127,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
       prefecture: _selectedPrefecture,
       features: _selectedFeatures.toList(),
     );
-    return filtered.where((ShopModel shop) {
+    final List<ShopModel> scoped = filtered.where((ShopModel shop) {
       return LocationPreferences.matchesCountry(
         selectedCountry: _selectedCountry,
         country: shop.country,
@@ -133,6 +135,8 @@ class _ShopsScreenState extends State<ShopsScreen> {
         address: shop.address,
       );
     }).toList();
+    _visibleCount = _lazyPageSize;
+    return scoped;
   }
 
   void _refresh() {
@@ -143,9 +147,22 @@ class _ShopsScreenState extends State<ShopsScreen> {
 
   void _applyFilters() {
     setState(() {
+      _visibleCount = _lazyPageSize;
       _shopsFuture = Future.value(
         _repository
             .applyFilters(
+
+                void _loadMoreIfNeeded(int total, int index) {
+                  if (index < _visibleCount - 6) {
+                    return;
+                  }
+                  if (_visibleCount >= total) {
+                    return;
+                  }
+                  setState(() {
+                    _visibleCount = (_visibleCount + _lazyPageSize).clamp(0, total);
+                  });
+                }
               _allShops,
               search: _searchController.text,
               prefecture: _selectedPrefecture,
@@ -170,20 +187,11 @@ class _ShopsScreenState extends State<ShopsScreen> {
     ).push(MaterialPageRoute(builder: (_) => ShopDetailsScreen(shop: shop)));
   }
 
-  Future<void> _openCreateShopScreen() async {
-    final bool? created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const AdminCreateShopScreen()),
-    );
-    if (!mounted || created != true) {
-      return;
-    }
-    _refresh();
-  }
-
   Future<void> _openSubmitShopScreen() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const UserSubmitShopScreen()));
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const UserSubmitShopScreen()));
+    if (!mounted) return;
+    _refresh();
   }
 
   @override
@@ -281,63 +289,73 @@ class _ShopsScreenState extends State<ShopsScreen> {
                       ),
                       if (_availableFeatures.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Features',
-                            style: Theme.of(context).textTheme.titleSmall,
+                        Theme(
+                          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ExpansionTile(
+                              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+                              childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                              title: Row(
+                                children: [
+                                  Text('Features', style: Theme.of(context).textTheme.titleSmall),
+                                  if (_selectedFeatures.isNotEmpty) ...<Widget>[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${_selectedFeatures.length}',
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.onPrimary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              initiallyExpanded: _featuresExpanded,
+                              onExpansionChanged: (v) => setState(() => _featuresExpanded = v),
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _availableFeatures.map((String feature) {
+                                    final bool isSelected = _selectedFeatures.contains(feature);
+                                    return FilterChip(
+                                      label: Text(feature),
+                                      selected: isSelected,
+                                      onSelected: (bool selected) {
+                                        setState(() {
+                                          if (selected) _selectedFeatures.add(feature);
+                                          else _selectedFeatures.remove(feature);
+                                        });
+                                        _applyFilters();
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _availableFeatures.map((String feature) {
-                            final bool isSelected = _selectedFeatures.contains(
-                              feature,
-                            );
-                            return FilterChip(
-                              label: Text(feature),
-                              selected: isSelected,
-                              onSelected: (bool selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedFeatures.add(feature);
-                                  } else {
-                                    _selectedFeatures.remove(feature);
-                                  }
-                                });
-                                _applyFilters();
-                              },
-                            );
-                          }).toList(),
                         ),
                       ],
                       const SizedBox(height: 12),
-                      FutureBuilder<bool>(
-                        future: _isAdminFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.data == true) {
-                            return Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.icon(
-                                onPressed: _openCreateShopScreen,
-                                icon: const Icon(Icons.store_mall_directory),
-                                label: const Text('Add Shop (Admin)'),
-                              ),
-                            );
-                          }
-
-                          // Regular users can submit a shop for review.
-                          return Align(
-                            alignment: Alignment.centerRight,
-                            child: OutlinedButton.icon(
-                              onPressed: _openSubmitShopScreen,
-                              icon: const Icon(Icons.storefront_outlined),
-                              label: Text(l10n.t('submitShop')),
-                            ),
-                          );
-                        },
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          onPressed: _openSubmitShopScreen,
+                          icon: const Icon(Icons.storefront_outlined),
+                          label: const Text('Add Shop'),
+                        ),
                       ),
                     ],
                   ),
@@ -368,6 +386,7 @@ class _ShopsScreenState extends State<ShopsScreen> {
                   }
 
                   final shops = snapshot.data ?? <ShopModel>[];
+                  final int visible = _visibleCount.clamp(0, shops.length);
 
                   if (shops.isEmpty) {
                     return Center(child: Text(l10n.t('noShopsFound')));
@@ -385,8 +404,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
                                   crossAxisSpacing: 16,
                                   childAspectRatio: 2.25,
                                 ),
-                            itemCount: shops.length,
+                            itemCount: visible,
                             itemBuilder: (context, index) {
+                              _loadMoreIfNeeded(shops.length, index);
                               return _ShopDirectoryCard(
                                 shop: shops[index],
                                 onTap: () => _openShop(shops[index]),
@@ -395,8 +415,9 @@ class _ShopsScreenState extends State<ShopsScreen> {
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.all(16),
-                            itemCount: shops.length,
+                            itemCount: visible,
                             itemBuilder: (context, index) {
+                              _loadMoreIfNeeded(shops.length, index);
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _ShopDirectoryCard(

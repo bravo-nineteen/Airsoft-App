@@ -161,7 +161,22 @@ class TeamRepository {
         .select()
         .single();
 
-    return TeamModel.fromJson(Map<String, dynamic>.from(row));
+    final team = TeamModel.fromJson(Map<String, dynamic>.from(row));
+
+    // Ensure the creator is in team_members as an active leader so
+    // getMyTeams() (which queries team_members) can find this team.
+    try {
+      await _client.from('team_members').upsert({
+        'team_id': team.id,
+        'user_id': uid,
+        'role': 'leader',
+        'status': 'active',
+      }, onConflict: 'team_id,user_id');
+    } catch (_) {
+      // Non-fatal: team was created; membership row may already exist via trigger.
+    }
+
+    return team;
   }
 
   Future<void> updateTeam(

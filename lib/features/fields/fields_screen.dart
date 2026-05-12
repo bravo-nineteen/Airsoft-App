@@ -5,9 +5,6 @@ import 'package:flutter/material.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../core/content/app_content_preloader.dart';
 import '../../core/location/location_preferences.dart';
-import '../admin/admin_create_field_screen.dart';
-import '../admin/admin_repository.dart';
-
 import 'field_details_screen.dart';
 import 'field_map_screen.dart';
 import 'field_model.dart';
@@ -24,7 +21,6 @@ class FieldsScreen extends StatefulWidget {
 class _FieldsScreenState extends State<FieldsScreen> {
   final AppContentPreloader _contentPreloader = AppContentPreloader.instance;
   final FieldRepository _repository = FieldRepository();
-  final AdminRepository _adminRepository = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedLocation = 'All';
@@ -34,7 +30,6 @@ class _FieldsScreenState extends State<FieldsScreen> {
   bool _mapView = false;
 
   late Future<List<FieldModel>> _fieldsFuture;
-  late Future<bool> _isAdminFuture;
 
   List<FieldModel> get _countryScopedFields {
     return _contentPreloader.fields.where((FieldModel field) {
@@ -85,7 +80,6 @@ class _FieldsScreenState extends State<FieldsScreen> {
     _contentPreloader.fieldsRevision.addListener(_handleSharedFieldsUpdated);
     _restoreCountryPreference();
     _fieldsFuture = _loadFields();
-    _isAdminFuture = _adminRepository.isCurrentUserAdmin();
   }
 
   Future<void> _restoreCountryPreference() async {
@@ -164,22 +158,11 @@ class _FieldsScreenState extends State<FieldsScreen> {
     ).push(MaterialPageRoute(builder: (_) => FieldDetailsScreen(field: field)));
   }
 
-  Future<void> _openCreateFieldScreen() async {
-    final bool? created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const AdminCreateFieldScreen()),
-    );
-
-    if (!mounted || created != true) {
-      return;
-    }
-
-    _refreshFields();
-  }
-
   Future<void> _openSubmitFieldScreen() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const UserSubmitFieldScreen()),
     );
+    if (mounted) _refreshFields();
   }
 
   @override
@@ -211,29 +194,6 @@ class _FieldsScreenState extends State<FieldsScreen> {
                 onSubmitted: (_) => _refreshFields(),
               ),
               const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          SizedBox(
-                            width: isWide ? 260 : double.infinity,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _selectedCountry,
-                              decoration: const InputDecoration(
-                                labelText: 'Country',
-                              ),
-                              items: LocationPreferences.countries
-                                  .map(
-                                    (String value) => DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(value),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (String? value) {
-                                setState(() {
-                                  _selectedCountry =
-                                      value ?? LocationPreferences.allCountries;
                                   _selectedLocation = 'All';
                                 });
                                 LocationPreferences.savePreferredCountry(
@@ -310,57 +270,39 @@ class _FieldsScreenState extends State<FieldsScreen> {
                               },
                             ),
                           ),
-                          SizedBox(
-                            width: isWide ? 220 : double.infinity,
-                            child: SegmentedButton<bool>(
-                              segments: [
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text(l10n.list),
-                                  icon: const Icon(Icons.view_agenda_outlined),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text(l10n.map),
-                                  icon: const Icon(Icons.map_outlined),
-                                ),
-                              ],
-                              selected: {_mapView},
-                              onSelectionChanged: (selection) {
-                                setState(() {
-                                  _mapView = selection.first;
-                                });
-                              },
-                            ),
-                          ),
                         ],
                       ),
-              const SizedBox(height: 12),
-              FutureBuilder<bool>(
-                future: _isAdminFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.data == true) {
-                    return Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _openCreateFieldScreen,
-                        icon: const Icon(Icons.add_business),
-                        label: const Text('Add Field (Admin)'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SegmentedButton<bool>(
+                        segments: [
+                          ButtonSegment<bool>(
+                            value: false,
+                            label: Text(l10n.list),
+                            icon: const Icon(Icons.view_agenda_outlined),
+                          ),
+                          ButtonSegment<bool>(
+                            value: true,
+                            label: Text(l10n.map),
+                            icon: const Icon(Icons.map_outlined),
+                          ),
+                        ],
+                        selected: {_mapView},
+                        onSelectionChanged: (selection) {
+                          setState(() { _mapView = selection.first; });
+                        },
                       ),
-                    );
-                  }
-
-                  // Regular users can submit a field for review.
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
                       onPressed: _openSubmitFieldScreen,
                       icon: const Icon(Icons.add_location_alt_outlined),
-                      label: Text(l10n.t('submitField')),
+                      label: const Text('Add Field'),
                     ),
-                  );
-                },
-              ),
+                  ],
+                ),
                     ],
                   ),
                 ),

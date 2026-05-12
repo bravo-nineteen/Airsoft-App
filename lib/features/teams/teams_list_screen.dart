@@ -125,7 +125,7 @@ class _TeamsListScreenState extends State<TeamsListScreen>
   }
 }
 
-class _TeamList extends StatelessWidget {
+class _TeamList extends StatefulWidget {
   const _TeamList({
     required this.teams,
     required this.loading,
@@ -139,22 +139,63 @@ class _TeamList extends StatelessWidget {
   final String emptyMessage;
 
   @override
+  State<_TeamList> createState() => _TeamListState();
+}
+
+class _TeamListState extends State<_TeamList> {
+  static const int _pageSize = 20;
+  int _visibleCount = _pageSize;
+
+  @override
+  void didUpdateWidget(covariant _TeamList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teams != widget.teams) {
+      _visibleCount = _pageSize;
+    }
+  }
+
+  bool get _canLoadMore => _visibleCount < widget.teams.length;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (!_canLoadMore) return false;
+    if (notification.metrics.pixels >=
+        notification.metrics.maxScrollExtent - 320) {
+      setState(() {
+        _visibleCount = (_visibleCount + _pageSize).clamp(0, widget.teams.length);
+      });
+    }
+    return false;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (loading) {
+    if (widget.loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (teams.isEmpty) {
+    if (widget.teams.isEmpty) {
       return Center(
-        child: Text(emptyMessage,
+        child: Text(widget.emptyMessage,
             style: Theme.of(context).textTheme.bodyMedium),
       );
     }
+    final int count = _visibleCount.clamp(0, widget.teams.length);
     return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
+      onRefresh: widget.onRefresh,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        itemCount: teams.length,
-        itemBuilder: (context, i) => _TeamCard(team: teams[i]),
+          itemCount: _canLoadMore ? count + 1 : count,
+          itemBuilder: (context, i) {
+            if (i >= count) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            }
+            return _TeamCard(team: widget.teams[i]);
+          },
+        ),
       ),
     );
   }

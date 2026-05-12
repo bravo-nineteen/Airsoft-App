@@ -506,8 +506,8 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
         label: l10n.events,
       ),
       NavigationDestination(
-        icon: const Icon(Icons.groups_3_outlined),
-        selectedIcon: const Icon(Icons.groups_3),
+        icon: const Icon(Icons.forum_outlined),
+        selectedIcon: const Icon(Icons.forum),
         label: l10n.t('boards'),
       ),
       NavigationDestination(
@@ -539,16 +539,13 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
         child: Column(
           children: <Widget>[
             const SizedBox(height: 12),
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                Icons.hub_rounded,
-                color: Theme.of(context).colorScheme.primary,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/logo.png',
+                width: 48,
+                height: 48,
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(height: 16),
@@ -570,10 +567,10 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                     selectedIcon: const Icon(Icons.event),
                     label: Text(l10n.events),
                   ),
-                  NavigationRailDestination(
-                    icon: const Icon(Icons.groups_3_outlined),
-                    selectedIcon: const Icon(Icons.groups_3),
-                    label: Text(l10n.t('boards')),
+                        NavigationRailDestination(
+                          icon: const Icon(Icons.forum_outlined),
+                          selectedIcon: const Icon(Icons.forum),
+                          label: Text(l10n.t('boards')),
                   ),
                   NavigationRailDestination(
                     icon: const Icon(Icons.person_outline),
