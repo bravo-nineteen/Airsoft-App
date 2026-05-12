@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../shared/services/annual_membership_service.dart';
+
 class AdAccessRepository {
   AdAccessRepository();
 
@@ -12,6 +14,13 @@ class AdAccessRepository {
   }
 
   Future<bool> shouldShowAds() async {
+    final AnnualMembershipService membershipService =
+        AnnualMembershipService.instance;
+    await membershipService.ensureInitialized();
+    if (await membershipService.isAdFree()) {
+      return false;
+    }
+
     final SupabaseClient? client = _client;
     if (client == null) {
       return true;

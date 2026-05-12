@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/content/app_content_preloader.dart';
 import 'core/config/app_config.dart';
+import 'shared/services/annual_membership_service.dart';
 import 'core/notifications/push_notification_service.dart';
 import 'features/auth/reset_password_screen.dart';
 import 'firebase_options.dart';
@@ -121,6 +122,13 @@ class _BootstrapAppState extends State<BootstrapApp> {
   }
 
   Future<void> _runDeferredStartupWork() async {
+    try {
+      await AnnualMembershipService.instance.ensureInitialized();
+    } catch (error, stackTrace) {
+      debugPrint('Deferred membership init failed: $error');
+      debugPrint('$stackTrace');
+    }
+
     try {
       await PushNotificationService.init().timeout(const Duration(seconds: 8));
     } catch (error, stackTrace) {

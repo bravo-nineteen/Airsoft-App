@@ -18,6 +18,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "28.2.13676358"
 
+    val admobAppId = (project.findProperty("ADMOB_APP_ID") as String?)
+        ?.takeIf { it.isNotBlank() }
+        ?: "ca-app-pub-9389437663066051~9887982975"
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -34,6 +38,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     signingConfigs {

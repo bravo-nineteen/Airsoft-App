@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../core/ads/ad_config.dart';
+import '../services/annual_membership_service.dart';
 
 class AdInlineBanner extends StatefulWidget {
   const AdInlineBanner({super.key, this.margin});
@@ -15,11 +18,41 @@ class AdInlineBanner extends StatefulWidget {
 class _AdInlineBannerState extends State<AdInlineBanner> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
+  final AnnualMembershipService _membershipService =
+      AnnualMembershipService.instance;
 
   @override
   void initState() {
     super.initState();
+    _membershipService.isAdFreeNotifier.addListener(_handleMembershipChanged);
+    unawaited(_initializeAndLoad());
+  }
+
+  Future<void> _initializeAndLoad() async {
+    await _membershipService.ensureInitialized();
+    if (!mounted || _membershipService.isAdFreeNotifier.value) {
+      return;
+    }
     _loadAd();
+  }
+
+  void _handleMembershipChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    if (_membershipService.isAdFreeNotifier.value) {
+      setState(() {
+        _isLoaded = false;
+      });
+      _bannerAd?.dispose();
+      _bannerAd = null;
+      return;
+    }
+
+    if (_bannerAd == null && !_isLoaded) {
+      _loadAd();
+    }
   }
 
   void _loadAd() {
@@ -54,12 +87,17 @@ class _AdInlineBannerState extends State<AdInlineBanner> {
 
   @override
   void dispose() {
+    _membershipService.isAdFreeNotifier.removeListener(_handleMembershipChanged);
     _bannerAd?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_membershipService.isAdFreeNotifier.value) {
+      return const SizedBox.shrink();
+    }
+
     if (!_isLoaded || _bannerAd == null) {
       return const SizedBox.shrink();
     }

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/localization/app_localizations.dart';
+import '../../shared/services/annual_membership_service.dart';
 import '../community/community_image_service.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 
@@ -253,7 +254,7 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
     }
   }
 
-  Future<bool> _submitClaimRequest() async {
+  Future<bool> _submitClaimRequest({String? paymentReference}) async {
     if (_submittingClaim) {
       return false;
     }
@@ -280,6 +281,8 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
         officialPhone: phone,
         officialEmail: email,
         verificationNote: _claimNoteController.text,
+        paymentStatus: 'paid',
+        paymentReference: paymentReference,
       );
       if (!mounted) {
         return false;
@@ -310,105 +313,182 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
   }
 
   Future<void> _openClaimFieldDialog() async {
+    final AnnualMembershipService membershipService =
+        AnnualMembershipService.instance;
+    await membershipService.ensureInitialized();
+    if (!mounted) {
+      return;
+    }
+
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Claim field'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Text(
-                  'Submit your field staff verification details. Annual fee is ¥5,000 and payment is requested only after admin approval.',
+        bool acceptedTerms = false;
+        bool purchasing = false;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            final bool isAdFree = membershipService.isAdFreeNotifier.value;
+
+            return AlertDialog(
+              title: const Text('Claim field'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Claiming this field requires a Google Play annual membership payment of ¥5,000.',
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'If you are not affiliated with the field, your access may be revoked after review.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _claimStaffNameController,
+                      decoration: const InputDecoration(labelText: 'Staff name'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _uploadingClaimId
+                          ? null
+                          : () async {
+                              setState(() => _uploadingClaimId = true);
+                              try {
+                                final String? imageUrl = await _imageService
+                                    .pickCropAndUploadCommunityImage(
+                                  folder: 'field-claims',
+                                );
+                                if (!mounted || imageUrl == null) {
+                                  return;
+                                }
+                                setState(() => _claimIdImageUrl = imageUrl);
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _uploadingClaimId = false);
+                                }
+                              }
+                            },
+                      icon: _uploadingClaimId
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.badge_outlined),
+                      label: Text(
+                        (_claimIdImageUrl ?? '').isEmpty
+                            ? 'Upload official ID image'
+                            : 'ID image uploaded',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _claimPhoneController,
+                      decoration: const InputDecoration(labelText: 'Official phone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _claimEmailController,
+                      decoration: const InputDecoration(labelText: 'Official email'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _claimNoteController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Message to admin (optional)',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: acceptedTerms,
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          acceptedTerms = value ?? false;
+                        });
+                      },
+                      title: const Text('I am affiliated with this field or authorized to claim it.'),
+                    ),
+                    if (!isAdFree) ...<Widget>[
+                      const SizedBox(height: 4),
+                      const Text(
+                        'You will be charged through Google Play before the claim is submitted.',
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _claimStaffNameController,
-                  decoration: const InputDecoration(labelText: 'Staff name'),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _uploadingClaimId
+                FilledButton(
+                  onPressed: (purchasing || _submittingClaim)
                       ? null
                       : () async {
-                          setState(() => _uploadingClaimId = true);
-                          try {
-                            final String? imageUrl = await _imageService
-                                .pickCropAndUploadCommunityImage(
-                              folder: 'field-claims',
+                          if (!acceptedTerms) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please accept the terms first.'),
+                              ),
                             );
-                            if (!mounted || imageUrl == null) {
+                            return;
+                          }
+
+                          setDialogState(() {
+                            purchasing = true;
+                          });
+
+                          try {
+                            String? paymentReference =
+                                await membershipService.getCachedPurchaseToken();
+                            if (!membershipService.isAdFreeNotifier.value) {
+                              final purchase = await membershipService
+                                  .purchaseAnnualMembership();
+                              if (purchase == null) {
+                                return;
+                              }
+                              paymentReference = purchase
+                                  .verificationData.serverVerificationData;
+                            }
+
+                            final bool success = await _submitClaimRequest(
+                              paymentReference: paymentReference,
+                            );
+                            if (!dialogContext.mounted || !success) {
                               return;
                             }
-                            setState(() => _claimIdImageUrl = imageUrl);
+                            Navigator.of(dialogContext).pop();
                           } finally {
-                            if (mounted) {
-                              setState(() => _uploadingClaimId = false);
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                purchasing = false;
+                              });
                             }
                           }
                         },
-                  icon: _uploadingClaimId
+                  child: purchasing
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.badge_outlined),
-                  label: Text(
-                    (_claimIdImageUrl ?? '').isEmpty
-                        ? 'Upload official ID image'
-                        : 'ID image uploaded',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _claimPhoneController,
-                  decoration: const InputDecoration(labelText: 'Official phone'),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _claimEmailController,
-                  decoration: const InputDecoration(labelText: 'Official email'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _claimNoteController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Message to admin (optional)',
-                  ),
+                      : Text(
+                          membershipService.isAdFreeNotifier.value
+                              ? 'Submit claim'
+                              : 'Pay ¥5,000 and submit claim',
+                        ),
                 ),
               ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: _submittingClaim
-                  ? null
-                  : () async {
-                      final bool success = await _submitClaimRequest();
-                      if (!dialogContext.mounted || !success) {
-                        return;
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-              child: _submittingClaim
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Submit claim'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -957,11 +1037,11 @@ class _FieldDetailsScreenState extends State<FieldDetailsScreen> {
               const Text('This field is verified and managed by field staff.')
             else if (isPending)
               const Text(
-                'A claim request is pending verification. Our team will contact the requester.',
+                'A claim request is pending verification. If approved, the field will become officially owned and can still be revoked if the affiliation is not valid.',
               )
             else
               const Text(
-                'Staff can claim this field by submitting an official ID image, phone, and email. Admin reviews first and sends the ¥5,000/year Google Play request only after approval.',
+                'User-submitted fields stay unclaimed and unowned until someone purchases the annual Google Play ownership membership and the claim is approved.',
               ),
             const SizedBox(height: 12),
             Row(

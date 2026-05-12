@@ -36,11 +36,9 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- AdMob App ID. Replace with your real ID from https://admob.google.com before publishing. -->
-        <!-- Test ID below is the official Google test app ID and is safe for development builds. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${admobAppId}" />
     </application>
 
     <queries>

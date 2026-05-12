@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../app/localization/app_localizations.dart';
-import 'membership_repository.dart';
+import '../../shared/services/annual_membership_service.dart';
 
 class MembershipRequestScreen extends StatefulWidget {
   const MembershipRequestScreen({super.key});
@@ -11,19 +12,33 @@ class MembershipRequestScreen extends StatefulWidget {
 }
 
 class _MembershipRequestScreenState extends State<MembershipRequestScreen> {
-  final MembershipRepository _repository = MembershipRepository();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _notesController = TextEditingController();
+  final AnnualMembershipService _membershipService =
+      AnnualMembershipService.instance;
 
-  MembershipRequestModel? _latestRequest;
   bool _loading = true;
-  bool _submitting = false;
+  bool _termsAccepted = false;
+  bool _purchasing = false;
+  List<ProductDetails> _products = const <ProductDetails>[];
+  DateTime? _cachedExpiry;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _membershipService.isAdFreeNotifier.addListener(_handleMembershipChanged);
+  }
+
+  @override
+  void dispose() {
+    _membershipService.isAdFreeNotifier.removeListener(_handleMembershipChanged);
+    super.dispose();
+  }
+
+  void _handleMembershipChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _load() async {
@@ -32,19 +47,22 @@ class _MembershipRequestScreenState extends State<MembershipRequestScreen> {
     });
 
     try {
-      final MembershipRequestModel? latest = await _repository.getLatestRequest();
+      await _membershipService.ensureInitialized();
+      final List<ProductDetails> products = await _membershipService.loadProducts();
+      final DateTime? expiry = await _membershipService.getCachedExpiry();
       if (!mounted) {
         return;
       }
       setState(() {
-        _latestRequest = latest;
+        _products = products;
+        _cachedExpiry = expiry;
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _latestRequest = null;
+        _products = const <ProductDetails>[];
       });
     } finally {
       if (mounted) {
@@ -55,76 +73,111 @@ class _MembershipRequestScreenState extends State<MembershipRequestScreen> {
     }
   }
 
-  Future<void> _submit() async {
-    if (_submitting) {
-      return;
-    }
-
-    final String fullName = _nameController.text.trim();
-    final String email = _emailController.text.trim();
-
-    if (fullName.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).membershipNameEmailRequired)),
-      );
+  Future<void> _restore() async {
+    if (_purchasing) {
       return;
     }
 
     setState(() {
-      _submitting = true;
+      _purchasing = true;
     });
 
     try {
-      await _repository.submitAnnualMembershipRequest(
-        fullName: fullName,
-        contactEmail: email,
-        notes: _notesController.text,
-      );
-
+      await _membershipService.restorePurchases();
+      await _membershipService.refreshEntitlement();
       if (!mounted) {
         return;
       }
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).membershipRequestSent,
-          ),
-        ),
+        const SnackBar(content: Text('Purchase history restored.')),
       );
-
-      _nameController.clear();
-      _emailController.clear();
-      _notesController.clear();
       await _load();
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).t('membershipSubmitFailed', args: {'error': error.toString()}))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to restore purchases: $error')),
+      );
     } finally {
       if (mounted) {
         setState(() {
-          _submitting = false;
+          _purchasing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _purchase() async {
+    if (_purchasing) {
+      return;
+    }
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Accept the terms before purchasing.')),
+      );
+      return;
+    }
+    if (_products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Google Play subscription not configured yet. Set IAP_ANNUAL_MEMBERSHIP_SUBSCRIPTION_ID.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _purchasing = true;
+    });
+
+    try {
+      final purchase = await _membershipService.purchaseAnnualMembership();
+      if (!mounted) {
+        return;
+      }
+
+      if (purchase == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Purchase was canceled or timed out.')),
+        );
+        return;
+      }
+
+      await _membershipService.refreshEntitlement();
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Annual membership activated. Ads are now disabled.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Purchase failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _purchasing = false;
         });
       }
     }
   }
 
   @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool isAdFree = _membershipService.isAdFreeNotifier.value;
+    final ProductDetails? product = _products.isNotEmpty ? _products.first : null;
+
     return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context).annualMembership)),
+      appBar: AppBar(title: Text(l10n.annualMembership)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -132,129 +185,111 @@ class _MembershipRequestScreenState extends State<MembershipRequestScreen> {
               children: <Widget>[
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Builder(
-                          builder: (BuildContext ctx) => Text(
-                            AppLocalizations.of(ctx).annualPlan,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                        Text(
+                          'Ad-free annual membership',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                         const SizedBox(height: 8),
-                        Builder(
-                          builder: (BuildContext ctx) => Text(
-                            AppLocalizations.of(ctx).membershipProcess,
-                          ),
+                        const Text(
+                          'Remove in-app ads and unlock official field ownership claims through an annual Google Play subscription.',
                         ),
                         const SizedBox(height: 12),
-                        _StatusChip(status: _latestRequest?.status ?? 'none'),
-                        if ((_latestRequest?.adminNote ?? '').isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 8),
-                          Builder(builder: (BuildContext ctx) => Text(AppLocalizations.of(ctx).t('membershipAdminNote', args: {'note': _latestRequest!.adminNote!}))),
-                        ],
-                        if (_latestRequest?.expiresAt != null) ...<Widget>[
-                          const SizedBox(height: 6),
-                          Builder(builder: (BuildContext ctx) => Text(AppLocalizations.of(ctx).t('membershipExpires', args: {'date': _latestRequest!.expiresAt!.toLocal().toString()}))),
-                        ],
+                        _StatusBadge(
+                          active: isAdFree,
+                          expiry: _cachedExpiry,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Terms: if you claim a field that you are not actually affiliated with, your access and ownership may be revoked after review.',
+                        ),
+                        const SizedBox(height: 8),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _termsAccepted,
+                          onChanged: (bool? value) {
+                            setState(() {
+                              _termsAccepted = value ?? false;
+                            });
+                          },
+                          title: const Text('I agree to the terms above.'),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                Builder(builder: (BuildContext ctx) {
-                  final AppLocalizations l10n = AppLocalizations.of(ctx);
-                  return Column(
-                    children: [
-                      TextField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: l10n.membershipFullName,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: l10n.membershipContactEmail,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _notesController,
-                        minLines: 3,
-                        maxLines: 5,
-                        decoration: InputDecoration(
-                          labelText: l10n.membershipNotesHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: _submitting ? null : _submit,
-                        icon: const Icon(Icons.send_outlined),
-                        label: Text(_submitting ? l10n.membershipSubmitting : l10n.membershipRequestBtn),
-                      ),
-                    ],
-                  );
-                }),
+                if (product != null) ...<Widget>[
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.payments_outlined),
+                      title: const Text('Google Play annual subscription'),
+                      subtitle: Text(product.price),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                FilledButton.icon(
+                  onPressed: _purchasing || isAdFree ? null : _purchase,
+                  icon: _purchasing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.shopping_cart_checkout_outlined),
+                  label: Text(
+                    isAdFree
+                        ? 'Membership active'
+                      : (product == null
+                        ? 'Configure Google Play subscription'
+                        : 'Subscribe with Google Play'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _purchasing ? null : _restore,
+                  icon: const Icon(Icons.restore_outlined),
+                  label: const Text('Restore purchases'),
+                ),
               ],
             ),
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.active, this.expiry});
 
-  final String status;
+  final bool active;
+  final DateTime? expiry;
 
   @override
   Widget build(BuildContext context) {
-    final String normalized = status.toLowerCase();
-    final ColorScheme colorScheme = Theme.of(context).colorScheme;
-
-    final (Color bg, Color fg) = switch (normalized) {
-      'active' => (Colors.green.withValues(alpha: 0.2), Colors.green.shade900),
-      'approved' || 'payment_requested' => (
-        colorScheme.secondaryContainer,
-        colorScheme.onSecondaryContainer,
-      ),
-      'rejected' => (Colors.red.withValues(alpha: 0.2), Colors.red.shade900),
-      _ => (colorScheme.surfaceContainerHighest, colorScheme.onSurfaceVariant),
-    };
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+    final Color background = active
+        ? Colors.green.withValues(alpha: 0.18)
+        : colors.surfaceContainerHighest;
+    final Color foreground = active ? Colors.green.shade900 : colors.onSurfaceVariant;
+    final String expiryLabel = expiry == null ? '' : ' until ${expiry!.toLocal()}';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
+        color: background,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        _statusLabel(context, normalized),
-        style: TextStyle(fontWeight: FontWeight.w600, color: fg),
+        active ? 'Active$expiryLabel' : 'Not active yet',
+        style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
       ),
     );
-  }
-
-  String _statusLabel(BuildContext context, String normalized) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return switch (normalized) {
-      'none' => l10n.membershipStatusNone,
-      'pending' => l10n.membershipStatusPending,
-      'approved' => l10n.membershipStatusApproved,
-      'rejected' => l10n.membershipStatusRejected,
-      'payment_requested' => l10n.membershipStatusPaymentRequested,
-      'active' => l10n.membershipStatusActive,
-      'expired' => l10n.membershipStatusExpired,
-      _ => normalized,
-    };
   }
 }
