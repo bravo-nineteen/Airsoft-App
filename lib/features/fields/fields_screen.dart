@@ -30,6 +30,8 @@ class _FieldsScreenState extends State<FieldsScreen> {
   bool _mapView = false;
 
   late Future<List<FieldModel>> _fieldsFuture;
+  static const int _lazyPageSize = 20;
+  int _visibleCount = _lazyPageSize;
 
   List<FieldModel> get _countryScopedFields {
     return _contentPreloader.fields.where((FieldModel field) {
@@ -127,6 +129,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
     }
 
     setState(() {
+      _visibleCount = _lazyPageSize;
       _fieldsFuture = Future<List<FieldModel>>.value(
         _repository.applyFilters(
           _contentPreloader.fields,
@@ -148,7 +151,23 @@ class _FieldsScreenState extends State<FieldsScreen> {
 
   void _refreshFields() {
     setState(() {
+      _visibleCount = _lazyPageSize;
       _fieldsFuture = _loadFields(preferCache: false);
+    });
+  }
+
+  void _loadMoreIfNeeded(int total, int index) {
+    if (_mapView) {
+      return;
+    }
+    if (index < _visibleCount - 6) {
+      return;
+    }
+    if (_visibleCount >= total) {
+      return;
+    }
+    setState(() {
+      _visibleCount = (_visibleCount + _lazyPageSize).clamp(0, total);
     });
   }
 
@@ -332,6 +351,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
               }
 
               final List<FieldModel> fields = snapshot.data ?? <FieldModel>[];
+              final int visible = _visibleCount.clamp(0, fields.length);
 
               if (fields.isEmpty) {
                 return Center(child: Text(l10n.t('noFieldsFound')));
@@ -376,8 +396,9 @@ class _FieldsScreenState extends State<FieldsScreen> {
                           crossAxisSpacing: 16,
                           childAspectRatio: 2.15,
                         ),
-                        itemCount: fields.length,
+                        itemCount: visible,
                         itemBuilder: (context, index) {
+                          _loadMoreIfNeeded(fields.length, index);
                           return _FieldDirectoryCard(
                             field: fields[index],
                             onTap: () => _openField(fields[index]),
@@ -386,8 +407,9 @@ class _FieldsScreenState extends State<FieldsScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: fields.length,
+                        itemCount: visible,
                         itemBuilder: (context, index) {
+                          _loadMoreIfNeeded(fields.length, index);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _FieldDirectoryCard(

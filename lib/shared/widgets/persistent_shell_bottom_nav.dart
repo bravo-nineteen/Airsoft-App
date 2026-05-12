@@ -92,8 +92,8 @@ class PersistentShellBottomNav extends StatelessWidget {
                 label: 'Events',
               ),
               NavigationDestination(
-                icon: Icon(Icons.groups_3_outlined),
-                selectedIcon: Icon(Icons.groups_3),
+                icon: Icon(Icons.forum_outlined),
+                selectedIcon: Icon(Icons.forum),
                 label: 'Boards',
               ),
               NavigationDestination(
