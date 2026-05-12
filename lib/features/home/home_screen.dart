@@ -59,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showAds = false;
   HomeInterestFilter _selectedFilter = HomeInterestFilter.all;
   Timer? _backgroundSyncTimer;
+  DateTime? _blogPostsLastFetch;
+  static const Duration _blogCacheTtl = Duration(minutes: 5);
 
   static AppContentPreloader? _resolvePreloader() {
     try {
@@ -220,6 +222,13 @@ class _HomeScreenState extends State<HomeScreen> {
     const endpoint =
         'https://airsoftonlinejapan.com/wp-json/wp/v2/posts?per_page=5&_embed';
 
+    final DateTime now = DateTime.now();
+    if (_blogPosts.isNotEmpty &&
+        _blogPostsLastFetch != null &&
+        now.difference(_blogPostsLastFetch!) < _blogCacheTtl) {
+      return _blogPosts;
+    }
+
     final response = await http.get(Uri.parse(endpoint));
 
     if (response.statusCode != 200) {
@@ -227,6 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    _blogPostsLastFetch = now;
 
     return data
         .map(

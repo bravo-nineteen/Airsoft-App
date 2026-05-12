@@ -47,6 +47,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
   bool _isLoadingMore = false;
   bool _hasMore = true;
   bool _didInitLanguagePreference = false;
+  DateTime? _lastLoadTime;
   int _offset = 0;
   String _selectedLanguagePreference = 'all';
   String _selectedGroup = 'All groups';
@@ -159,6 +160,12 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     _transientRetryTimer?.cancel();
     _transientRetryTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted || _isLoading || _isLoadingMore) {
+        return;
+      }
+      // Skip if data was refreshed recently (within the background sync window)
+      final DateTime? last = _lastLoadTime;
+      if (last != null &&
+          DateTime.now().difference(last) < const Duration(seconds: 30)) {
         return;
       }
       _loadPosts(showError: false);
@@ -418,6 +425,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
         _isLoading = false;
         _isInitialLoading = false;
         _isRefreshing = false;
+        _lastLoadTime = DateTime.now();
       });
       _cachePosts();
     } catch (error) {

@@ -24,6 +24,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
   bool _mapView = false;
 
   late Future<List<FieldModel>> _fieldsFuture;
+  List<FieldModel> _cachedFields = const [];
 
   final List<String> _locations = const [
     'All',
@@ -47,7 +48,10 @@ class _FieldsScreenState extends State<FieldsScreen> {
   @override
   void initState() {
     super.initState();
-    _fieldsFuture = _loadFields();
+    _fieldsFuture = _loadFields().then((fields) {
+      if (mounted) setState(() => _cachedFields = fields);
+      return fields;
+    });
   }
 
   @override
@@ -67,7 +71,10 @@ class _FieldsScreenState extends State<FieldsScreen> {
 
   void _refreshFields() {
     setState(() {
-      _fieldsFuture = _loadFields();
+      _fieldsFuture = _loadFields().then((fields) {
+        if (mounted) setState(() => _cachedFields = fields);
+        return fields;
+      });
     });
   }
 
@@ -200,11 +207,12 @@ class _FieldsScreenState extends State<FieldsScreen> {
           child: FutureBuilder<List<FieldModel>>(
             future: _fieldsFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  _cachedFields.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (snapshot.hasError) {
+              if (snapshot.hasError && _cachedFields.isEmpty) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -216,7 +224,7 @@ class _FieldsScreenState extends State<FieldsScreen> {
                 );
               }
 
-              final fields = snapshot.data ?? [];
+              final fields = snapshot.data ?? _cachedFields;
 
               if (fields.isEmpty) {
                 return Center(child: Text(l10n.t('noFieldsFound')));

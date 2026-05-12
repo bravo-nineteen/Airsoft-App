@@ -116,7 +116,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       ),
     );
-    await _refresh();
+    if (!mounted) return;
+    // Refresh only the timeline after creating a post
+    setState(() {
+      _timelineFuture = _communityRepository.fetchMergedTimelinePosts(_uid);
+    });
   }
 
   Future<void> _openPost(CommunityPostModel post) async {
@@ -125,7 +129,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (_) => CommunityPostDetailsScreen(postId: post.id),
       ),
     );
-    await _refresh();
   }
 
   Future<void> _openComment(CommunityCommentModel comment) async {
@@ -134,7 +137,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (_) => CommunityPostDetailsScreen(postId: comment.postId),
       ),
     );
-    await _refresh();
   }
 
   Future<void> _openEvent(EventModel event) async {
@@ -143,7 +145,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (_) => EventDetailsScreen(event: event),
       ),
     );
-    await _refresh();
   }
 
   String _otherUserId(ContactModel contact) {

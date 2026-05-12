@@ -161,11 +161,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.6,
-          color: Colors.white70,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ),
     );
