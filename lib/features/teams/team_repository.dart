@@ -12,16 +12,23 @@ class TeamRepository {
   // ── Listing ─────────────────────────────────────────────────────────────────
 
   Future<List<TeamModel>> getTeams({String? search}) async {
-    var query = _client
-        .from('teams')
-      .select('id, name, description, logo_url, banner_url, country, prefecture, city, association, is_official, leader_id, created_by, created_at');
-
+    const cols = 'id, name, description, logo_url, banner_url, country, prefecture, city, association, is_official, leader_id, created_by, created_at';
+    final List<dynamic> rows;
     if (search != null && search.trim().isNotEmpty) {
       final q = search.trim().replaceAll('%', '');
-      query = query.ilike('name', '%$q%') as dynamic;
+      rows = await _client
+          .from('teams')
+          .select(cols)
+          .ilike('name', '%$q%')
+          .order('is_official', ascending: false)
+          .order('created_at', ascending: false);
+    } else {
+      rows = await _client
+          .from('teams')
+          .select(cols)
+          .order('is_official', ascending: false)
+          .order('created_at', ascending: false);
     }
-
-    final rows = await (query as dynamic).order('is_official', ascending: false).order('created_at', ascending: false) as List<dynamic>;
 
     final List<TeamModel> teams = [];
     for (final row in rows) {
@@ -29,7 +36,7 @@ class TeamRepository {
       final List<dynamic> members = await _client
           .from('team_members')
           .select('id')
-          .eq('team_id', m['id'])
+          .eq('team_id', m['id'] as String)
           .eq('status', 'active');
       m['member_count'] = members.length;
       teams.add(TeamModel.fromJson(m));

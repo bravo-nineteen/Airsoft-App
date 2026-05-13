@@ -11,6 +11,8 @@ import '../safety/safety_repository.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
 import 'community_repository.dart';
+import 'community_reaction_types.dart';
+import 'community_reaction_ui.dart';
 import 'community_user_profile_screen.dart';
 
 enum _CommentSortMode { mostRecent, allComments, popularComments }
@@ -599,26 +601,68 @@ class _CommunityPostDetailsScreenState
     _imageService.deleteUploadedImageByPublicUrl(imageUrl);
   }
 
-  Future<void> _togglePostLike() async {
+  Future<String?> _pickReaction(String? currentReaction) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final CommunityReactionOption option
+                  in CommunityReactionUi.options)
+                ListTile(
+                  leading: Icon(option.icon, color: option.color),
+                  title: Text(option.label),
+                  trailing: option.code == currentReaction
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          color: theme.colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(option.code),
+                ),
+              if (currentReaction != null)
+                ListTile(
+                  leading: const Icon(Icons.remove_circle_outline),
+                  title: const Text('Remove reaction'),
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _setPostReaction(String? reaction) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final post = _post;
     if (post == null || _isTogglingPostLike) {
       return;
     }
 
-    final bool nextLiked = !post.isLikedByMe;
-    final int nextCount = post.likeCount + (nextLiked ? 1 : -1);
+    final bool didHaveReaction = post.myReaction != null;
+    final bool willHaveReaction = reaction != null && reaction.trim().isNotEmpty;
+    final int nextCount = post.likeCount + (willHaveReaction ? 1 : 0) - (didHaveReaction ? 1 : 0);
 
     setState(() {
       _isTogglingPostLike = true;
       _post = post.copyWith(
-        isLikedByMe: nextLiked,
+        isLikedByMe: willHaveReaction,
+        myReaction: willHaveReaction ? reaction : null,
         likeCount: nextCount < 0 ? 0 : nextCount,
       );
     });
 
     try {
-      await _repository.toggleLikePost(post.id);
+      if (willHaveReaction) {
+        await _repository.setPostReaction(post.id, reaction!);
+      } else {
+        await _repository.clearPostReaction(post.id);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -641,7 +685,20 @@ class _CommunityPostDetailsScreenState
     }
   }
 
-  Future<void> _toggleCommentLike(String commentId) async {
+  Future<void> _openPostReactionPicker() async {
+    final CommunityPostModel? post = _post;
+    if (post == null) {
+      return;
+    }
+    final String? selected = await _pickReaction(post.myReaction);
+    if (selected == null) {
+      return;
+    }
+    final String? nextReaction = selected.trim().isEmpty ? null : selected;
+    await _setPostReaction(nextReaction);
+  }
+
+  Future<void> _setCommentReaction(String commentId, String? reaction) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (_togglingCommentLikes.contains(commentId)) {
       return;
@@ -654,19 +711,25 @@ class _CommunityPostDetailsScreenState
       return;
     }
     final CommunityCommentModel original = _comments[index];
-    final bool nextLiked = !original.likedByMe;
-    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+    final bool didHaveReaction = original.myReaction != null;
+    final bool willHaveReaction = reaction != null && reaction.trim().isNotEmpty;
+    final int nextCount = original.likeCount + (willHaveReaction ? 1 : 0) - (didHaveReaction ? 1 : 0);
 
     setState(() {
       _togglingCommentLikes.add(commentId);
       _comments[index] = original.copyWith(
-        likedByMe: nextLiked,
+        likedByMe: willHaveReaction,
+        myReaction: willHaveReaction ? reaction : null,
         likeCount: nextCount < 0 ? 0 : nextCount,
       );
     });
 
     try {
-      await _repository.toggleLikeComment(commentId);
+      if (willHaveReaction) {
+        await _repository.setCommentReaction(commentId, reaction!);
+      } else {
+        await _repository.clearCommentReaction(commentId);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -687,6 +750,15 @@ class _CommunityPostDetailsScreenState
         });
       }
     }
+  }
+
+  Future<void> _openCommentReactionPicker(CommunityCommentModel comment) async {
+    final String? selected = await _pickReaction(comment.myReaction);
+    if (selected == null) {
+      return;
+    }
+    final String? nextReaction = selected.trim().isEmpty ? null : selected;
+    await _setCommentReaction(comment.id, nextReaction);
   }
 
   Future<void> _editPost(CommunityPostModel post) async {
@@ -1205,6 +1277,9 @@ class _CommunityPostDetailsScreenState
   }) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isBusy = _togglingCommentLikes.contains(comment.id);
+    final CommunityReactionOption activeReaction = CommunityReactionUi.optionFor(
+      comment.myReaction ?? CommunityReactionTypes.thumbsUp,
+    );
     final bool isOwner = _isCommentOwner(comment);
     final String? parentAuthorName =
         isReply ? _parentAuthorNameFor(comment) : null;
@@ -1350,9 +1425,14 @@ class _CommunityPostDetailsScreenState
                     icon: const Icon(Icons.copy_outlined),
                   ),
                   IconButton(
-                    onPressed: isBusy ? null : () => _toggleCommentLike(comment.id),
+                    onPressed: isBusy
+                        ? null
+                        : () => _openCommentReactionPicker(comment),
                     icon: Icon(
-                      comment.likedByMe ? Icons.favorite : Icons.favorite_border,
+                      comment.likedByMe
+                          ? activeReaction.icon
+                          : Icons.thumb_up_alt_outlined,
+                      color: comment.likedByMe ? activeReaction.color : null,
                     ),
                   ),
                   Text('${comment.likeCount}'),
@@ -1839,12 +1919,27 @@ class _CommunityPostDetailsScreenState
                         icon: Icons.visibility_outlined,
                         value: '${post.viewCount}',
                       ),
-                      TextButton.icon(
-                        onPressed: _isTogglingPostLike ? null : _togglePostLike,
-                        icon: Icon(
-                          post.isLikedByMe ? Icons.favorite : Icons.favorite_border,
-                        ),
-                        label: Text('${post.likeCount}'),
+                      Builder(
+                        builder: (BuildContext context) {
+                          final CommunityReactionOption activeReaction =
+                              CommunityReactionUi.optionFor(
+                                post.myReaction ?? CommunityReactionTypes.thumbsUp,
+                              );
+                          return TextButton.icon(
+                            onPressed: _isTogglingPostLike
+                                ? null
+                                : _openPostReactionPicker,
+                            icon: Icon(
+                              post.isLikedByMe
+                                  ? activeReaction.icon
+                                  : Icons.thumb_up_alt_outlined,
+                              color: post.isLikedByMe
+                                  ? activeReaction.color
+                                  : null,
+                            ),
+                            label: Text('${post.likeCount}'),
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -24,6 +24,7 @@ class _TeamsListScreenState extends State<TeamsListScreen>
   List<TeamModel> _myTeams = [];
   bool _loading = true;
   String _search = '';
+  String? _error;
 
   @override
   void initState() {
@@ -50,9 +51,10 @@ class _TeamsListScreenState extends State<TeamsListScreen>
         _allTeams = results[0];
         _myTeams = results[1];
         _loading = false;
+        _error = null;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -81,7 +83,20 @@ class _TeamsListScreenState extends State<TeamsListScreen>
               icon: const Icon(Icons.add),
               label: const Text('Create Team'),
             ),
-      body: Column(
+      body: _error != null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 40),
+                  const SizedBox(height: 8),
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  TextButton(onPressed: _load, child: const Text('Retry')),
+                ],
+              ),
+            )
+          : Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),

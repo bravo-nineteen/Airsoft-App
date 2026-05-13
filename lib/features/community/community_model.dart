@@ -1,6 +1,8 @@
 import '../../core/time/japan_time.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'community_reaction_types.dart';
+
 class CommunityPostModel {
   final String id;
   final String? authorId;
@@ -23,6 +25,7 @@ class CommunityPostModel {
   final String postContext;
   final String? targetUserId;
   final bool isLikedByMe;
+  final String? myReaction;
 
   const CommunityPostModel({
     required this.id,
@@ -46,6 +49,7 @@ class CommunityPostModel {
     required this.postContext,
     required this.targetUserId,
     this.isLikedByMe = false,
+    this.myReaction,
   });
 
   CommunityPostModel copyWith({
@@ -70,6 +74,7 @@ class CommunityPostModel {
     String? postContext,
     Object? targetUserId = _communityPostNoChange,
     bool? isLikedByMe,
+    Object? myReaction = _communityPostNoChange,
   }) {
     return CommunityPostModel(
       id: id ?? this.id,
@@ -104,6 +109,9 @@ class CommunityPostModel {
           ? this.targetUserId
           : targetUserId as String?,
       isLikedByMe: isLikedByMe ?? this.isLikedByMe,
+      myReaction: myReaction == _communityPostNoChange
+          ? this.myReaction
+          : myReaction as String?,
     );
   }
 
@@ -149,6 +157,7 @@ class CommunityPostModel {
       'updated_at': updatedAt?.toUtc().toIso8601String(),
       'is_pinned': isPinned,
       'is_liked_by_me': isLikedByMe,
+      'my_reaction': myReaction,
       'post_context': postContext,
       'target_user_id': targetUserId,
     };
@@ -178,6 +187,9 @@ class CommunityPostModel {
 
     final authorId = _readNullableString(json['author_id']) ??
         _readNullableString(json['user_id']);
+    final String? myReaction = CommunityReactionTypes.normalizeNullable(
+      _readNullableString(json['my_reaction']) ?? _readNullableString(json['reaction']),
+    );
 
     return CommunityPostModel(
       id: (json['id'] ?? '').toString(),
@@ -202,7 +214,10 @@ class CommunityPostModel {
       postContext: _readNullableString(json['post_context']) ?? 'community',
       targetUserId: _readNullableString(json['target_user_id']),
       isLikedByMe:
-          json['is_liked_by_me'] == true || json['liked_by_me'] == true,
+          myReaction != null ||
+          json['is_liked_by_me'] == true ||
+          json['liked_by_me'] == true,
+      myReaction: myReaction,
     );
   }
 }
@@ -217,6 +232,7 @@ class CommunityCommentModel {
   final String? imageUrl;
   final int likeCount;
   final bool likedByMe;
+  final String? myReaction;
   final DateTime createdAt;
   final String? parentCommentId;
 
@@ -230,6 +246,7 @@ class CommunityCommentModel {
     required this.imageUrl,
     required this.likeCount,
     required this.likedByMe,
+    this.myReaction,
     required this.createdAt,
     this.parentCommentId,
   });
@@ -244,6 +261,7 @@ class CommunityCommentModel {
     Object? imageUrl = _communityCommentNoChange,
     int? likeCount,
     bool? likedByMe,
+    Object? myReaction = _communityCommentNoChange,
     DateTime? createdAt,
     Object? parentCommentId = _communityCommentNoChange,
   }) {
@@ -254,11 +272,14 @@ class CommunityCommentModel {
       authorName: authorName ?? this.authorName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       message: message ?? this.message,
-        imageUrl: imageUrl == _communityCommentNoChange
+      imageUrl: imageUrl == _communityCommentNoChange
           ? this.imageUrl
           : imageUrl as String?,
       likeCount: likeCount ?? this.likeCount,
       likedByMe: likedByMe ?? this.likedByMe,
+      myReaction: myReaction == _communityCommentNoChange
+          ? this.myReaction
+          : myReaction as String?,
       createdAt: createdAt ?? this.createdAt,
       parentCommentId: parentCommentId == _communityCommentNoChange
           ? this.parentCommentId
@@ -269,6 +290,9 @@ class CommunityCommentModel {
   factory CommunityCommentModel.fromJson(Map<String, dynamic> json) {
     final authorId = _readNullableString(json['author_id']) ??
         _readNullableString(json['user_id']);
+    final String? myReaction = CommunityReactionTypes.normalizeNullable(
+      _readNullableString(json['my_reaction']) ?? _readNullableString(json['reaction']),
+    );
 
     return CommunityCommentModel(
       id: (json['id'] ?? '').toString(),
@@ -281,7 +305,8 @@ class CommunityCommentModel {
           '',
       imageUrl: _normalizeCommunityImageUrl(_readNullableString(json['image_url'])),
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
-      likedByMe: json['liked_by_me'] == true,
+        likedByMe: myReaction != null || json['liked_by_me'] == true,
+        myReaction: myReaction,
       createdAt: JapanTime.parseServerTimestamp(json['created_at']) ??
           DateTime.now(),
       parentCommentId: _readNullableString(json['parent_comment_id']),

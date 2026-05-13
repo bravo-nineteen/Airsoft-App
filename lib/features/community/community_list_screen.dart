@@ -15,6 +15,8 @@ import '../../core/content/app_content_preloader.dart';
 import 'community_create_post_screen.dart';
 import 'community_model.dart';
 import 'community_post_categories.dart';
+import 'community_reaction_types.dart';
+import 'community_reaction_ui.dart';
 import 'community_post_details_screen.dart';
 import 'community_repository.dart';
 import 'community_user_profile_screen.dart';
@@ -686,7 +688,46 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     await _loadPosts();
   }
 
-  Future<void> _toggleLikeFromFeed(CommunityPostModel post) async {
+  Future<String?> _pickReaction(String? currentReaction) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final CommunityReactionOption option
+                  in CommunityReactionUi.options)
+                ListTile(
+                  leading: Icon(option.icon, color: option.color),
+                  title: Text(option.label),
+                  trailing: option.code == currentReaction
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          color: theme.colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(option.code),
+                ),
+              if (currentReaction != null)
+                ListTile(
+                  leading: const Icon(Icons.remove_circle_outline),
+                  title: const Text('Remove reaction'),
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _reactFromFeed(
+    CommunityPostModel post, {
+    required String? reaction,
+  }) async {
     if (_busyLikePostIds.contains(post.id)) {
       return;
     }
@@ -699,19 +740,26 @@ class _CommunityListScreenState extends State<CommunityListScreen>
     }
 
     final CommunityPostModel original = _posts[index];
-    final bool nextLiked = !original.isLikedByMe;
-    final int nextCount = original.likeCount + (nextLiked ? 1 : -1);
+    final String? previousReaction = original.myReaction;
+    final bool didHaveReaction = previousReaction != null;
+    final bool willHaveReaction = reaction != null && reaction.trim().isNotEmpty;
+    final int nextCount = original.likeCount + (willHaveReaction ? 1 : 0) - (didHaveReaction ? 1 : 0);
 
     setState(() {
       _busyLikePostIds.add(post.id);
       _posts[index] = original.copyWith(
-        isLikedByMe: nextLiked,
+        isLikedByMe: willHaveReaction,
+        myReaction: willHaveReaction ? reaction : null,
         likeCount: nextCount < 0 ? 0 : nextCount,
       );
     });
 
     try {
-      await _repository.toggleLikePost(post.id);
+      if (willHaveReaction) {
+        await _repository.setPostReaction(post.id, reaction!);
+      } else {
+        await _repository.clearPostReaction(post.id);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -732,6 +780,15 @@ class _CommunityListScreenState extends State<CommunityListScreen>
         });
       }
     }
+  }
+
+  Future<void> _openPostReactionPicker(CommunityPostModel post) async {
+    final String? selected = await _pickReaction(post.myReaction);
+    if (selected == null) {
+      return;
+    }
+    final String? nextReaction = selected.trim().isEmpty ? null : selected;
+    await _reactFromFeed(post, reaction: nextReaction);
   }
 
   void _openProfile(String? userId, String fallbackName) {
@@ -1034,7 +1091,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
                                         : <String>[post.primaryImageUrl!]);
                               _openImageLightbox(images);
                             },
-                            onLikeTap: () => _toggleLikeFromFeed(post),
+                            onLikeTap: () => _openPostReactionPicker(post),
                             isLiking: _busyLikePostIds.contains(post.id),
                             onAuthorTap: () =>
                                 _openProfile(post.authorId, post.authorName),
@@ -1067,7 +1124,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
                                         : <String>[post.primaryImageUrl!]);
                               _openImageLightbox(images);
                             },
-                            onLikeTap: () => _toggleLikeFromFeed(post),
+                            onLikeTap: () => _openPostReactionPicker(post),
                             isLiking: _busyLikePostIds.contains(post.id),
                             onAuthorTap: () =>
                                 _openProfile(post.authorId, post.authorName),
@@ -1115,6 +1172,10 @@ class _CompactPostCard extends StatelessWidget {
         CommunityPostCategories.normalizeCommunityCategory(post.category);
     final resolvedImageUrl = post.primaryImageUrl?.trim() ?? '';
     final hasImage = resolvedImageUrl.isNotEmpty;
+
+    final CommunityReactionOption activeReaction = CommunityReactionUi.optionFor(
+      post.myReaction ?? CommunityReactionTypes.thumbsUp,
+    );
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1315,8 +1376,8 @@ class _CompactPostCard extends StatelessWidget {
                               onPressed: isLiking ? null : onLikeTap,
                               style: TextButton.styleFrom(
                                 foregroundColor: post.isLikedByMe
-                                    ? Colors.red
-                                    : null,
+                                  ? activeReaction.color
+                                  : null,
                               ),
                               icon: isLiking
                                   ? const SizedBox(
@@ -1328,8 +1389,8 @@ class _CompactPostCard extends StatelessWidget {
                                     )
                                   : Icon(
                                       post.isLikedByMe
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
+                                        ? activeReaction.icon
+                                        : Icons.thumb_up_alt_outlined,
                                     ),
                               label: Text(
                                 l10n.t(

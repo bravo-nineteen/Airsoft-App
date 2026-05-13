@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/time/japan_time.dart';
 import 'community_model.dart';
 import 'community_image_service.dart';
+import 'community_reaction_types.dart';
 import '../notifications/notification_writer.dart';
 import '../safety/safety_repository.dart';
 
@@ -86,6 +87,20 @@ class CommunityRepository {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> _hasColumn(String tableName, String columnName) async {
+    try {
+      await _client.from(tableName).select(columnName).limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _normalizeReactionOrDefault(String? value) {
+    return CommunityReactionTypes.normalizeNullable(value) ??
+        CommunityReactionTypes.thumbsUp;
   }
 
   bool _isMissingTableError(PostgrestException error, String tableName) {
@@ -332,6 +347,37 @@ class CommunityRepository {
     }
   }
 
+  Future<String?> _reactionForCurrentUser(
+    String tableName,
+    String foreignKey,
+    String foreignId,
+  ) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      return null;
+    }
+
+    final bool hasReactionColumn = await _hasColumn(tableName, 'reaction');
+    try {
+      final String selectColumns = hasReactionColumn ? 'id,reaction' : 'id';
+      final Map<String, dynamic>? response = await _client
+          .from(tableName)
+          .select(selectColumns)
+          .eq(foreignKey, foreignId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (response == null) {
+        return null;
+      }
+      if (!hasReactionColumn) {
+        return CommunityReactionTypes.thumbsUp;
+      }
+      return _normalizeReactionOrDefault(response['reaction']?.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<CommunityPostModel>> fetchPosts({
     String query = '',
     String category = 'All',
@@ -431,6 +477,52 @@ class CommunityRepository {
         posts[i] = current.copyWith(
           commentCount: commentCountByPostId[current.id] ?? 0,
         );
+      }
+
+      final bool hasPostLikesTable = await _hasTable('community_post_likes');
+      if (hasPostLikesTable) {
+        final bool hasReactionColumn = await _hasColumn(
+          'community_post_likes',
+          'reaction',
+        );
+
+        final String selectColumns = hasReactionColumn
+            ? 'post_id,user_id,reaction'
+            : 'post_id,user_id';
+        final List<dynamic> rows = await _client
+            .from('community_post_likes')
+            .select(selectColumns)
+            .inFilter('post_id', postIds);
+
+        final Map<String, int> countByPostId = <String, int>{};
+        final Map<String, String> myReactionByPostId = <String, String>{};
+        final String? viewerId = currentUserId;
+
+        for (final dynamic row in rows) {
+          final Map<String, dynamic> map = Map<String, dynamic>.from(row as Map);
+          final String postId = map['post_id']?.toString() ?? '';
+          if (postId.isEmpty) {
+            continue;
+          }
+          countByPostId[postId] = (countByPostId[postId] ?? 0) + 1;
+
+          if (viewerId != null && map['user_id']?.toString() == viewerId) {
+            final String reaction = hasReactionColumn
+                ? _normalizeReactionOrDefault(map['reaction']?.toString())
+                : CommunityReactionTypes.thumbsUp;
+            myReactionByPostId[postId] = reaction;
+          }
+        }
+
+        for (int i = 0; i < posts.length; i++) {
+          final CommunityPostModel current = posts[i];
+          final String? myReaction = myReactionByPostId[current.id];
+          posts[i] = current.copyWith(
+            likeCount: countByPostId[current.id] ?? 0,
+            isLikedByMe: myReaction != null,
+            myReaction: myReaction,
+          );
+        }
       }
     }
 
@@ -585,18 +677,22 @@ class CommunityRepository {
 
     final hasLikesTable = await _hasTable('community_post_likes');
     if (hasLikesTable) {
-      final likeCount = await _countRows(
+      final int likeCount = await _countRows(
         'community_post_likes',
         'post_id',
         postId,
       );
-      final isLikedByMe = await _isLikedByCurrentUser(
+      final String? myReaction = await _reactionForCurrentUser(
         'community_post_likes',
         'post_id',
         postId,
       );
 
-      post = post.copyWith(likeCount: likeCount, isLikedByMe: isLikedByMe);
+      post = post.copyWith(
+        likeCount: likeCount,
+        isLikedByMe: myReaction != null,
+        myReaction: myReaction,
+      );
     }
 
     return post;
@@ -631,31 +727,60 @@ class CommunityRepository {
       }).toList();
     }
 
-    final hasLikesTable = await _hasTable('community_comment_likes');
+    final bool hasLikesTable = await _hasTable('community_comment_likes');
     if (!hasLikesTable) {
       return comments;
     }
 
-    final List<CommunityCommentModel> enriched =
-        await Future.wait<CommunityCommentModel>(
-          comments.map((CommunityCommentModel comment) async {
-            final likeCount = await _countRows(
-              'community_comment_likes',
-              'comment_id',
-              comment.id,
-            );
-            final isLikedByMe = await _isLikedByCurrentUser(
-              'community_comment_likes',
-              'comment_id',
-              comment.id,
-            );
+    final List<String> commentIds = comments
+        .map((CommunityCommentModel comment) => comment.id)
+        .toList();
+    if (commentIds.isEmpty) {
+      return comments;
+    }
 
-            return comment.copyWith(
-              likeCount: likeCount,
-              likedByMe: isLikedByMe,
-            );
-          }),
-        );
+    final bool hasReactionColumn = await _hasColumn(
+      'community_comment_likes',
+      'reaction',
+    );
+    final String selectColumns = hasReactionColumn
+        ? 'comment_id,user_id,reaction'
+        : 'comment_id,user_id';
+    final List<dynamic> rows = await _client
+        .from('community_comment_likes')
+        .select(selectColumns)
+        .inFilter('comment_id', commentIds);
+
+    final Map<String, int> countByCommentId = <String, int>{};
+    final Map<String, String> myReactionByCommentId = <String, String>{};
+    final String? viewerId = currentUserId;
+
+    for (final dynamic row in rows) {
+      final Map<String, dynamic> map = Map<String, dynamic>.from(row as Map);
+      final String commentId = map['comment_id']?.toString() ?? '';
+      if (commentId.isEmpty) {
+        continue;
+      }
+      countByCommentId[commentId] = (countByCommentId[commentId] ?? 0) + 1;
+
+      if (viewerId != null && map['user_id']?.toString() == viewerId) {
+        final String reaction = hasReactionColumn
+            ? _normalizeReactionOrDefault(map['reaction']?.toString())
+            : CommunityReactionTypes.thumbsUp;
+        myReactionByCommentId[commentId] = reaction;
+      }
+    }
+
+    final List<CommunityCommentModel> enriched = comments
+        .map((CommunityCommentModel comment) {
+          final String? myReaction = myReactionByCommentId[comment.id];
+          return comment.copyWith(
+            likeCount: countByCommentId[comment.id] ?? 0,
+            likedByMe: myReaction != null,
+            myReaction: myReaction,
+          );
+        })
+        .toList();
 
     return enriched;
   }
@@ -1141,15 +1266,21 @@ class CommunityRepository {
     }
   }
 
-  Future<void> toggleLikePost(String postId) async {
+  Future<void> setPostReaction(String postId, String reaction) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw Exception('User not logged in');
     }
 
-    final existing = await _client
+    final String normalizedReaction = _normalizeReactionOrDefault(reaction);
+    final bool hasReactionColumn = await _hasColumn(
+      'community_post_likes',
+      'reaction',
+    );
+
+    final Map<String, dynamic>? existing = await _client
         .from('community_post_likes')
-        .select('id')
+        .select(hasReactionColumn ? 'id,reaction' : 'id')
         .eq('post_id', postId)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -1161,16 +1292,31 @@ class CommunityRepository {
         .maybeSingle();
 
     if (existing == null) {
-      await _client.from('community_post_likes').insert({
+      final Map<String, dynamic> payload = <String, dynamic>{
         'post_id': postId,
         'user_id': user.id,
-      });
+      };
+      if (hasReactionColumn) {
+        payload['reaction'] = normalizedReaction;
+      }
+      await _client.from('community_post_likes').insert(payload);
     } else {
-      await _client
-          .from('community_post_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+      final String existingReaction = hasReactionColumn
+          ? _normalizeReactionOrDefault(existing['reaction']?.toString())
+          : CommunityReactionTypes.thumbsUp;
+      if (existingReaction == normalizedReaction) {
+        await _client
+            .from('community_post_likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', user.id);
+      } else if (hasReactionColumn) {
+        await _client
+            .from('community_post_likes')
+            .update({'reaction': normalizedReaction})
+            .eq('post_id', postId)
+            .eq('user_id', user.id);
+      }
     }
 
     final likeCount = await _countRows(
@@ -1205,15 +1351,51 @@ class CommunityRepository {
     }
   }
 
-  Future<void> toggleLikeComment(String commentId) async {
+  Future<void> clearPostReaction(String postId) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw Exception('User not logged in');
     }
 
-    final existing = await _client
+    await _client
+        .from('community_post_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', user.id);
+
+    final int likeCount = await _countRows(
+      'community_post_likes',
+      'post_id',
+      postId,
+    );
+    await _client
+        .from('community_posts')
+        .update({
+          'like_count': likeCount,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', postId);
+  }
+
+  Future<void> toggleLikePost(String postId) async {
+    await setPostReaction(postId, CommunityReactionTypes.thumbsUp);
+  }
+
+  Future<void> setCommentReaction(String commentId, String reaction) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    final String normalizedReaction = _normalizeReactionOrDefault(reaction);
+    final bool hasReactionColumn = await _hasColumn(
+      'community_comment_likes',
+      'reaction',
+    );
+
+    final Map<String, dynamic>? existing = await _client
         .from('community_comment_likes')
-        .select('id')
+        .select(hasReactionColumn ? 'id,reaction' : 'id')
         .eq('comment_id', commentId)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -1225,16 +1407,31 @@ class CommunityRepository {
         .maybeSingle();
 
     if (existing == null) {
-      await _client.from('community_comment_likes').insert({
+      final Map<String, dynamic> payload = <String, dynamic>{
         'comment_id': commentId,
         'user_id': user.id,
-      });
+      };
+      if (hasReactionColumn) {
+        payload['reaction'] = normalizedReaction;
+      }
+      await _client.from('community_comment_likes').insert(payload);
     } else {
-      await _client
-          .from('community_comment_likes')
-          .delete()
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id);
+      final String existingReaction = hasReactionColumn
+          ? _normalizeReactionOrDefault(existing['reaction']?.toString())
+          : CommunityReactionTypes.thumbsUp;
+      if (existingReaction == normalizedReaction) {
+        await _client
+            .from('community_comment_likes')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+      } else if (hasReactionColumn) {
+        await _client
+            .from('community_comment_likes')
+            .update({'reaction': normalizedReaction})
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+      }
     }
 
     final int likeCount = await _countRows(
@@ -1265,6 +1462,36 @@ class CommunityRepository {
         body: 'liked your comment.',
       );
     }
+  }
+
+  Future<void> clearCommentReaction(String commentId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User not logged in');
+    }
+
+    await _client
+        .from('community_comment_likes')
+        .delete()
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id);
+
+    final int likeCount = await _countRows(
+      'community_comment_likes',
+      'comment_id',
+      commentId,
+    );
+    await _client
+        .from('community_comments')
+        .update({
+          'like_count': likeCount,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', commentId);
+  }
+
+  Future<void> toggleLikeComment(String commentId) async {
+    await setCommentReaction(commentId, CommunityReactionTypes.thumbsUp);
   }
 
   Future<void> updateComment({
