@@ -614,7 +614,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                 fit: BoxFit.contain,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
             Expanded(
               child: NavigationRail(
                 extended: false,
@@ -622,7 +622,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                 minExtendedWidth: 140,
                 selectedIndex: selectedIndex,
                 onDestinationSelected: _selectTabletDestination,
-                groupAlignment: -0.4,
+                groupAlignment: -0.15,
                 useIndicator: true,
                 destinations: <NavigationRailDestination>[
                   NavigationRailDestination(

@@ -49,6 +49,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   bool _enablePoll = false;
   bool _pollAllowMultiple = false;
   bool _didInitLanguage = false;
+  bool _didPublishPost = false;
 
   bool get _isProfilePost => widget.postContext == 'profile';
 
@@ -352,6 +353,7 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
             );
 
       await _repository.clearPostDraft(draftKey: _draftKey);
+      _didPublishPost = true;
 
       if (!mounted) {
         return;
@@ -388,7 +390,9 @@ class _CommunityCreatePostScreenState extends State<CommunityCreatePostScreen> {
   @override
   void dispose() {
     _draftSaveDebounce?.cancel();
-    unawaited(_saveDraft());
+    if (!_isSubmitting && !_didPublishPost) {
+      unawaited(_saveDraft());
+    }
     _titleController.removeListener(_onDraftInputsChanged);
     _bodyController.removeListener(_onDraftInputsChanged);
     _pollQuestionController.removeListener(_onDraftInputsChanged);

@@ -53,6 +53,7 @@ flutter:
 
   assets:
     - assets/logo.png
+    - assets/reactions/
 
 flutter_launcher_icons:
   android: true

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -240,9 +241,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      final String? redirectTo = kIsWeb ? null : 'fieldops://login-callback';
       final bool launched = await Supabase.instance.client.auth.signInWithOAuth(
         provider,
-        redirectTo: 'fieldops://login-callback',
+        redirectTo: redirectTo,
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
 
       if (!launched && mounted) {

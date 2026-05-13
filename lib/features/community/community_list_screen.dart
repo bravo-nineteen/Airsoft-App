@@ -701,7 +701,7 @@ class _CommunityListScreenState extends State<CommunityListScreen>
               for (final CommunityReactionOption option
                   in CommunityReactionUi.options)
                 ListTile(
-                  leading: Icon(option.icon, color: option.color),
+                  leading: CommunityReactionUi.buildIcon(option),
                   title: Text(option.label),
                   trailing: option.code == currentReaction
                       ? Icon(
@@ -1379,6 +1379,7 @@ class _CompactPostCard extends StatelessWidget {
                                   ? activeReaction.color
                                   : null,
                               ),
+                              iconAlignment: IconAlignment.start,
                               icon: isLiking
                                   ? const SizedBox(
                                       width: 14,
@@ -1387,11 +1388,14 @@ class _CompactPostCard extends StatelessWidget {
                                         strokeWidth: 2,
                                       ),
                                     )
-                                  : Icon(
-                                      post.isLikedByMe
-                                        ? activeReaction.icon
-                                        : Icons.thumb_up_alt_outlined,
-                                    ),
+                                  : (post.isLikedByMe
+                                        ? CommunityReactionUi.buildIcon(
+                                            activeReaction,
+                                            size: 18,
+                                          )
+                                        : const Icon(
+                                            Icons.thumb_up_alt_outlined,
+                                          )),
                               label: Text(
                                 l10n.t(
                                   'likeWithCount',

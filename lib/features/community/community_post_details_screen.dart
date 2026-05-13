@@ -614,7 +614,7 @@ class _CommunityPostDetailsScreenState
               for (final CommunityReactionOption option
                   in CommunityReactionUi.options)
                 ListTile(
-                  leading: Icon(option.icon, color: option.color),
+                  leading: CommunityReactionUi.buildIcon(option),
                   title: Text(option.label),
                   trailing: option.code == currentReaction
                       ? Icon(
@@ -1428,12 +1428,9 @@ class _CommunityPostDetailsScreenState
                     onPressed: isBusy
                         ? null
                         : () => _openCommentReactionPicker(comment),
-                    icon: Icon(
-                      comment.likedByMe
-                          ? activeReaction.icon
-                          : Icons.thumb_up_alt_outlined,
-                      color: comment.likedByMe ? activeReaction.color : null,
-                    ),
+                    icon: comment.likedByMe
+                        ? CommunityReactionUi.buildIcon(activeReaction, size: 22)
+                        : const Icon(Icons.thumb_up_alt_outlined),
                   ),
                   Text('${comment.likeCount}'),
                 ],
@@ -1929,14 +1926,12 @@ class _CommunityPostDetailsScreenState
                             onPressed: _isTogglingPostLike
                                 ? null
                                 : _openPostReactionPicker,
-                            icon: Icon(
-                              post.isLikedByMe
-                                  ? activeReaction.icon
-                                  : Icons.thumb_up_alt_outlined,
-                              color: post.isLikedByMe
-                                  ? activeReaction.color
-                                  : null,
-                            ),
+                            icon: post.isLikedByMe
+                                ? CommunityReactionUi.buildIcon(
+                                    activeReaction,
+                                    size: 20,
+                                  )
+                                : const Icon(Icons.thumb_up_alt_outlined),
                             label: Text('${post.likeCount}'),
                           );
                         },

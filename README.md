@@ -76,11 +76,15 @@ Social login will not work unless both provider credentials and redirect URLs ar
 2. Facebook App Secret
 3. In Facebook Login settings, set Valid OAuth Redirect URI to:
 	- https://yznlhjopcqjbsweohptb.supabase.co/auth/v1/callback
-4. Android package name:
+4. In App Settings -> Basic -> App Domains, add every domain/subdomain used by auth flow, including:
+	- yznlhjopcqjbsweohptb.supabase.co
+	- your production app domain (and any subdomains)
+	- your staging/test app domains (and any subdomains)
+5. Android package name:
 	- com.airsoftonlinejapan.fieldops
-5. Android activity class name:
+6. Android activity class name:
 	- com.airsoftonlinejapan.fieldops.MainActivity
-6. App redirect URI used by this app:
+7. App redirect URI used by this app:
 	- fieldops://login-callback
 
 ### 4) Android callback wiring in this project
