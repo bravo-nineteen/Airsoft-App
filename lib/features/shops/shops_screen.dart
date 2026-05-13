@@ -145,24 +145,24 @@ class _ShopsScreenState extends State<ShopsScreen> {
     });
   }
 
+  void _loadMoreIfNeeded(int total, int index) {
+    if (index < _visibleCount - 6) {
+      return;
+    }
+    if (_visibleCount >= total) {
+      return;
+    }
+    setState(() {
+      _visibleCount = (_visibleCount + _lazyPageSize).clamp(0, total);
+    });
+  }
+
   void _applyFilters() {
     setState(() {
       _visibleCount = _lazyPageSize;
       _shopsFuture = Future.value(
         _repository
             .applyFilters(
-
-                void _loadMoreIfNeeded(int total, int index) {
-                  if (index < _visibleCount - 6) {
-                    return;
-                  }
-                  if (_visibleCount >= total) {
-                    return;
-                  }
-                  setState(() {
-                    _visibleCount = (_visibleCount + _lazyPageSize).clamp(0, total);
-                  });
-                }
               _allShops,
               search: _searchController.text,
               prefecture: _selectedPrefecture,

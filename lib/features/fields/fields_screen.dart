@@ -191,28 +191,52 @@ class _FieldsScreenState extends State<FieldsScreen> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isWide = constraints.maxWidth >= 920;
         return Column(
-          children: [
+          children: <Widget>[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
-                    children: [
-              TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: l10n.t('searchFieldsHint'),
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _refreshFields,
-                  ),
-                ),
-                onSubmitted: (_) => _refreshFields(),
-              ),
-              const SizedBox(height: 12),
+                    children: <Widget>[
+                      TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: l10n.t('searchFieldsHint'),
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _refreshFields,
+                          ),
+                        ),
+                        onSubmitted: (_) => _refreshFields(),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          SizedBox(
+                            width: isWide ? 260 : double.infinity,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _selectedCountry,
+                              decoration: const InputDecoration(
+                                labelText: 'Country',
+                              ),
+                              items: LocationPreferences.countries
+                                  .map(
+                                    (String country) =>
+                                        DropdownMenuItem<String>(
+                                          value: country,
+                                          child: Text(country),
+                                        ),
+                                  )
+                                  .toList(),
+                              onChanged: (String? value) {
+                                setState(() {
+                                  _selectedCountry =
+                                      value ?? LocationPreferences.allCountries;
                                   _selectedLocation = 'All';
                                 });
                                 LocationPreferences.savePreferredCountry(
@@ -231,13 +255,13 @@ class _FieldsScreenState extends State<FieldsScreen> {
                               ),
                               items: _locations
                                   .map(
-                                    (value) => DropdownMenuItem<String>(
+                                    (String value) => DropdownMenuItem<String>(
                                       value: value,
                                       child: Text(value),
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (value) {
+                              onChanged: (String? value) {
                                 setState(() {
                                   _selectedLocation = value ?? 'All';
                                 });
@@ -254,13 +278,13 @@ class _FieldsScreenState extends State<FieldsScreen> {
                               ),
                               items: _fieldTypes
                                   .map(
-                                    (value) => DropdownMenuItem<String>(
+                                    (String value) => DropdownMenuItem<String>(
                                       value: value,
                                       child: Text(value),
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (value) {
+                              onChanged: (String? value) {
                                 setState(() {
                                   _selectedFieldType = value ?? 'All';
                                 });
@@ -275,13 +299,25 @@ class _FieldsScreenState extends State<FieldsScreen> {
                               decoration: InputDecoration(
                                 labelText: l10n.t('minRating'),
                               ),
-                              items: [
-                                DropdownMenuItem(value: 0, child: Text(l10n.t('any'))),
-                                const DropdownMenuItem(value: 3, child: Text('3.0+')),
-                                const DropdownMenuItem(value: 4, child: Text('4.0+')),
-                                const DropdownMenuItem(value: 4.5, child: Text('4.5+')),
+                              items: <DropdownMenuItem<double>>[
+                                DropdownMenuItem<double>(
+                                  value: 0,
+                                  child: Text(l10n.t('any')),
+                                ),
+                                const DropdownMenuItem<double>(
+                                  value: 3,
+                                  child: Text('3.0+'),
+                                ),
+                                const DropdownMenuItem<double>(
+                                  value: 4,
+                                  child: Text('4.0+'),
+                                ),
+                                const DropdownMenuItem<double>(
+                                  value: 4.5,
+                                  child: Text('4.5+'),
+                                ),
                               ],
-                              onChanged: (value) {
+                              onChanged: (double? value) {
                                 setState(() {
                                   _minRating = value ?? 0;
                                 });
@@ -291,37 +327,39 @@ class _FieldsScreenState extends State<FieldsScreen> {
                           ),
                         ],
                       ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SegmentedButton<bool>(
-                        segments: [
-                          ButtonSegment<bool>(
-                            value: false,
-                            label: Text(l10n.list),
-                            icon: const Icon(Icons.view_agenda_outlined),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: SegmentedButton<bool>(
+                              segments: <ButtonSegment<bool>>[
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text(l10n.list),
+                                  icon: const Icon(Icons.view_agenda_outlined),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text(l10n.map),
+                                  icon: const Icon(Icons.map_outlined),
+                                ),
+                              ],
+                              selected: <bool>{_mapView},
+                              onSelectionChanged: (Set<bool> selection) {
+                                setState(() {
+                                  _mapView = selection.first;
+                                });
+                              },
+                            ),
                           ),
-                          ButtonSegment<bool>(
-                            value: true,
-                            label: Text(l10n.map),
-                            icon: const Icon(Icons.map_outlined),
+                          const SizedBox(width: 12),
+                          FilledButton.icon(
+                            onPressed: _openSubmitFieldScreen,
+                            icon: const Icon(Icons.add_location_alt_outlined),
+                            label: const Text('Add Field'),
                           ),
                         ],
-                        selected: {_mapView},
-                        onSelectionChanged: (selection) {
-                          setState(() { _mapView = selection.first; });
-                        },
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      onPressed: _openSubmitFieldScreen,
-                      icon: const Icon(Icons.add_location_alt_outlined),
-                      label: const Text('Add Field'),
-                    ),
-                  ],
-                ),
                     ],
                   ),
                 ),
@@ -330,96 +368,97 @@ class _FieldsScreenState extends State<FieldsScreen> {
             Expanded(
               child: FutureBuilder<List<FieldModel>>(
                 future: _fieldsFuture,
-                builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+                builder: (BuildContext context, AsyncSnapshot<List<FieldModel>> snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      l10n.t(
-                        'failedLoadFields',
-                        args: {'error': '${snapshot.error}'},
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          l10n.t(
+                            'failedLoadFields',
+                            args: <String, String>{'error': '${snapshot.error}'},
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                );
-              }
+                    );
+                  }
 
-              final List<FieldModel> fields = snapshot.data ?? <FieldModel>[];
-              final int visible = _visibleCount.clamp(0, fields.length);
+                  final List<FieldModel> fields = snapshot.data ?? <FieldModel>[];
+                  final int visible = _visibleCount.clamp(0, fields.length);
 
-              if (fields.isEmpty) {
-                return Center(child: Text(l10n.t('noFieldsFound')));
-              }
+                  if (fields.isEmpty) {
+                    return Center(child: Text(l10n.t('noFieldsFound')));
+                  }
 
-              if (_mapView) {
-                if (isWide) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          flex: 7,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: FieldMapScreen(fields: fields),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 4,
-                          child: _FieldResultsPane(
-                            fields: fields,
-                            onOpenField: _openField,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return FieldMapScreen(fields: fields);
-              }
-
-              return RefreshIndicator(
-                onRefresh: () async => _refreshFields(),
-                child: isWide
-                    ? GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                          childAspectRatio: 2.15,
-                        ),
-                        itemCount: visible,
-                        itemBuilder: (context, index) {
-                          _loadMoreIfNeeded(fields.length, index);
-                          return _FieldDirectoryCard(
-                            field: fields[index],
-                            onTap: () => _openField(fields[index]),
-                          );
-                        },
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: visible,
-                        itemBuilder: (context, index) {
-                          _loadMoreIfNeeded(fields.length, index);
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _FieldDirectoryCard(
-                              field: fields[index],
-                              onTap: () => _openField(fields[index]),
+                  if (_mapView) {
+                    if (isWide) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              flex: 7,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: FieldMapScreen(fields: fields),
+                              ),
                             ),
-                          );
-                        },
-                      ),
-              );
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 4,
+                              child: _FieldResultsPane(
+                                fields: fields,
+                                onOpenField: _openField,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return FieldMapScreen(fields: fields);
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () async => _refreshFields(),
+                    child: isWide
+                        ? GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: 16,
+                                  childAspectRatio: 2.15,
+                                ),
+                            itemCount: visible,
+                            itemBuilder: (BuildContext context, int index) {
+                              _loadMoreIfNeeded(fields.length, index);
+                              return _FieldDirectoryCard(
+                                field: fields[index],
+                                onTap: () => _openField(fields[index]),
+                              );
+                            },
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: visible,
+                            itemBuilder: (BuildContext context, int index) {
+                              _loadMoreIfNeeded(fields.length, index);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _FieldDirectoryCard(
+                                  field: fields[index],
+                                  onTap: () => _openField(fields[index]),
+                                ),
+                              );
+                            },
+                          ),
+                  );
                 },
               ),
             ),
