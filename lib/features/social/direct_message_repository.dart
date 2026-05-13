@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../community/community_image_service.dart';
+import '../community/community_reaction_types.dart';
 import '../safety/safety_repository.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
@@ -81,10 +82,114 @@ class DirectMessageRepository {
           .order('created_at', ascending: true),
     );
 
-    return response
+    List<DirectMessageModel> messages = response
       .map<DirectMessageModel>((e) => DirectMessageModel.fromJson(e))
       .where((DirectMessageModel message) => !message.isExpired)
       .toList();
+
+    if (messages.isEmpty) {
+      return messages;
+    }
+
+    final bool hasReactionsTable = await _hasTable('direct_message_reactions');
+    if (!hasReactionsTable) {
+      return messages;
+    }
+
+    final bool hasReactionColumn = await _hasColumn(
+      'direct_message_reactions',
+      'reaction',
+    );
+    final List<String> messageIds =
+        messages.map((DirectMessageModel message) => message.id).toList();
+    final String selectColumns = hasReactionColumn
+        ? 'message_id,user_id,reaction'
+        : 'message_id,user_id';
+    final List<dynamic> reactions = await _client
+        .from('direct_message_reactions')
+        .select(selectColumns)
+        .inFilter('message_id', messageIds);
+
+    final Map<String, int> countByMessageId = <String, int>{};
+    final Map<String, String> myReactionByMessageId = <String, String>{};
+
+    for (final dynamic row in reactions) {
+      final Map<String, dynamic> map = Map<String, dynamic>.from(row as Map);
+      final String messageId = map['message_id']?.toString() ?? '';
+      if (messageId.isEmpty) {
+        continue;
+      }
+      countByMessageId[messageId] = (countByMessageId[messageId] ?? 0) + 1;
+      if (map['user_id']?.toString() == _currentUserId) {
+        final String reaction = hasReactionColumn
+            ? _normalizeReactionOrDefault(map['reaction']?.toString())
+            : CommunityReactionTypes.thumbsUp;
+        myReactionByMessageId[messageId] = reaction;
+      }
+    }
+
+    messages = messages.map((DirectMessageModel message) {
+      return message.copyWith(
+        reactionCount: countByMessageId[message.id] ?? 0,
+        myReaction: myReactionByMessageId[message.id],
+      );
+    }).toList();
+
+    return messages;
+  }
+
+  Future<void> setMessageReaction(String messageId, String reaction) async {
+    final String userId = _currentUserId;
+    final String normalizedReaction = _normalizeReactionOrDefault(reaction);
+
+    final bool hasReactionColumn = await _hasColumn(
+      'direct_message_reactions',
+      'reaction',
+    );
+
+    final Map<String, dynamic>? existing = await _client
+        .from('direct_message_reactions')
+        .select(hasReactionColumn ? 'id,reaction' : 'id')
+        .eq('message_id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing == null) {
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'message_id': messageId,
+        'user_id': userId,
+      };
+      if (hasReactionColumn) {
+        payload['reaction'] = normalizedReaction;
+      }
+      await _client.from('direct_message_reactions').insert(payload);
+      return;
+    }
+
+    final String existingReaction = hasReactionColumn
+        ? _normalizeReactionOrDefault(existing['reaction']?.toString())
+        : CommunityReactionTypes.thumbsUp;
+    if (existingReaction == normalizedReaction) {
+      await clearMessageReaction(messageId);
+      return;
+    }
+
+    if (hasReactionColumn) {
+      await _client
+          .from('direct_message_reactions')
+          .update(<String, dynamic>{'reaction': normalizedReaction})
+          .eq('message_id', messageId)
+          .eq('user_id', userId);
+    }
+  }
+
+  Future<void> clearMessageReaction(String messageId) async {
+    final String userId = _currentUserId;
+    await _client
+        .from('direct_message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', userId);
   }
 
   Future<void> sendMessage({
@@ -309,5 +414,28 @@ class DirectMessageRepository {
         '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
             .toLowerCase();
     return summary.contains(tableName.toLowerCase());
+  }
+
+  Future<bool> _hasTable(String tableName) async {
+    try {
+      await _client.from(tableName).select('id').limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _hasColumn(String tableName, String columnName) async {
+    try {
+      await _client.from(tableName).select(columnName).limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _normalizeReactionOrDefault(String? value) {
+    return CommunityReactionTypes.normalizeNullable(value) ??
+        CommunityReactionTypes.thumbsUp;
   }
 }

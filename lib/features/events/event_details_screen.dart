@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../../shared/widgets/user_avatar.dart';
+import '../community/community_reaction_types.dart';
+import '../community/community_reaction_ui.dart';
 import '../safety/safety_repository.dart';
 import 'event_create_screen.dart';
 import 'event_model.dart';
@@ -34,6 +36,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _isSendingComment = false;
   _CommentSortMode _commentSortMode = _CommentSortMode.mostRecent;
   final Set<String> _busyAttendeeIds = <String>{};
+  final Set<String> _busyCommentReactionIds = <String>{};
   int _waitlistCount = 0;
   bool _isCurrentUserWaitlisted = false;
   List<EventCheckinRecord> _checkins = <EventCheckinRecord>[];
@@ -393,7 +396,101 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   int _threadPopularity(List<EventCommentModel> descendants) {
-    return descendants.length;
+    final int descendantReactions = descendants.fold<int>(
+      0,
+      (int total, EventCommentModel reply) => total + reply.reactionCount,
+    );
+    return descendants.length + descendantReactions;
+  }
+
+  Future<String?> _pickReaction(String? currentReaction) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final CommunityReactionOption option in CommunityReactionUi.options)
+                ListTile(
+                  leading: Icon(option.icon, color: option.color),
+                  title: Text(option.label),
+                  trailing: option.code == currentReaction
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          color: theme.colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(option.code),
+                ),
+              if (currentReaction != null)
+                ListTile(
+                  leading: const Icon(Icons.remove_circle_outline),
+                  title: const Text('Remove reaction'),
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _reactToComment(EventCommentModel comment) async {
+    if (_busyCommentReactionIds.contains(comment.id)) {
+      return;
+    }
+
+    final String? selected = await _pickReaction(comment.myReaction);
+    if (selected == null) {
+      return;
+    }
+    final String? nextReaction = selected.trim().isEmpty ? null : selected;
+    final int index = _comments.indexWhere((EventCommentModel c) => c.id == comment.id);
+    if (index == -1) {
+      return;
+    }
+
+    final EventCommentModel original = _comments[index];
+    final bool didHaveReaction = original.myReaction != null;
+    final bool willHaveReaction = nextReaction != null;
+    final int nextCount =
+        original.reactionCount + (willHaveReaction ? 1 : 0) - (didHaveReaction ? 1 : 0);
+
+    setState(() {
+      _busyCommentReactionIds.add(comment.id);
+      _comments[index] = original.copyWith(
+        myReaction: nextReaction,
+        reactionCount: nextCount < 0 ? 0 : nextCount,
+      );
+    });
+
+    try {
+      if (nextReaction == null) {
+        await _repository.clearEventCommentReaction(comment.id);
+      } else {
+        await _repository.setEventCommentReaction(comment.id, nextReaction);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _comments[index] = original;
+      });
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyCommentReactionIds.remove(comment.id);
+        });
+      }
+    }
   }
 
   void _setCommentSortMode(_CommentSortMode mode) {
@@ -1264,6 +1361,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool isOwner = _isCommentOwner(comment);
     final ThemeData theme = Theme.of(context);
+    final bool isBusyReaction = _busyCommentReactionIds.contains(comment.id);
+    final CommunityReactionOption activeReaction = CommunityReactionUi.optionFor(
+      comment.myReaction ?? CommunityReactionTypes.thumbsUp,
+    );
     final String? parentAuthorName =
         isReply ? _parentAuthorNameFor(comment) : null;
 
@@ -1407,6 +1508,28 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
           const SizedBox(height: 8),
           Text(comment.body),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              TextButton.icon(
+                onPressed: isBusyReaction ? null : () => _reactToComment(comment),
+                icon: isBusyReaction
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        comment.myReaction == null
+                            ? Icons.thumb_up_alt_outlined
+                            : activeReaction.icon,
+                        color: comment.myReaction == null ? null : activeReaction.color,
+                      ),
+                label: Text('${comment.reactionCount}'),
+              ),
+              const Spacer(),
+            ],
+          ),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(

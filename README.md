@@ -54,6 +54,10 @@ The app now supports social sign-in via Supabase OAuth.
 2. Add each provider's client ID and client secret.
 3. Add this mobile redirect URL in Authentication -> URL Configuration -> Additional Redirect URLs:
 	- fieldops://login-callback
+4. Set Site URL (or additional redirect) to include Supabase callback:
+	- https://yznlhjopcqjbsweohptb.supabase.co/auth/v1/callback
+
+Social login will not work unless both provider credentials and redirect URLs are configured in Supabase.
 
 ### 2) Google Cloud (What you need)
 
@@ -72,6 +76,12 @@ The app now supports social sign-in via Supabase OAuth.
 2. Facebook App Secret
 3. In Facebook Login settings, set Valid OAuth Redirect URI to:
 	- https://yznlhjopcqjbsweohptb.supabase.co/auth/v1/callback
+4. Android package name:
+	- com.airsoftonlinejapan.fieldops
+5. Android activity class name:
+	- com.airsoftonlinejapan.fieldops.MainActivity
+6. App redirect URI used by this app:
+	- fieldops://login-callback
 
 ### 4) Android callback wiring in this project
 

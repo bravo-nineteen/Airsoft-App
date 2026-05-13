@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../shared/widgets/persistent_shell_bottom_nav.dart';
 import '../community/community_image_service.dart';
+import '../community/community_reaction_types.dart';
+import '../community/community_reaction_ui.dart';
 import '../safety/safety_repository.dart';
 import 'contact_repository.dart';
 import 'direct_message_model.dart';
@@ -48,6 +50,7 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
   bool _expiringPhotosEnabled = true;
   bool _otherIsTyping = false;
   String? _pendingPhotoUrl;
+  final Set<String> _busyReactionMessageIds = <String>{};
 
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
 
@@ -346,6 +349,11 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                   onTap: () => Navigator.of(sheetContext).pop('unsend'),
                 ),
               ListTile(
+                leading: const Icon(Icons.emoji_emotions_outlined),
+                title: const Text('React'),
+                onTap: () => Navigator.of(sheetContext).pop('react'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: Text(l10n.t('deleteMessage')),
                 onTap: () => Navigator.of(sheetContext).pop('delete'),
@@ -368,6 +376,9 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
     try {
       if (selected == 'unsend') {
         await _repository.unsendMessage(message.id);
+      } else if (selected == 'react') {
+        await _reactToMessage(message);
+        return;
       } else if (selected == 'delete') {
         await _repository.deleteMessage(message.id);
       } else if (selected == 'report') {
@@ -381,6 +392,96 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
       );
+    }
+  }
+
+  Future<String?> _pickReaction(String? currentReaction) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        final ThemeData theme = Theme.of(context);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final CommunityReactionOption option in CommunityReactionUi.options)
+                ListTile(
+                  leading: Icon(option.icon, color: option.color),
+                  title: Text(option.label),
+                  trailing: option.code == currentReaction
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          color: theme.colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(option.code),
+                ),
+              if (currentReaction != null)
+                ListTile(
+                  leading: const Icon(Icons.remove_circle_outline),
+                  title: const Text('Remove reaction'),
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _reactToMessage(DirectMessageModel message) async {
+    if (_busyReactionMessageIds.contains(message.id)) {
+      return;
+    }
+
+    final String? selected = await _pickReaction(message.myReaction);
+    if (selected == null) {
+      return;
+    }
+
+    final int index = _messages.indexWhere((DirectMessageModel m) => m.id == message.id);
+    if (index == -1) {
+      return;
+    }
+    final DirectMessageModel original = _messages[index];
+    final String? nextReaction = selected.trim().isEmpty ? null : selected;
+    final bool didHaveReaction = original.myReaction != null;
+    final bool willHaveReaction = nextReaction != null;
+    final int nextCount =
+        original.reactionCount + (willHaveReaction ? 1 : 0) - (didHaveReaction ? 1 : 0);
+
+    setState(() {
+      _busyReactionMessageIds.add(message.id);
+      _messages[index] = original.copyWith(
+        myReaction: nextReaction,
+        reactionCount: nextCount < 0 ? 0 : nextCount,
+      );
+    });
+
+    try {
+      if (nextReaction == null) {
+        await _repository.clearMessageReaction(message.id);
+      } else {
+        await _repository.setMessageReaction(message.id, nextReaction);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _messages[index] = original;
+      });
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('actionFailed', args: {'error': '$error'}))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyReactionMessageIds.remove(message.id);
+        });
+      }
     }
   }
 
@@ -660,6 +761,12 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                           final ColorScheme colors = theme.colorScheme;
                           final bool isLightTheme =
                             theme.brightness == Brightness.light;
+                          final bool isBusyReaction =
+                              _busyReactionMessageIds.contains(message.id);
+                          final CommunityReactionOption activeReaction =
+                              CommunityReactionUi.optionFor(
+                                message.myReaction ?? CommunityReactionTypes.thumbsUp,
+                              );
                           final Color bubbleColor = isMine
                             ? (isLightTheme
                               ? colors.primary.withValues(alpha: 0.18)
@@ -729,6 +836,42 @@ class _DirectMessageScreenState extends State<DirectMessageScreen> {
                                       _formatTime(message.createdAt),
                                       style: theme.textTheme.bodySmall?.copyWith(
                                         color: timestampColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: isBusyReaction
+                                            ? null
+                                            : () => _reactToMessage(message),
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(0, 32),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 0,
+                                          ),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        icon: isBusyReaction
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : Icon(
+                                                message.myReaction == null
+                                                    ? Icons.thumb_up_alt_outlined
+                                                    : activeReaction.icon,
+                                                size: 16,
+                                                color: message.myReaction == null
+                                                    ? null
+                                                    : activeReaction.color,
+                                              ),
+                                        label: Text('${message.reactionCount}'),
                                       ),
                                     ),
                                   ],

@@ -1,4 +1,5 @@
 import '../../core/time/japan_time.dart';
+import '../community/community_reaction_types.dart';
 
 class DirectMessageModel {
   const DirectMessageModel({
@@ -11,6 +12,8 @@ class DirectMessageModel {
     this.expiresAt,
     this.unsentAt,
     this.readAt,
+    this.reactionCount = 0,
+    this.myReaction,
   });
 
   final String id;
@@ -22,8 +25,43 @@ class DirectMessageModel {
   final DateTime? expiresAt;
   final DateTime? unsentAt;
   final DateTime? readAt;
+  final int reactionCount;
+  final String? myReaction;
+
+  DirectMessageModel copyWith({
+    String? id,
+    String? senderId,
+    String? recipientId,
+    String? body,
+    DateTime? createdAt,
+    Object? imageUrl = _dmNoChange,
+    Object? expiresAt = _dmNoChange,
+    Object? unsentAt = _dmNoChange,
+    Object? readAt = _dmNoChange,
+    int? reactionCount,
+    Object? myReaction = _dmNoChange,
+  }) {
+    return DirectMessageModel(
+      id: id ?? this.id,
+      senderId: senderId ?? this.senderId,
+      recipientId: recipientId ?? this.recipientId,
+      body: body ?? this.body,
+      createdAt: createdAt ?? this.createdAt,
+      imageUrl: imageUrl == _dmNoChange ? this.imageUrl : imageUrl as String?,
+      expiresAt: expiresAt == _dmNoChange ? this.expiresAt : expiresAt as DateTime?,
+      unsentAt: unsentAt == _dmNoChange ? this.unsentAt : unsentAt as DateTime?,
+      readAt: readAt == _dmNoChange ? this.readAt : readAt as DateTime?,
+      reactionCount: reactionCount ?? this.reactionCount,
+      myReaction: myReaction == _dmNoChange
+          ? this.myReaction
+          : myReaction as String?,
+    );
+  }
 
   factory DirectMessageModel.fromJson(Map<String, dynamic> json) {
+    final String? myReaction = CommunityReactionTypes.normalizeNullable(
+      _readNullableString(json['my_reaction']) ?? _readNullableString(json['reaction']),
+    );
     return DirectMessageModel(
       id: json['id'].toString(),
       senderId: json['sender_id'].toString(),
@@ -35,6 +73,8 @@ class DirectMessageModel {
       expiresAt: JapanTime.parseServerTimestamp(json['expires_at']),
       unsentAt: JapanTime.parseServerTimestamp(json['unsent_at']),
       readAt: JapanTime.parseServerTimestamp(json['read_at']),
+      reactionCount: (json['reaction_count'] as num?)?.toInt() ?? 0,
+      myReaction: myReaction,
     );
   }
 
@@ -57,3 +97,5 @@ class DirectMessageModel {
     return text.isEmpty ? null : text;
   }
 }
+
+const Object _dmNoChange = Object();

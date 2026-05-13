@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/notifications/event_reminder_service.dart';
 import '../community/community_image_service.dart';
+import '../community/community_reaction_types.dart';
 import '../safety/safety_repository.dart';
 import 'event_model.dart';
 import '../notifications/notification_writer.dart';
@@ -21,6 +22,29 @@ class EventRepository {
   SupabaseClient get _resolvedClient => _client ?? Supabase.instance.client;
 
   User? get currentUser => _resolvedClient.auth.currentUser;
+
+  Future<bool> _hasTable(String tableName) async {
+    try {
+      await _resolvedClient.from(tableName).select('id').limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _hasColumn(String tableName, String columnName) async {
+    try {
+      await _resolvedClient.from(tableName).select(columnName).limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _normalizeReactionOrDefault(String? value) {
+    return CommunityReactionTypes.normalizeNullable(value) ??
+        CommunityReactionTypes.thumbsUp;
+  }
 
   Future<List<EventModel>> getEvents() async {
     dynamic query = _resolvedClient.from('events').select();
@@ -826,13 +850,123 @@ class EventRepository {
             row['id'].toString(): Map<String, dynamic>.from(row as Map),
         };
 
-    return baseComments.map((EventCommentModel comment) {
+    List<EventCommentModel> commentsWithProfiles = baseComments.map((EventCommentModel comment) {
       final Map<String, dynamic>? profile = profilesById[comment.userId];
       return comment.copyWith(
         callSign: profile?['call_sign']?.toString(),
         avatarUrl: profile?['avatar_url']?.toString(),
       );
     }).toList();
+
+    final bool hasReactionsTable = await _hasTable('event_comment_reactions');
+    if (!hasReactionsTable || commentsWithProfiles.isEmpty) {
+      return commentsWithProfiles;
+    }
+
+    final bool hasReactionColumn = await _hasColumn(
+      'event_comment_reactions',
+      'reaction',
+    );
+    final List<String> commentIds = commentsWithProfiles
+        .map((EventCommentModel comment) => comment.id)
+        .toList();
+    final String selectColumns = hasReactionColumn
+        ? 'comment_id,user_id,reaction'
+        : 'comment_id,user_id';
+    final List<dynamic> reactions = await _resolvedClient
+        .from('event_comment_reactions')
+        .select(selectColumns)
+        .inFilter('comment_id', commentIds);
+
+    final Map<String, int> countByCommentId = <String, int>{};
+    final Map<String, String> myReactionByCommentId = <String, String>{};
+    final String? currentUserId = currentUser?.id;
+
+    for (final dynamic row in reactions) {
+      final Map<String, dynamic> map = Map<String, dynamic>.from(row as Map);
+      final String commentId = map['comment_id']?.toString() ?? '';
+      if (commentId.isEmpty) {
+        continue;
+      }
+      countByCommentId[commentId] = (countByCommentId[commentId] ?? 0) + 1;
+
+      if (currentUserId != null && map['user_id']?.toString() == currentUserId) {
+        final String reaction = hasReactionColumn
+            ? _normalizeReactionOrDefault(map['reaction']?.toString())
+            : CommunityReactionTypes.thumbsUp;
+        myReactionByCommentId[commentId] = reaction;
+      }
+    }
+
+    commentsWithProfiles = commentsWithProfiles.map((EventCommentModel comment) {
+      return comment.copyWith(
+        reactionCount: countByCommentId[comment.id] ?? 0,
+        myReaction: myReactionByCommentId[comment.id],
+      );
+    }).toList();
+
+    return commentsWithProfiles;
+  }
+
+  Future<void> setEventCommentReaction(String commentId, String reaction) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to react.');
+    }
+
+    final String normalizedReaction = _normalizeReactionOrDefault(reaction);
+    final bool hasReactionColumn = await _hasColumn(
+      'event_comment_reactions',
+      'reaction',
+    );
+    final Map<String, dynamic>? existing = await _resolvedClient
+        .from('event_comment_reactions')
+        .select(hasReactionColumn ? 'id,reaction' : 'id')
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (existing == null) {
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'comment_id': commentId,
+        'user_id': user.id,
+      };
+      if (hasReactionColumn) {
+        payload['reaction'] = normalizedReaction;
+      }
+      await _resolvedClient.from('event_comment_reactions').insert(payload);
+      return;
+    }
+
+    final String existingReaction = hasReactionColumn
+        ? _normalizeReactionOrDefault(existing['reaction']?.toString())
+        : CommunityReactionTypes.thumbsUp;
+    if (existingReaction == normalizedReaction) {
+      await _resolvedClient
+          .from('event_comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+    } else if (hasReactionColumn) {
+      await _resolvedClient
+          .from('event_comment_reactions')
+          .update(<String, dynamic>{'reaction': normalizedReaction})
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+    }
+  }
+
+  Future<void> clearEventCommentReaction(String commentId) async {
+    final User? user = currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to react.');
+    }
+
+    await _resolvedClient
+        .from('event_comment_reactions')
+        .delete()
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id);
   }
 
   Future<void> addEventComment({

@@ -1,4 +1,5 @@
 import '../../core/time/japan_time.dart';
+import '../community/community_reaction_types.dart';
 
 class EventModel {
   const EventModel({
@@ -299,6 +300,8 @@ class EventCommentModel {
     this.parentCommentId,
     this.callSign,
     this.avatarUrl,
+    this.reactionCount = 0,
+    this.myReaction,
   });
 
   final String id;
@@ -310,6 +313,8 @@ class EventCommentModel {
   final String? parentCommentId;
   final String? callSign;
   final String? avatarUrl;
+  final int reactionCount;
+  final String? myReaction;
 
   String get displayName {
     final String name = (callSign ?? '').trim();
@@ -326,6 +331,8 @@ class EventCommentModel {
     Object? parentCommentId = _eventCommentNoChange,
     Object? callSign = _eventCommentNoChange,
     Object? avatarUrl = _eventCommentNoChange,
+    int? reactionCount,
+    Object? myReaction = _eventCommentNoChange,
   }) {
     return EventCommentModel(
       id: id ?? this.id,
@@ -345,10 +352,17 @@ class EventCommentModel {
       avatarUrl: avatarUrl == _eventCommentNoChange
           ? this.avatarUrl
           : avatarUrl as String?,
+      reactionCount: reactionCount ?? this.reactionCount,
+      myReaction: myReaction == _eventCommentNoChange
+          ? this.myReaction
+          : myReaction as String?,
     );
   }
 
   factory EventCommentModel.fromJson(Map<String, dynamic> json) {
+    final String? myReaction = CommunityReactionTypes.normalizeNullable(
+      _readNullableString(json['my_reaction']) ?? _readNullableString(json['reaction']),
+    );
     return EventCommentModel(
       id: (json['id'] ?? '').toString(),
       eventId: (json['event_id'] ?? '').toString(),
@@ -359,6 +373,8 @@ class EventCommentModel {
       parentCommentId: _readNullableString(json['parent_comment_id']),
       callSign: _readNullableString(json['call_sign']),
       avatarUrl: _readNullableString(json['avatar_url']),
+      reactionCount: (json['reaction_count'] as num?)?.toInt() ?? 0,
+      myReaction: myReaction,
     );
   }
 
