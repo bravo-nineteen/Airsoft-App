@@ -19,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _loading = false;
+  OAuthProvider? _oauthLoadingProvider;
   String? _error;
 
   Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
@@ -226,6 +227,50 @@ class _LoginScreenState extends State<LoginScreen> {
     resetEmailController.dispose();
   }
 
+  Future<void> _signInWithProvider(OAuthProvider provider) async {
+    if (_loading || _oauthLoadingProvider != null) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _oauthLoadingProvider = provider;
+      _error = null;
+    });
+
+    try {
+      final bool launched = await Supabase.instance.client.auth.signInWithOAuth(
+        provider,
+        redirectTo: 'fieldops://login-callback',
+      );
+
+      if (!launched && mounted) {
+        setState(() {
+          _error = 'Unable to open sign-in provider.';
+        });
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _oauthLoadingProvider = null;
+        });
+      }
+    }
+  }
+
   void _goToSignup() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -309,9 +354,53 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         : Text(l10n.t('login')),
                   ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: <Widget>[
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          l10n.t('continueWith'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: (_loading || _oauthLoadingProvider != null)
+                        ? null
+                        : () => _signInWithProvider(OAuthProvider.google),
+                    icon: _oauthLoadingProvider == OAuthProvider.google
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.g_mobiledata_rounded, size: 28),
+                    label: Text(l10n.t('signInWithGoogle')),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: (_loading || _oauthLoadingProvider != null)
+                        ? null
+                        : () => _signInWithProvider(OAuthProvider.facebook),
+                    icon: _oauthLoadingProvider == OAuthProvider.facebook
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.facebook_outlined),
+                    label: Text(l10n.t('signInWithFacebook')),
+                  ),
                   const SizedBox(height: 10),
                   OutlinedButton(
-                    onPressed: _loading ? null : _goToSignup,
+                    onPressed: (_loading || _oauthLoadingProvider != null)
+                        ? null
+                        : _goToSignup,
                     child: Text(l10n.t('signUp')),
                   ),
                   const Spacer(),

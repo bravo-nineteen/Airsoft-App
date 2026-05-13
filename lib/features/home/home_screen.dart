@@ -479,7 +479,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: EdgeInsets.only(bottom: 10),
                       child: LinearProgressIndicator(minHeight: 2),
                     ),
-                  const _HomeTopBar(),
+                  _NewsfeedHeroCard(
+                    onOpenBoards: _openBoards,
+                    onOpenEvents: _openEventsPage,
+                    onCreatePost: _currentUserId == null
+                        ? null
+                        : _openCreateTimelinePost,
+                  ),
                   const SizedBox(height: 16),
                   _InterestSelector(
                     selectedFilter: _selectedFilter,
@@ -574,25 +580,119 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HomeTopBar extends StatelessWidget {
-  const _HomeTopBar();
+class _NewsfeedHeroCard extends StatelessWidget {
+  const _NewsfeedHeroCard({
+    required this.onOpenBoards,
+    required this.onOpenEvents,
+    this.onCreatePost,
+  });
+
+  final VoidCallback onOpenBoards;
+  final VoidCallback onOpenEvents;
+  final VoidCallback? onCreatePost;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.surfaceContainerHigh,
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
             l10n.t('fieldOpsNewsFeed'),
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
+              letterSpacing: -0.3,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.t('friendsTimelineSubtitle'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _HeroQuickActionChip(
+                icon: Icons.forum_outlined,
+                label: l10n.t('boards'),
+                onTap: onOpenBoards,
+              ),
+              _HeroQuickActionChip(
+                icon: Icons.event_outlined,
+                label: l10n.t('events'),
+                onTap: onOpenEvents,
+              ),
+              if (onCreatePost != null)
+                _HeroQuickActionChip(
+                  icon: Icons.edit_outlined,
+                  label: l10n.t('newTimelinePost'),
+                  onTap: onCreatePost!,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroQuickActionChip extends StatelessWidget {
+  const _HeroQuickActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Material(
+      color: theme.colorScheme.surface.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

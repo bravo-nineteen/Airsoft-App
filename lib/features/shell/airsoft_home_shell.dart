@@ -30,6 +30,7 @@ import 'shell_navigation_service.dart';
 
 enum _UtilityPanel {
   none,
+  profile,
   notifications,
   messages,
   fields,
@@ -78,17 +79,11 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
 
   List<Widget> get _screens => <Widget>[
     HomeScreen(
-      onOpenEventsTab: () => _selectTab(1),
-      onOpenBoardsTab: () => _selectTab(2),
+      onOpenEventsTab: () => _selectTab(2),
+      onOpenBoardsTab: () => _selectTab(1),
     ),
-    const EventsScreen(),
     const CommunityListScreen(),
-    ProfileScreen(
-      currentLocale: widget.currentLocale,
-      onLocaleChanged: widget.onLocaleChanged,
-      currentThemeMode: widget.currentThemeMode,
-      onThemeModeChanged: widget.onThemeModeChanged,
-    ),
+    const EventsScreen(),
   ];
 
   @override
@@ -131,10 +126,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       return;
     }
     if (requestedIndex >= 0 && requestedIndex <= 3) {
-      setState(() {
-        _index = requestedIndex;
-        _utilityPanel = _UtilityPanel.none;
-      });
+      _selectTab(requestedIndex);
     }
     ShellNavigationService.clear();
   }
@@ -243,8 +235,13 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   }
 
   void _selectTab(int value) {
-    if (value == 4) {
-      _openHamburgerMenu();
+    if (value == 3) {
+      final bool isTablet = MediaQuery.sizeOf(context).width >= 960;
+      if (isTablet) {
+        _openUtilityPanel(_UtilityPanel.profile);
+      } else {
+        _openHamburgerMenu();
+      }
       return;
     }
 
@@ -252,6 +249,39 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       _index = value;
       _utilityPanel = _UtilityPanel.none;
     });
+  }
+
+  void _selectTabletDestination(int value) {
+    switch (value) {
+      case 0:
+        _selectTab(0);
+        break;
+      case 1:
+        _selectTab(1);
+        break;
+      case 2:
+        _selectTab(2);
+        break;
+      case 3:
+        _openUtilityPanel(_UtilityPanel.profile);
+        break;
+      case 4:
+        _openUtilityPanel(_UtilityPanel.fields);
+        break;
+      case 5:
+        _openUtilityPanel(_UtilityPanel.shops);
+        break;
+      case 6:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const TeamsListScreen(),
+          ),
+        );
+        break;
+      case 7:
+        _openUtilityPanel(_UtilityPanel.settings);
+        break;
+    }
   }
 
   void _openUtilityPanel(_UtilityPanel panel) {
@@ -367,7 +397,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
           // Ignore broken event links.
         }
       } else {
-        setState(() => _index = 1);
+        setState(() => _index = 2);
       }
     } else if (type.contains('community_post') ||
         type.contains('post') ||
@@ -379,7 +409,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
           ),
         );
       } else {
-        setState(() => _index = 2);
+        setState(() => _index = 1);
       }
     } else if (type.contains('profile') || type.contains('user')) {
       if (entityId != null && entityId.isNotEmpty) {
@@ -418,6 +448,14 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text(l10n.profile),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _openUtilityPanel(_UtilityPanel.profile);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.map_outlined),
               title: Text(l10n.fieldFinder),
@@ -496,14 +534,9 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
   List<NavigationDestination> _phoneDestinations(AppLocalizations l10n) {
     return <NavigationDestination>[
       NavigationDestination(
-        icon: const Icon(Icons.home_outlined),
-        selectedIcon: const Icon(Icons.home),
-        label: l10n.home,
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.event_outlined),
-        selectedIcon: const Icon(Icons.event),
-        label: l10n.events,
+        icon: const Icon(Icons.dynamic_feed_outlined),
+        selectedIcon: const Icon(Icons.dynamic_feed),
+        label: l10n.t('newsfeed'),
       ),
       NavigationDestination(
         icon: const Icon(Icons.forum_outlined),
@@ -511,22 +544,55 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
         label: l10n.t('boards'),
       ),
       NavigationDestination(
-        icon: const Icon(Icons.person_outline),
-        selectedIcon: const Icon(Icons.person),
-        label: l10n.profile,
+        icon: const Icon(Icons.event_outlined),
+        selectedIcon: const Icon(Icons.event),
+        label: l10n.events,
       ),
       NavigationDestination(
-        icon: const Icon(Icons.grid_view_rounded),
-        selectedIcon: const Icon(Icons.grid_view_rounded),
+        icon: const Icon(Icons.menu_rounded),
+        selectedIcon: const Icon(Icons.menu_rounded),
         label: l10n.t('menu'),
       ),
     ];
   }
 
+  String _primaryTitle(AppLocalizations l10n) {
+    switch (_index) {
+      case 1:
+        return l10n.t('boards');
+      case 2:
+        return l10n.events;
+      case 0:
+      default:
+        return l10n.t('newsfeed');
+    }
+  }
+
+  int _selectedTabletRailIndex(bool showingPrimaryTabs) {
+    if (showingPrimaryTabs) {
+      return _index;
+    }
+
+    switch (_utilityPanel) {
+      case _UtilityPanel.profile:
+        return 3;
+      case _UtilityPanel.fields:
+        return 4;
+      case _UtilityPanel.shops:
+        return 5;
+      case _UtilityPanel.settings:
+        return 7;
+      case _UtilityPanel.notifications:
+      case _UtilityPanel.messages:
+      case _UtilityPanel.none:
+        return 0;
+    }
+  }
+
   Widget _buildTabletRail(AppLocalizations l10n, bool showingPrimaryTabs) {
-    final int selectedIndex = showingPrimaryTabs ? _index : 4;
+    final int selectedIndex = _selectedTabletRailIndex(showingPrimaryTabs);
     return Container(
-      width: 92,
+      width: 108,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
@@ -552,25 +618,27 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
             Expanded(
               child: NavigationRail(
                 extended: false,
-                minWidth: 88,
+                minWidth: 96,
+                minExtendedWidth: 140,
                 selectedIndex: selectedIndex,
-                onDestinationSelected: _selectTab,
-                groupAlignment: -0.7,
+                onDestinationSelected: _selectTabletDestination,
+                groupAlignment: -0.4,
+                useIndicator: true,
                 destinations: <NavigationRailDestination>[
                   NavigationRailDestination(
-                    icon: const Icon(Icons.home_outlined),
-                    selectedIcon: const Icon(Icons.home),
-                    label: Text(l10n.home),
+                    icon: const Icon(Icons.dynamic_feed_outlined),
+                    selectedIcon: const Icon(Icons.dynamic_feed),
+                      label: Text(l10n.t('newsfeed')),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.forum_outlined),
+                    selectedIcon: const Icon(Icons.forum),
+                    label: Text(l10n.t('boards')),
                   ),
                   NavigationRailDestination(
                     icon: const Icon(Icons.event_outlined),
                     selectedIcon: const Icon(Icons.event),
                     label: Text(l10n.events),
-                  ),
-                        NavigationRailDestination(
-                          icon: const Icon(Icons.forum_outlined),
-                          selectedIcon: const Icon(Icons.forum),
-                          label: Text(l10n.t('boards')),
                   ),
                   NavigationRailDestination(
                     icon: const Icon(Icons.person_outline),
@@ -578,29 +646,26 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
                     label: Text(l10n.profile),
                   ),
                   NavigationRailDestination(
-                    icon: const Icon(Icons.grid_view_rounded),
-                    selectedIcon: const Icon(Icons.grid_view_rounded),
-                    label: Text(l10n.t('menu')),
+                    icon: const Icon(Icons.map_outlined),
+                    selectedIcon: const Icon(Icons.map),
+                    label: Text(l10n.t('fields')),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.storefront_outlined),
+                    selectedIcon: const Icon(Icons.storefront),
+                    label: Text(l10n.t('shops')),
+                  ),
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.groups_outlined),
+                    selectedIcon: Icon(Icons.groups),
+                    label: Text('Teams'),
+                  ),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.settings_outlined),
+                    selectedIcon: const Icon(Icons.settings),
+                    label: Text(l10n.settings),
                   ),
                 ],
-                trailing: Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _RailQuickActions(
-                        onOpenFields: () => _openUtilityPanel(_UtilityPanel.fields),
-                        onOpenShops: () => _openUtilityPanel(_UtilityPanel.shops),
-                        onOpenTeams: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const TeamsListScreen(),
-                          ),
-                        ),
-                        onOpenSettings: () => _openUtilityPanel(_UtilityPanel.settings),
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -620,6 +685,14 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
       switch (_utilityPanel) {
         case _UtilityPanel.notifications:
           body = const NotificationsScreen();
+          break;
+        case _UtilityPanel.profile:
+          body = ProfileScreen(
+            currentLocale: widget.currentLocale,
+            onLocaleChanged: widget.onLocaleChanged,
+            currentThemeMode: widget.currentThemeMode,
+            onThemeModeChanged: widget.onThemeModeChanged,
+          );
           break;
         case _UtilityPanel.messages:
           body = const DirectMessageThreadsScreen();
@@ -646,6 +719,9 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
     String? utilityTitle;
     if (!showingPrimaryTabs) {
       switch (_utilityPanel) {
+        case _UtilityPanel.profile:
+          utilityTitle = l10n.profile;
+          break;
         case _UtilityPanel.notifications:
           utilityTitle = l10n.t('notifications');
           break;
@@ -669,6 +745,7 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
     return Scaffold(
       appBar: showingPrimaryTabs
           ? AppBar(
+                title: Text(_primaryTitle(l10n)),
               actions: [
                 IconButton(
                   onPressed: () => Navigator.of(context).push(
@@ -730,54 +807,61 @@ class _AirsoftHomeShellState extends State<AirsoftHomeShell>
           : body,
       bottomNavigationBar: isTablet
           ? null
-          : NavigationBar(
-              selectedIndex: showingPrimaryTabs ? _index : 4,
-              onDestinationSelected: _selectTab,
-              destinations: _phoneDestinations(l10n),
+          : Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: NavigationBarTheme(
+                  data: NavigationBarThemeData(
+                    height: 72,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainer,
+                    indicatorColor: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.16),
+                    iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((
+                      Set<WidgetState> states,
+                    ) {
+                      final bool selected = states.contains(WidgetState.selected);
+                      return IconThemeData(
+                        size: selected ? 25 : 22,
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      );
+                    }),
+                    labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((
+                      Set<WidgetState> states,
+                    ) {
+                      final bool selected = states.contains(WidgetState.selected);
+                      return Theme.of(context).textTheme.labelSmall!.copyWith(
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      );
+                    }),
+                  ),
+                  child: NavigationBar(
+                    selectedIndex: showingPrimaryTabs ? _index : 3,
+                    onDestinationSelected: _selectTab,
+                    destinations: _phoneDestinations(l10n),
+                  ),
+                ),
+              ),
             ),
-    );
-  }
-}
-
-class _RailQuickActions extends StatelessWidget {
-  const _RailQuickActions({
-    required this.onOpenFields,
-    required this.onOpenShops,
-    required this.onOpenTeams,
-    required this.onOpenSettings,
-  });
-
-  final VoidCallback onOpenFields;
-  final VoidCallback onOpenShops;
-  final VoidCallback onOpenTeams;
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        IconButton(
-          onPressed: onOpenFields,
-          tooltip: 'Fields',
-          icon: const Icon(Icons.map_outlined),
-        ),
-        IconButton(
-          onPressed: onOpenShops,
-          tooltip: 'Shops',
-          icon: const Icon(Icons.storefront_outlined),
-        ),
-        IconButton(
-          onPressed: onOpenTeams,
-          tooltip: 'Teams',
-          icon: const Icon(Icons.groups_outlined),
-        ),
-        IconButton(
-          onPressed: onOpenSettings,
-          tooltip: 'Settings',
-          icon: const Icon(Icons.settings_outlined),
-        ),
-      ],
     );
   }
 }
